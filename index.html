@@ -19,7 +19,7 @@
   --success: #16a34a; --success-bg: #f0fdf4;
   --danger: #dc2626; --danger-bg: #fef2f2;
   --warning-bg: #fffbeb; --warning: #d97706;
-  --green: #16a34a; --green-bg: #f0fdf4;
+  --green: #16a34a;
   --radius: 12px; --radius-sm: 8px;
 }
 html, body {
@@ -36,6 +36,8 @@ html, body {
 .header-inner { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; }
 .header-title { font-size: 17px; font-weight: 600; }
 .header-sub { font-size: 12px; opacity: 0.8; margin-top: 1px; }
+.sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; display: inline-block; margin-left: 6px; }
+.sync-dot.offline { background: #f87171; }
 .bottom-nav {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
   background: var(--white); border-top: 1px solid var(--border);
@@ -96,8 +98,6 @@ textarea { resize: none; height: 90px; line-height: 1.5; }
 .btn-primary { background: var(--blue); color: #fff; }
 .btn-secondary { background: var(--surface); color: var(--text); border: 1.5px solid var(--border); }
 .btn-green { background: var(--green); color: #fff; border: none; }
-
-/* ── List ── */
 .list-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .list-count { font-size: 14px; color: var(--text-sub); font-weight: 500; }
 .trip-card { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 10px; overflow: hidden; }
@@ -117,8 +117,6 @@ textarea { resize: none; height: 90px; line-height: 1.5; }
 .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
 .empty-state svg { width: 48px; height: 48px; margin-bottom: 12px; opacity: 0.4; }
 .empty-state p { font-size: 15px; }
-
-/* ── Export screen ── */
 .export-section { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); padding: 16px; margin-bottom: 16px; }
 .export-section h3 { font-size: 15px; font-weight: 600; margin-bottom: 14px; color: var(--text); }
 .month-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
@@ -130,10 +128,7 @@ textarea { resize: none; height: 90px; line-height: 1.5; }
 .month-btn.has-data { border-color: var(--blue); color: var(--blue); background: var(--blue-light); }
 .month-btn.selected { background: var(--blue); color: #fff; border-color: var(--blue); }
 .month-btn.no-data { opacity: 0.4; cursor: default; }
-.preview-box {
-  background: var(--surface); border-radius: var(--radius-sm); border: 1px solid var(--border);
-  padding: 14px; margin-bottom: 14px;
-}
+.preview-box { background: var(--surface); border-radius: var(--radius-sm); border: 1px solid var(--border); padding: 14px; margin-bottom: 14px; }
 .preview-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; border-bottom: 1px solid var(--border); }
 .preview-row:last-child { border-bottom: none; }
 .preview-label { color: var(--text-sub); }
@@ -142,8 +137,9 @@ textarea { resize: none; height: 90px; line-height: 1.5; }
 .year-select-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .year-select-row label { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; }
 .year-select-row select { flex: 1; padding: 10px 14px; font-size: 15px; }
-
-/* ── Toast ── */
+.loading { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 14px; }
+.spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .toast {
   position: fixed; bottom: calc(env(safe-area-inset-bottom, 0px) + 80px); left: 16px; right: 16px;
   background: #1f2937; color: #fff; padding: 14px 16px; border-radius: var(--radius-sm);
@@ -158,8 +154,8 @@ textarea { resize: none; height: 90px; line-height: 1.5; }
 <div class="header">
   <div class="header-inner">
     <div>
-      <div class="header-title">✈ 出張申請</div>
-      <div class="header-sub">旅費申請システム</div>
+      <div class="header-title">✈ 出張申請 <span class="sync-dot" id="sync-dot"></span></div>
+      <div class="header-sub" id="sync-status">接続中...</div>
     </div>
   </div>
 </div>
@@ -251,6 +247,7 @@ textarea { resize: none; height: 90px; line-height: 1.5; }
     <div class="list-toolbar">
       <div class="list-count" id="list-count">0件</div>
     </div>
+    <div id="list-loading" class="loading"><div class="spinner"></div>読み込み中...</div>
     <div id="list-container"></div>
     <div id="empty-state" class="empty-state" style="display:none">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
@@ -262,23 +259,17 @@ textarea { resize: none; height: 90px; line-height: 1.5; }
   <div id="screen-export" class="screen">
     <div class="export-section">
       <h3>📅 出力する年月を選択</h3>
-
       <div class="year-select-row">
         <label>年</label>
         <select id="year-sel" onchange="renderMonthGrid()"></select>
       </div>
-
       <div class="month-grid" id="month-grid"></div>
-
       <div id="preview-area" style="display:none">
         <div class="preview-box" id="preview-box"></div>
         <div class="btn-row" style="padding:0">
-          <button class="btn btn-green" onclick="doExport()">
-            📊 Excelで出力する
-          </button>
+          <button class="btn btn-green" onclick="doExport()">📊 Excelで出力する</button>
         </div>
       </div>
-
       <div id="no-data-msg" style="display:none; text-align:center; padding:20px; color:var(--text-muted); font-size:14px;">
         この月の申請データがありません
       </div>
@@ -287,7 +278,6 @@ textarea { resize: none; height: 90px; line-height: 1.5; }
 
 </div>
 
-<!-- Bottom Nav -->
 <div class="bottom-nav">
   <div class="nav-btn-wrap">
     <button class="nav-btn active" id="nav-form" onclick="showScreen('form')">
@@ -312,31 +302,69 @@ textarea { resize: none; height: 90px; line-height: 1.5; }
 
 <div class="toast" id="toast"></div>
 
-<script>
+<!-- Firebase SDK -->
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getDatabase, ref, push, onValue, remove, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+
+// ★ここにFirebaseの設定を入れる★
+const firebaseConfig = {
+  databaseURL: "https://trip-app-a1746-default-rtdb.asia-southeast1.firebasedatabase.app"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getDatabase(app);
+const appsRef = ref(db, 'applications');
+
 let applications = [];
-let nextId = 1;
 let selectedMonth = null;
 const NAME_AMOUNT = { '金髙孝紀': 20000, '金髙裕亮': 10000 };
 const NAMES = ['金髙孝紀', '金髙裕亮'];
 
-try {
-  const saved = localStorage.getItem('trip-apps');
-  if (saved) { const d = JSON.parse(saved); applications = d.list || []; nextId = d.nextId || 1; }
-} catch(e) {}
+// 接続ステータス
+const connRef = ref(db, '.info/connected');
+onValue(connRef, snap => {
+  const online = snap.val();
+  document.getElementById('sync-dot').className = 'sync-dot' + (online ? '' : ' offline');
+  document.getElementById('sync-status').textContent = online ? 'リアルタイム同期中' : 'オフライン';
+});
 
-function persist() {
-  try { localStorage.setItem('trip-apps', JSON.stringify({ list: applications, nextId })); } catch(e) {}
-}
+// データをリアルタイムで受信
+onValue(appsRef, snap => {
+  applications = [];
+  snap.forEach(child => {
+    applications.push({ _key: child.key, ...child.val() });
+  });
+  applications.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  updateBadge();
+  // 一覧画面が表示中なら即更新
+  if (document.getElementById('screen-list').classList.contains('active')) renderList();
+  if (document.getElementById('screen-export').classList.contains('active')) renderMonthGrid();
+  document.getElementById('list-loading').style.display = 'none';
+});
 
-/* ── Form ── */
+// グローバルに公開
+window._fbPush = (data) => push(appsRef, { ...data, createdAt: Date.now() });
+window._fbRemove = (key) => remove(ref(db, 'applications/' + key));
+window._getApps = () => applications;
+window._getNames = () => NAMES;
+window._getNameAmount = () => NAME_AMOUNT;
+window._getSelectedMonth = () => selectedMonth;
+window._setSelectedMonth = (v) => { selectedMonth = v; };
+
+initYearSelect();
+</script>
+
+<script>
+// ── フォーム ──
 function handleName() {
   const name = document.getElementById('emp-name').value;
   const disp = document.getElementById('amount-display');
   const amt  = document.getElementById('amount');
-  if (name && NAME_AMOUNT[name] !== undefined) {
-    const v = NAME_AMOUNT[name];
-    amt.value = v;
-    disp.textContent = '¥' + v.toLocaleString('ja-JP');
+  const NA   = window._getNameAmount ? window._getNameAmount() : {};
+  if (name && NA[name] !== undefined) {
+    amt.value = NA[name];
+    disp.textContent = '¥' + NA[name].toLocaleString('ja-JP');
     disp.style.color = 'var(--blue)';
   } else {
     amt.value = '';
@@ -361,11 +389,12 @@ function getFormData(status) {
   if (!name || !date || !dest || !purposeSel || !amount) return null;
   if (purposeSel === 'other' && !purposeOth) return null;
   return {
-    id: nextId++, name, date, dest,
+    name, date, dest,
     purpose: purposeSel === 'other' ? 'その他：' + purposeOth : purposeSel,
     amount: parseInt(amount, 10),
     memo: document.getElementById('memo').value.trim(),
-    status, submittedAt: new Date().toLocaleDateString('ja-JP')
+    status,
+    submittedAt: new Date().toLocaleDateString('ja-JP')
   };
 }
 
@@ -380,28 +409,36 @@ function clearForm() {
   document.getElementById('other-wrap').style.display = 'none';
 }
 
-function submitForm() {
+async function submitForm() {
   const data = getFormData('申請中');
   if (!data) { showAlert('必須項目をすべて入力してください', 'error'); return; }
-  applications.push(data); persist(); updateBadge();
-  clearForm(); showToast('申請 #' + data.id + ' を提出しました');
+  try {
+    await window._fbPush(data);
+    clearForm();
+    showToast('申請を提出しました');
+  } catch(e) { showAlert('送信に失敗しました。接続を確認してください', 'error'); }
 }
 
-function saveDraft() {
+async function saveDraft() {
   const data = getFormData('下書き');
   if (!data) { showAlert('必須項目をすべて入力してください', 'error'); return; }
-  applications.push(data); persist(); updateBadge();
-  clearForm(); showToast('下書きを保存しました');
+  try {
+    await window._fbPush(data);
+    clearForm();
+    showToast('下書きを保存しました');
+  } catch(e) { showAlert('保存に失敗しました。接続を確認してください', 'error'); }
 }
 
-/* ── List ── */
+// ── 一覧 ──
 function renderList() {
+  const apps      = window._getApps ? window._getApps() : [];
   const container = document.getElementById('list-container');
   const empty     = document.getElementById('empty-state');
-  document.getElementById('list-count').textContent = applications.length + '件';
-  if (!applications.length) { container.innerHTML = ''; empty.style.display = 'block'; return; }
+  document.getElementById('list-count').textContent = apps.length + '件';
+  document.getElementById('list-loading').style.display = 'none';
+  if (!apps.length) { container.innerHTML = ''; empty.style.display = 'block'; return; }
   empty.style.display = 'none';
-  container.innerHTML = [...applications].reverse().map(a => `
+  container.innerHTML = apps.map(a => `
     <div class="trip-card">
       <div class="trip-card-head">
         <div class="trip-meta">
@@ -415,23 +452,33 @@ function renderList() {
         <div class="trip-purpose">${a.purpose}</div>
         <div class="trip-footer">
           <div class="trip-amount">¥${a.amount.toLocaleString('ja-JP')}</div>
-          <button class="delete-btn" onclick="deleteApp(${a.id})">削除</button>
+          <button class="delete-btn" onclick="deleteApp('${a._key}')">削除</button>
         </div>
       </div>
     </div>`).join('');
 }
 
-function deleteApp(id) {
+async function deleteApp(key) {
   if (!confirm('この申請を削除しますか？')) return;
-  applications = applications.filter(a => a.id !== id);
-  persist(); updateBadge(); renderList();
+  try {
+    await window._fbRemove(key);
+    showToast('削除しました');
+  } catch(e) { showToast('削除に失敗しました'); }
 }
 
-/* ── Export screen ── */
+function updateBadge() {
+  const apps = window._getApps ? window._getApps() : [];
+  const n = apps.length;
+  const b = document.getElementById('nav-badge');
+  b.style.display = n > 0 ? 'block' : 'none';
+  b.textContent = n;
+}
+
+// ── 月次出力 ──
 function initYearSelect() {
   const sel  = document.getElementById('year-sel');
-  const now  = new Date();
-  const year = now.getFullYear();
+  if (!sel) return;
+  const year = new Date().getFullYear();
   sel.innerHTML = '';
   for (let y = year + 1; y >= year - 2; y--) {
     const opt = document.createElement('option');
@@ -446,25 +493,25 @@ function getMonthKey(year, month) {
 }
 
 function appsForMonth(year, month) {
-  const key = getMonthKey(year, month);
-  return applications.filter(a => a.date && a.date.startsWith(key));
+  const apps = window._getApps ? window._getApps() : [];
+  const key  = getMonthKey(year, month);
+  return apps.filter(a => a.date && a.date.startsWith(key));
 }
 
 function renderMonthGrid() {
   const year = parseInt(document.getElementById('year-sel').value);
   const grid = document.getElementById('month-grid');
-  selectedMonth = null;
+  if (window._setSelectedMonth) window._setSelectedMonth(null);
   document.getElementById('preview-area').style.display = 'none';
-  document.getElementById('no-data-msg').style.display = 'none';
-
+  document.getElementById('no-data-msg').style.display  = 'none';
   grid.innerHTML = '';
   for (let m = 1; m <= 12; m++) {
-    const apps = appsForMonth(year, m);
-    const btn  = document.createElement('button');
-    btn.textContent = m + '月';
-    btn.className   = 'month-btn' + (apps.length > 0 ? ' has-data' : ' no-data');
+    const cnt = appsForMonth(year, m).length;
+    const btn = document.createElement('button');
+    btn.textContent   = m + '月';
+    btn.className     = 'month-btn' + (cnt > 0 ? ' has-data' : ' no-data');
     btn.dataset.month = m;
-    btn.onclick = () => selectMonth(year, m, btn);
+    btn.onclick       = () => selectMonth(year, m, btn);
     grid.appendChild(btn);
   }
 }
@@ -473,20 +520,16 @@ function selectMonth(year, month, btnEl) {
   const apps = appsForMonth(year, month);
   document.querySelectorAll('.month-btn').forEach(b => b.classList.remove('selected'));
   btnEl.classList.add('selected');
-  selectedMonth = { year, month };
+  if (window._setSelectedMonth) window._setSelectedMonth({ year, month });
 
-  const preview  = document.getElementById('preview-area');
-  const noData   = document.getElementById('no-data-msg');
-  const preBox   = document.getElementById('preview-box');
+  const preview = document.getElementById('preview-area');
+  const noData  = document.getElementById('no-data-msg');
+  const preBox  = document.getElementById('preview-box');
 
-  if (!apps.length) {
-    preview.style.display  = 'none';
-    noData.style.display   = 'block';
-    return;
-  }
+  if (!apps.length) { preview.style.display = 'none'; noData.style.display = 'block'; return; }
   noData.style.display = 'none';
 
-  // Build preview per person
+  const NAMES = window._getNames ? window._getNames() : [];
   let html = '';
   NAMES.forEach(name => {
     const rows  = apps.filter(a => a.name === name);
@@ -495,93 +538,38 @@ function selectMonth(year, month, btnEl) {
   });
   const grandTotal = apps.reduce((s, a) => s + a.amount, 0);
   html += `<div class="preview-row" style="margin-top:6px;padding-top:10px;border-top:2px solid var(--border)"><span class="preview-label" style="font-weight:600">合計</span><span class="preview-val preview-total">¥${grandTotal.toLocaleString('ja-JP')}</span></div>`;
-
   preBox.innerHTML = `<div style="font-size:13px;font-weight:700;color:var(--text-sub);margin-bottom:10px">${year}年${month}月分 ／ ${apps.length}件</div>` + html;
   preview.style.display = 'block';
 }
 
-/* ── Excel 出力 ── */
-function buildPersonSheet(wb, name, rows, year, month) {
-  const title   = `旅費日程申請書　${year}年${month}月分`;
-  const headers = ['日付', '出張先', '出張目的', '金額（円）'];
-
-  // Title row + blank + headers + data rows + blank + total
-  const aoa = [
-    [title],
-    ['申請者：' + name],
-    [],
-    headers,
-    ...rows.map(a => [a.date, a.dest, a.purpose, a.amount]),
-    [],
-    ['', '', '合計', rows.reduce((s, a) => s + a.amount, 0)]
-  ];
-
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-
-  // Column widths
-  ws['!cols'] = [{ wch: 14 }, { wch: 18 }, { wch: 26 }, { wch: 14 }];
-
-  // Merge title cell A1:D1
-  ws['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 3 } }
-  ];
-
-  // Style helpers
-  const titleStyle  = { font: { bold: true, sz: 14 }, alignment: { horizontal: 'center' } };
-  const headerStyle = { font: { bold: true }, fill: { fgColor: { rgb: 'DBEAFE' } }, alignment: { horizontal: 'center' } };
-  const totalStyle  = { font: { bold: true, color: { rgb: '1D4ED8' } } };
-  const numStyle    = { numFmt: '#,##0' };
-
-  // Apply styles (row 0 = title, row 3 = headers, data starts row 4)
-  ['A1','B1','C1','D1'].forEach(ref => {
-    if (!ws[ref]) ws[ref] = { v: '', t: 's' };
-    ws[ref].s = titleStyle;
-  });
-  ['A4','B4','C4','D4'].forEach(ref => {
-    if (ws[ref]) ws[ref].s = headerStyle;
-  });
-
-  // Number format for amount column (D) in data rows
-  const dataStart = 5; // 1-indexed row 5
-  rows.forEach((_, i) => {
-    const ref = 'D' + (dataStart + i);
-    if (ws[ref]) { ws[ref].s = numStyle; }
-  });
-
-  // Total row
-  const totalRow = dataStart + rows.length + 1;
-  const totalRef = 'D' + totalRow;
-  if (ws[totalRef]) ws[totalRef].s = { ...numStyle, ...totalStyle };
-  const labelRef = 'C' + totalRow;
-  if (ws[labelRef]) ws[labelRef].s = { font: { bold: true } };
-
-  const sheetName = name.length > 15 ? name.slice(0, 15) : name;
-  XLSX.utils.book_append_sheet(wb, ws, sheetName);
-}
-
 function doExport() {
-  if (!selectedMonth) return;
-  const { year, month } = selectedMonth;
+  const sm = window._getSelectedMonth ? window._getSelectedMonth() : null;
+  if (!sm) return;
+  const { year, month } = sm;
   const monthApps = appsForMonth(year, month);
   if (!monthApps.length) { showToast('この月のデータがありません'); return; }
 
+  const NAMES = window._getNames ? window._getNames() : [];
   const wb = XLSX.utils.book_new();
-
   NAMES.forEach(name => {
-    const rows = monthApps
-      .filter(a => a.name === name)
-      .sort((a, b) => a.date.localeCompare(b.date));
-    // Always create sheet even if 0 rows (show blank sheet)
-    buildPersonSheet(wb, name, rows, year, month);
+    const rows = monthApps.filter(a => a.name === name).sort((a,b) => a.date.localeCompare(b.date));
+    const title = `旅費日程申請書　${year}年${month}月分`;
+    const aoa = [
+      [title], ['申請者：' + name], [],
+      ['日付', '出張先', '出張目的', '金額（円）'],
+      ...rows.map(a => [a.date, a.dest, a.purpose, a.amount]),
+      [], ['', '', '合計', rows.reduce((s,a) => s + a.amount, 0)]
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [{ wch: 14 }, { wch: 18 }, { wch: 26 }, { wch: 14 }];
+    ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:3} }, { s:{r:1,c:0}, e:{r:1,c:3} }];
+    XLSX.utils.book_append_sheet(wb, ws, name.length > 15 ? name.slice(0,15) : name);
   });
-
-  const fname = `旅費申請_${year}年${month}月.xlsx`;
-  XLSX.writeFile(wb, fname);
+  XLSX.writeFile(wb, `旅費申請_${year}年${month}月.xlsx`);
   showToast(year + '年' + month + '月分を出力しました');
 }
 
-/* ── Nav / UI helpers ── */
+// ── ナビ ──
 function showScreen(name) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -601,21 +589,9 @@ function showAlert(msg, type) {
 
 function showToast(msg) {
   const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
+  t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2500);
 }
-
-function updateBadge() {
-  const n = applications.length;
-  const b = document.getElementById('nav-badge');
-  b.style.display = n > 0 ? 'block' : 'none';
-  b.textContent   = n;
-}
-
-// Init
-initYearSelect();
-updateBadge();
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
