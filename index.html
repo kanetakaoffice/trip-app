@@ -809,12 +809,15 @@ async function loadInventory() {
 
 const YAHOO_CLIENT_ID = "dmVyPTIwMjUwNyZpZD1oZWl6dUs1MUZSJmhhc2g9TXpOak5qSTNNREkzTkRCaVl6UTVaQQ";
 
-function lookupJan() {
+const GOOGLE_API_KEY = "AIzaSyBQ3fIrqjgVV-fgfVF3DvDsowLsQASYLUk";
+const SEARCH_ENGINE_ID = "f4008bcf1a11f4fbd";
+
+async function lookupJan() {
   const jan = document.getElementById('inv-jan').value.trim();
   const status = document.getElementById('jan-lookup-status');
   if (!jan) { status.textContent = ''; return; }
 
-  // Search in already registered products
+  // まず登録済み商品を検索
   const found = products.find(p => p.jan === jan);
   if (found) {
     document.getElementById('inv-name').value = found.name || '';
@@ -822,8 +825,46 @@ function lookupJan() {
     document.getElementById('inv-model').value = found.model || '';
     status.innerHTML = '✅ 登録済み商品の情報を自動入力しました！';
     status.style.color = 'var(--success)';
-  } else {
-    status.innerHTML = `新規商品です。<a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-weight:600;text-decoration:underline">📦 価格.comで検索する</a>`;
+    return;
+  }
+
+  // Google Custom Search APIで価格.comを検索
+  status.innerHTML = '🔍 価格.comで商品情報を検索中...';
+  status.style.color = 'var(--text-muted)';
+
+  try {
+    const query = encodeURIComponent(jan + ' 価格.com');
+    const url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${SEARCH_ENGINE_ID}&q=${query}&num=1`;
+    const r = await fetch(url);
+    const d = await r.json();
+
+    if (d.items && d.items.length > 0) {
+      const item = d.items[0];
+      const title = item.title || '';
+      const snippet = item.snippet || '';
+
+      // 商品名をタイトルから抽出（「価格.com」「- 最安値・」などを除去）
+      let productName = title
+        .replace(/[-|｜].*価格\.com.*/gi, '')
+        .replace(/価格\.com.*/gi, '')
+        .replace(/の最安値.*$/gi, '')
+        .replace(/\s*[-|｜]\s*$/, '')
+        .trim();
+
+      if (productName) {
+        document.getElementById('inv-name').value = productName;
+        status.innerHTML = `✅ 商品名を取得しました！確認・修正してから登録してください。<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-size:12px">📦 価格.comで詳細を確認</a>`;
+        status.style.color = 'var(--success)';
+      } else {
+        status.innerHTML = `商品が見つかりませんでした。<a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-weight:600;text-decoration:underline">📦 価格.comで検索する</a>`;
+        status.style.color = 'var(--text-muted)';
+      }
+    } else {
+      status.innerHTML = `新規商品です。<a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-weight:600;text-decoration:underline">📦 価格.comで検索する</a>`;
+      status.style.color = 'var(--text-muted)';
+    }
+  } catch(e) {
+    status.innerHTML = `<a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-weight:600;text-decoration:underline">📦 価格.comで検索する</a>`;
     status.style.color = 'var(--text-muted)';
   }
 }
