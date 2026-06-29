@@ -80,7 +80,10 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 .btn-purple { background: #ddd6fe; color: #4c1d95; border: none; }
 .btn-orange { background: #fed7aa; color: #7c2d12; border: none; }
 .btn-teal { background: #fbcfe8; color: #831843; border: none; }
-.status-sales { background: #f0fdfa; color: #0f766e; }
+.status-sales { background: #fce7f3; color: #9d174d; }
+.status-unpaid { background: #fef2f2; color: #dc2626; }
+.status-paid { background: #f0fdf4; color: #16a34a; }
+.btn-pink { background: #fbcfe8; color: #831843; border: none; }
 .btn-gold { background: #bfdbfe; color: #1e3a5f; font-weight: 700; border: none; }
 .list-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .list-count { font-size: 14px; color: var(--text-sub); font-weight: 500; }
@@ -350,12 +353,30 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       </div>
       <div class="field-divider"></div>
       <div class="field" style="padding-top:16px">
+        <div class="field-label">入金期日</div>
+        <input type="date" id="sal-due">
+      </div>
+      <div class="field-divider"></div>
+      <div class="field" style="padding-top:16px">
         <div class="field-label">メモ</div>
         <input type="text" id="sal-note" placeholder="請求書番号など（任意）">
       </div>
     </div>
     <div class="btn-row">
       <button class="btn btn-teal" onclick="submitSales()">売上を登録する</button>
+    </div>
+  </div>
+
+  <!-- 売掛金管理 -->
+  <div id="screen-receivable" class="screen">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:14px;color:var(--text-sub);font-weight:500" id="recv-summary">読み込み中...</div>
+      <button class="btn btn-pink" style="flex:none;padding:8px 14px;font-size:13px" onclick="doExportReceivable()">未回収Excel</button>
+    </div>
+    <div id="recv-container"></div>
+    <div id="recv-empty" class="empty-state" style="display:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
+      <p>売掛金データがありません</p>
     </div>
   </div>
 
@@ -428,6 +449,12 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       売上
     </button>
   </div>
+  <div class="nav-btn-wrap">
+    <button class="nav-btn" id="nav-receivable" onclick="showScreen('receivable')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+      売掛金
+    </button>
+  </div>
   <div class="nav-btn-wrap" style="position:relative">
     <button class="nav-btn" id="nav-list" onclick="showScreen('list')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
@@ -476,6 +503,7 @@ async function loadAll() {
     document.getElementById('list-loading').style.display = 'none';
     if (document.getElementById('screen-list').classList.contains('active')) renderList();
     if (document.getElementById('screen-export').classList.contains('active')) renderMonthGrid();
+    if (document.getElementById('screen-receivable').classList.contains('active')) renderReceivable();
     document.getElementById('sync-dot').className = 'sync-dot';
     document.getElementById('sync-status').textContent = '同期済み';
   } catch(e) {
@@ -649,10 +677,11 @@ function getSalesData() {
   const type   = document.getElementById('sal-type').value;
   const client = document.getElementById('sal-client').value;
   const amount = document.getElementById('sal-amount').value;
+  const due    = document.getElementById('sal-due').value;
   const note   = document.getElementById('sal-note').value.trim();
   if (!date || !type || !client || !amount) return null;
   const typeLabel = type === 'domestic' ? '国内（請求書）' : '国外（インボイス）';
-  return { type: 'sales', date, salesType: typeLabel, client, amount: parseInt(amount,10), note, submittedAt: new Date().toLocaleDateString('ja-JP') };
+  return { type: 'sales', date, salesType: typeLabel, client, amount: parseInt(amount,10), due: due||'', note, payStatus: '未入金', submittedAt: new Date().toLocaleDateString('ja-JP') };
 }
 
 function clearSalesForm() {
@@ -660,6 +689,7 @@ function clearSalesForm() {
   document.getElementById('sal-type').selectedIndex = 0;
   document.getElementById('sal-client').innerHTML = '<option value="">先に区分を選択してください</option>';
   document.getElementById('sal-amount').value = '';
+  document.getElementById('sal-due').value = '';
   document.getElementById('sal-note').value = '';
 }
 
@@ -956,6 +986,98 @@ function doExportPurchase() {
   showToast('仕入Excelを出力しました');
 }
 
+// ── 売掛金管理 ──
+function renderReceivable() {
+  const allSales = window._getSales ? window._getSales() : [];
+  const container = document.getElementById('recv-container');
+  const empty = document.getElementById('recv-empty');
+  const summary = document.getElementById('recv-summary');
+
+  if (!allSales.length) {
+    container.innerHTML = '';
+    empty.style.display = 'block';
+    summary.textContent = '売上データなし';
+    return;
+  }
+  empty.style.display = 'none';
+
+  const unpaid = allSales.filter(s => s.payStatus !== '入金済み');
+  const paid   = allSales.filter(s => s.payStatus === '入金済み');
+  const unpaidTotal = unpaid.reduce((s,a) => s+a.amount, 0);
+  const paidTotal   = paid.reduce((s,a) => s+a.amount, 0);
+  summary.innerHTML = `未回収: <span style="color:var(--danger);font-weight:700">¥${unpaidTotal.toLocaleString('ja-JP')}</span> ／ 入金済: <span style="color:var(--success);font-weight:700">¥${paidTotal.toLocaleString('ja-JP')}</span>`;
+
+  const today = new Date().toISOString().slice(0,10);
+  const sorted = [...allSales].sort((a,b) => {
+    if (a.payStatus === '入金済み' && b.payStatus !== '入金済み') return 1;
+    if (a.payStatus !== '入金済み' && b.payStatus === '入金済み') return -1;
+    return (a.due||'9999') > (b.due||'9999') ? 1 : -1;
+  });
+
+  container.innerHTML = sorted.map(s => {
+    const isOverdue = s.payStatus !== '入金済み' && s.due && s.due < today;
+    const statusClass = s.payStatus === '入金済み' ? 'status-paid' : 'status-unpaid';
+    const statusLabel = s.payStatus === '入金済み' ? '入金済み' : isOverdue ? '⚠ 期限超過' : '未入金';
+    return `
+    <div class="trip-card" style="${isOverdue ? 'border-color:#fca5a5' : ''}">
+      <div class="trip-card-head">
+        <div class="trip-meta">
+          <span class="trip-date">${s.date}</span>
+          <span class="trip-name">${s.salesType||''}</span>
+        </div>
+        <span class="trip-status ${statusClass}">${statusLabel}</span>
+      </div>
+      <div class="trip-card-body">
+        <div class="trip-dest">${s.client}</div>
+        ${s.due ? `<div class="trip-purpose">入金期日: ${s.due}</div>` : ''}
+        ${s.note ? `<div class="trip-purpose">${s.note}</div>` : ''}
+        <div class="trip-footer">
+          <div class="trip-amount" style="color:${s.payStatus==='入金済み'?'var(--success)':'var(--danger)'}">¥${s.amount.toLocaleString('ja-JP')}</div>
+          ${s.payStatus !== '入金済み'
+            ? `<button class="btn btn-green" style="flex:none;padding:7px 12px;font-size:13px" onclick="markPaid('${s._key}')">入金確認</button>`
+            : `<button class="delete-btn" onclick="deleteSales('${s._key}')">削除</button>`
+          }
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function markPaid(key) {
+  if (!confirm('入金済みにしますか？')) return;
+  try {
+    const r = await fetch(DB_URL + '/sales/' + key + '/payStatus.json', {
+      method: 'PUT',
+      body: JSON.stringify('入金済み')
+    });
+    if (!r.ok) throw new Error();
+    await loadAll();
+    showToast('入金済みにしました');
+  } catch(e) { showToast('更新に失敗しました'); }
+}
+
+function doExportReceivable() {
+  const allSales = window._getSales ? window._getSales() : [];
+  const unpaid = allSales.filter(s => s.payStatus !== '入金済み').sort((a,b) => (a.due||'9999') > (b.due||'9999') ? 1 : -1);
+  if (!unpaid.length) { showToast('未回収の売掛金はありません'); return; }
+  const total = unpaid.reduce((s,a) => s+a.amount, 0);
+  const today = new Date().toLocaleDateString('ja-JP');
+  const aoa = [
+    ['未回収売掛金一覧'], [`出力日: ${today}`], [],
+    ['請求日','入金期日','区分','卸先','金額（円）','メモ'],
+    ...unpaid.map(r => [r.date, r.due||'', r.salesType||'', r.client, r.amount, r.note||'']),
+    [], ['','','','未回収合計', total, '']
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{wch:14},{wch:14},{wch:16},{wch:28},{wch:14},{wch:20}];
+  ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:5}}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '未回収売掛金');
+  const d = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  XLSX.writeFile(wb, `未回収売掛金_${d}.xlsx`);
+  showToast('未回収売掛金Excelを出力しました');
+}
+
 function doExportSales() {
   const sm = window._getSelectedMonth?.();
   if (!sm) return;
@@ -991,8 +1113,9 @@ function showScreen(name) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('screen-' + name).classList.add('active');
   document.getElementById('nav-' + name).classList.add('active');
-  if (name === 'list')   renderList();
-  if (name === 'export') renderMonthGrid();
+  if (name === 'list')        renderList();
+  if (name === 'export')      renderMonthGrid();
+  if (name === 'receivable')  renderReceivable();
 }
 
 function showAlert(boxId, msgId, msg, type) {
