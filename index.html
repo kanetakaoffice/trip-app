@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="KANETAKA">
-<meta name="theme-color" content="#1a1a1a">
+<meta name="theme-color" content="#c5e8e5">
 <title>株式会社KANETAKA</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -27,23 +27,23 @@
   --orange: #ea580c; --orange-bg: #fff7ed;
   --teal: #0f766e; --teal-bg: #f0fdfa; --teal-light: #99f6e4;
   --text: #1a1a1a; --text-sub: #6b7280; --text-muted: #9ca3af;
-  --border: #e5e7eb; --surface: #f9f7f2; --white: #ffffff;
+  --border: #e5e7eb; --surface: #edf8f7; --white: #ffffff;
   --success: #16a34a; --success-bg: #f0fdf4;
   --danger: #dc2626; --danger-bg: #fef2f2;
   --warning-bg: #fffbeb; --warning: #d97706;
   --radius: 12px; --radius-sm: 8px;
 }
 html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif; background: var(--surface); color: var(--text); -webkit-font-smoothing: antialiased; }
-.header { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: var(--black); color: #fff; padding: env(safe-area-inset-top, 0) 0 0; border-bottom: 1px solid var(--gold-dark); }
+.header { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: linear-gradient(135deg, #c5e8e5, #a8d8d4); color: var(--black); padding: env(safe-area-inset-top, 0) 0 0; border-bottom: 2px solid var(--gold); box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
 .header-inner { display: flex; align-items: center; gap: 12px; padding: 10px 16px; }
 .header-logo { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; }
 .header-text { flex: 1; }
-.header-title { font-size: 15px; font-weight: 700; color: var(--gold-light); letter-spacing: 0.05em; }
-.header-sub { font-size: 11px; color: #888; margin-top: 1px; }
+.header-title { font-size: 15px; font-weight: 700; color: var(--gold-dark); letter-spacing: 0.05em; }
+.header-sub { font-size: 11px; color: var(--gold); margin-top: 1px; }
 .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; display: inline-block; margin-left: 5px; }
 .sync-dot.offline { background: #f87171; }
-.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 100; background: var(--black); border-top: 1px solid var(--gold-dark); display: flex; padding-bottom: env(safe-area-inset-bottom, 0); }
-.nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 8px 0 6px; background: none; border: none; cursor: pointer; color: #666; font-size: 9px; font-weight: 500; -webkit-tap-highlight-color: transparent; }
+.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 100; background: linear-gradient(135deg, #c5e8e5, #a8d8d4); border-top: 2px solid var(--gold); display: flex; padding-bottom: env(safe-area-inset-bottom, 0); box-shadow: 0 -2px 12px rgba(0,0,0,0.08); }
+.nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 8px 0 6px; background: none; border: none; cursor: pointer; color: #b8a070; font-size: 9px; font-weight: 500; -webkit-tap-highlight-color: transparent; }
 .nav-btn.active { color: var(--gold-light); }
 .nav-btn svg { width: 22px; height: 22px; stroke-width: 1.8; }
 .nav-badge { position: absolute; top: 4px; right: calc(50% - 20px); background: var(--danger); color: #fff; font-size: 9px; font-weight: 700; border-radius: 20px; padding: 1px 4px; min-width: 14px; text-align: center; display: none; }
@@ -84,7 +84,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 .status-unpaid { background: #fef2f2; color: #dc2626; }
 .status-paid { background: #f0fdf4; color: #16a34a; }
 .btn-pink { background: #fbcfe8; color: #831843; border: none; }
-.btn-gold { background: #bfdbfe; color: #1e3a5f; font-weight: 700; border: none; }
+.btn-gold { background: linear-gradient(135deg, var(--gold-light), var(--gold-dark)); color: var(--black); font-weight: 700; border: none; }
 .list-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .list-count { font-size: 14px; color: var(--text-sub); font-weight: 500; }
 .trip-card { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
@@ -114,6 +114,19 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 .month-btn.selected { background: linear-gradient(135deg, var(--gold-light), var(--gold-dark)); color: var(--black); border-color: var(--gold); }
 .month-btn.no-data { opacity: 0.4; cursor: default; }
 .preview-box { background: var(--surface); border-radius: var(--radius-sm); border: 1px solid var(--border); padding: 14px; margin-bottom: 14px; }
+.accordion-header { display: flex; align-items: center; justify-content: space-between; cursor: pointer; padding: 10px 0; border-bottom: 1px solid var(--border); user-select: none; -webkit-tap-highlight-color: transparent; }
+.accordion-header:last-child { border-bottom: none; }
+.accordion-title { font-size: 13px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 6px; }
+.accordion-summary { font-size: 12px; color: var(--text-sub); }
+.accordion-arrow { font-size: 12px; color: var(--text-muted); transition: transform 0.2s; }
+.accordion-arrow.open { transform: rotate(180deg); }
+.accordion-body { display: none; padding: 8px 0 4px; }
+.accordion-body.open { display: block; }
+.detail-row { display: flex; justify-content: space-between; font-size: 12px; padding: 5px 8px; border-radius: 6px; margin-bottom: 2px; }
+.detail-row:nth-child(odd) { background: rgba(0,0,0,0.03); }
+.detail-date { color: var(--text-muted); white-space: nowrap; margin-right: 8px; }
+.detail-name { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detail-amount { font-weight: 600; color: var(--text); white-space: nowrap; margin-left: 8px; }
 .preview-row { display: flex; justify-content: space-between; font-size: 13px; padding: 5px 0; border-bottom: 1px solid var(--border); }
 .preview-row:last-child { border-bottom: none; }
 .preview-label { color: var(--text-sub); }
@@ -129,8 +142,8 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 .tab-switch { display: flex; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 3px; margin-bottom: 16px; gap: 2px; }
 .tab-switch-btn { flex: 1; padding: 7px 4px; font-size: 12px; font-weight: 600; border: none; background: none; border-radius: 6px; cursor: pointer; color: var(--text-muted); -webkit-tap-highlight-color: transparent; }
 .tab-switch-btn.active { background: var(--white); color: var(--gold-dark); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-.mode-switch { display: flex; background: rgba(255,255,255,0.1); border-radius: 20px; padding: 2px; margin-left: auto; }
-.mode-btn { padding: 5px 10px; border: none; border-radius: 18px; font-size: 11px; font-weight: 600; cursor: pointer; background: none; color: rgba(255,255,255,0.6); -webkit-tap-highlight-color: transparent; }
+.mode-switch { display: flex; background: rgba(255,255,255,0.4); border-radius: 20px; padding: 2px; margin-left: auto; border: 1px solid var(--gold); }
+.mode-btn { padding: 5px 10px; border: none; border-radius: 18px; font-size: 11px; font-weight: 600; cursor: pointer; background: none; color: var(--gold-dark); -webkit-tap-highlight-color: transparent; }
 .mode-btn.active { background: var(--gold); color: var(--black); }
 .inv-card { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 .inv-card-img { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; background: var(--surface); flex-shrink: 0; }
@@ -151,7 +164,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 #scan-video { width: 100%; max-width: 400px; border-radius: 12px; }
 .scan-guide { position: absolute; width: 240px; height: 120px; border: 3px solid var(--gold); border-radius: 8px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.5); }
 .scan-close { margin-top: 24px; padding: 12px 32px; background: var(--gold); color: var(--black); border: none; border-radius: var(--radius-sm); font-size: 16px; font-weight: 700; cursor: pointer; }
-.toast { position: fixed; bottom: calc(env(safe-area-inset-bottom, 0px) + 76px); left: 16px; right: 16px; background: var(--black); color: var(--gold-light); padding: 14px 16px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; text-align: center; z-index: 200; opacity: 0; transform: translateY(10px); transition: opacity 0.2s, transform 0.2s; pointer-events: none; border: 1px solid var(--gold-dark); }
+.toast { position: fixed; bottom: calc(env(safe-area-inset-bottom, 0px) + 76px); left: 16px; right: 16px; background: linear-gradient(135deg, #c5e8e5, #a8d8d4); color: var(--gold-dark); padding: 14px 16px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; text-align: center; z-index: 200; opacity: 0; transform: translateY(10px); transition: opacity 0.2s, transform 0.2s; pointer-events: none; border: 2px solid var(--gold); box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
 .toast.show { opacity: 1; transform: translateY(0); }
 </style>
 </head>
@@ -437,7 +450,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       <div id="preview-area" style="display:none">
         <div class="preview-box" id="preview-box"></div>
         <div class="export-btn-grid">
-          <button class="btn btn-gold" onclick="doExportTrip()">✈ 出張Excel</button>
+          <button class="btn btn-primary" onclick="doExportTrip()">✈ 出張Excel</button>
           <button class="btn btn-purple" onclick="doExportExpense()">💴 経費Excel</button>
           <button class="btn btn-orange" onclick="doExportPurchase()">🛒 仕入Excel</button>
           <button class="btn btn-teal" onclick="doExportSales()">💹 売上Excel</button>
@@ -512,7 +525,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     </div>
   </div>
   <div class="btn-row">
-    <button class="btn btn-primary" onclick="submitProduct()">商品を登録する</button>
+    <button class="btn btn-gold" onclick="submitProduct()">商品を登録する</button>
   </div>
 </div>
 
@@ -561,7 +574,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     </div>
   </div>
   <div class="btn-row">
-    <button class="btn btn-primary" onclick="submitMove()">入出庫を記録する</button>
+    <button class="btn btn-gold" onclick="submitMove()">入出庫を記録する</button>
   </div>
 </div>
 
@@ -1387,69 +1400,131 @@ function renderMonthGrid() {
   }
 }
 
+function toggleAccordion(id) {
+  const body = document.getElementById('acc-body-' + id);
+  const arrow = document.getElementById('acc-arrow-' + id);
+  if (!body) return;
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  arrow.classList.toggle('open', !isOpen);
+}
+
 function selectMonth(year, month, btnEl) {
   const tApps = tripsForMonth(year, month);
   const eApps = expensesForMonth(year, month);
   const pApps = purchasesForMonth(year, month);
+  const sApps = salesForMonth(year, month);
   document.querySelectorAll('.month-btn').forEach(b => b.classList.remove('selected'));
   btnEl.classList.add('selected');
   if (window._setSelectedMonth) window._setSelectedMonth({ year, month });
   const preview = document.getElementById('preview-area');
   const noData  = document.getElementById('no-data-msg');
   const preBox  = document.getElementById('preview-box');
-  const sAppsCheck = salesForMonth(year, month);
-  if (!tApps.length && !eApps.length && !pApps.length && !sAppsCheck.length) { preview.style.display='none'; noData.style.display='block'; return; }
+  if (!tApps.length && !eApps.length && !pApps.length && !sApps.length) {
+    preview.style.display='none'; noData.style.display='block'; return;
+  }
   noData.style.display = 'none';
   const NAMES = window._getNames?.() || [];
   const SUPPLIERS = window._getSuppliers?.() || [];
   let html = `<div style="font-size:13px;font-weight:700;color:var(--gold-dark);margin-bottom:10px">${year}年${month}月分</div>`;
+
+  // ✈ 出張
   if (tApps.length) {
-    html += `<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin:8px 0 4px">✈ 出張申請</div>`;
-    NAMES.forEach(name => {
-      const rows = tApps.filter(a => a.name === name);
-      const total = rows.reduce((s,a) => s+a.amount, 0);
-      html += `<div class="preview-row"><span class="preview-label">${name}</span><span class="preview-val">${rows.length}件 ／ ¥${total.toLocaleString('ja-JP')}</span></div>`;
-    });
+    const tripTotal = tApps.reduce((s,a) => s+a.amount, 0);
+    const sorted = [...tApps].sort((a,b) => a.date.localeCompare(b.date));
+    let detailHtml = sorted.map(a => `
+      <div class="detail-row">
+        <span class="detail-date">${a.date}</span>
+        <span class="detail-name">${a.name} / ${a.dest}</span>
+        <span class="detail-amount">¥${a.amount.toLocaleString('ja-JP')}</span>
+      </div>`).join('');
+    html += `
+      <div class="accordion-header" onclick="toggleAccordion('trip')">
+        <span class="accordion-title">✈ 出張申請 <span style="font-size:11px;color:var(--text-muted);font-weight:400">${tApps.length}件</span></span>
+        <span style="display:flex;align-items:center;gap:8px">
+          <span class="accordion-summary">¥${tripTotal.toLocaleString('ja-JP')}</span>
+          <span class="accordion-arrow" id="acc-arrow-trip">▼</span>
+        </span>
+      </div>
+      <div class="accordion-body" id="acc-body-trip">${detailHtml}</div>`;
   }
+
+  // 💴 経費
   if (eApps.length) {
     const expTotal = eApps.reduce((s,a) => s+a.amount, 0);
-    html += `<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin:12px 0 4px">💴 経費</div>`;
-    html += `<div class="preview-row"><span class="preview-label">${eApps.length}件</span><span class="preview-val">¥${expTotal.toLocaleString('ja-JP')}</span></div>`;
+    const sorted = [...eApps].sort((a,b) => a.date.localeCompare(b.date));
+    let detailHtml = sorted.map(e => `
+      <div class="detail-row">
+        <span class="detail-date">${e.date}</span>
+        <span class="detail-name">${e.payee} / ${e.category}</span>
+        <span class="detail-amount">¥${e.amount.toLocaleString('ja-JP')}</span>
+      </div>`).join('');
+    html += `
+      <div class="accordion-header" onclick="toggleAccordion('expense')">
+        <span class="accordion-title">💴 経費 <span style="font-size:11px;color:var(--text-muted);font-weight:400">${eApps.length}件</span></span>
+        <span style="display:flex;align-items:center;gap:8px">
+          <span class="accordion-summary">¥${expTotal.toLocaleString('ja-JP')}</span>
+          <span class="accordion-arrow" id="acc-arrow-expense">▼</span>
+        </span>
+      </div>
+      <div class="accordion-body" id="acc-body-expense">${detailHtml}</div>`;
   }
-  const sApps = salesForMonth(year, month);
 
+  // 🛒 仕入
   if (pApps.length) {
     const purTotal = pApps.reduce((s,a) => s+a.amount, 0);
-    html += `<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin:12px 0 4px">🛒 仕入</div>`;
-    SUPPLIERS.forEach(sup => {
-      const rows = pApps.filter(a => a.supplier === sup);
-      if (!rows.length) return;
-      const total = rows.reduce((s,a) => s+a.amount, 0);
-      html += `<div class="preview-row"><span class="preview-label">${sup}</span><span class="preview-val">${rows.length}件 ／ ¥${total.toLocaleString('ja-JP')}</span></div>`;
-    });
-    html += `<div class="preview-row" style="margin-top:4px;border-top:2px solid var(--border);padding-top:6px"><span class="preview-label" style="font-weight:600">仕入合計</span><span class="preview-val" style="color:var(--gold-dark)">¥${purTotal.toLocaleString('ja-JP')}</span></div>`;
+    const sorted = [...pApps].sort((a,b) => a.date.localeCompare(b.date));
+    let detailHtml = sorted.map(p => `
+      <div class="detail-row">
+        <span class="detail-date">${p.date}</span>
+        <span class="detail-name">${p.supplier}${p.note ? ' / ' + p.note : ''}</span>
+        <span class="detail-amount">¥${p.amount.toLocaleString('ja-JP')}</span>
+      </div>`).join('');
+    html += `
+      <div class="accordion-header" onclick="toggleAccordion('purchase')">
+        <span class="accordion-title">🛒 仕入 <span style="font-size:11px;color:var(--text-muted);font-weight:400">${pApps.length}件</span></span>
+        <span style="display:flex;align-items:center;gap:8px">
+          <span class="accordion-summary">¥${purTotal.toLocaleString('ja-JP')}</span>
+          <span class="accordion-arrow" id="acc-arrow-purchase">▼</span>
+        </span>
+      </div>
+      <div class="accordion-body" id="acc-body-purchase">${detailHtml}</div>`;
   }
+
+  // 💹 売上
   if (sApps.length) {
     const salTotal = sApps.reduce((s,a) => s+a.amount, 0);
-    html += `<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin:12px 0 4px">💹 売上</div>`;
-    ['国内（請求書）','国外（インボイス）'].forEach(type => {
-      const rows = sApps.filter(a => a.salesType === type);
-      if (!rows.length) return;
-      html += `<div class="preview-row"><span class="preview-label">${type}</span><span class="preview-val">${rows.length}件 ／ ¥${rows.reduce((s,a)=>s+a.amount,0).toLocaleString('ja-JP')}</span></div>`;
-    });
-    html += `<div class="preview-row" style="margin-top:4px;border-top:2px solid var(--border);padding-top:6px"><span class="preview-label" style="font-weight:600">売上合計</span><span class="preview-val" style="color:var(--teal)">¥${salTotal.toLocaleString('ja-JP')}</span></div>`;
+    const sorted = [...sApps].sort((a,b) => a.date.localeCompare(b.date));
+    let detailHtml = sorted.map(s => `
+      <div class="detail-row">
+        <span class="detail-date">${s.date}</span>
+        <span class="detail-name">${s.client}</span>
+        <span class="detail-amount" style="color:var(--teal)">¥${s.amount.toLocaleString('ja-JP')}</span>
+      </div>`).join('');
+    html += `
+      <div class="accordion-header" onclick="toggleAccordion('sales')">
+        <span class="accordion-title">💹 売上 <span style="font-size:11px;color:var(--text-muted);font-weight:400">${sApps.length}件</span></span>
+        <span style="display:flex;align-items:center;gap:8px">
+          <span class="accordion-summary" style="color:var(--teal)">¥${salTotal.toLocaleString('ja-JP')}</span>
+          <span class="accordion-arrow" id="acc-arrow-sales">▼</span>
+        </span>
+      </div>
+      <div class="accordion-body" id="acc-body-sales">${detailHtml}</div>`;
   }
+
+  // 📊 売上 vs 仕入
   if (pApps.length && sApps.length) {
     const purTotal = pApps.reduce((s,a) => s+a.amount, 0);
     const salTotal = sApps.reduce((s,a) => s+a.amount, 0);
     const profit = salTotal - purTotal;
-    html += `<div style="margin-top:12px;padding:12px;background:var(--black);border-radius:8px;color:#fff">`;
-    html += `<div style="font-size:11px;color:#aaa;margin-bottom:8px;font-weight:700">📊 売上 vs 仕入</div>`;
-    html += `<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:#aaa">仕入合計</span><span style="color:#fed7aa">¥${purTotal.toLocaleString('ja-JP')}</span></div>`;
-    html += `<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:#aaa">売上合計</span><span style="color:#99f6e4">¥${salTotal.toLocaleString('ja-JP')}</span></div>`;
-    html += `<div style="display:flex;justify-content:space-between;border-top:1px solid #444;padding-top:8px"><span style="font-weight:700">粗利益</span><span style="font-weight:700;color:${profit>=0?'#4ade80':'#f87171'}">¥${profit.toLocaleString('ja-JP')}</span></div>`;
+    html += `<div style="margin-top:12px;padding:12px;background:var(--gold-bg);border:1px solid var(--gold);border-radius:8px;">`;
+    html += `<div style="font-size:11px;color:var(--gold-dark);margin-bottom:8px;font-weight:700">📊 売上 vs 仕入</div>`;
+    html += `<div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:13px"><span style="color:var(--text-sub)">仕入合計</span><span style="color:var(--orange)">¥${purTotal.toLocaleString('ja-JP')}</span></div>`;
+    html += `<div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:13px"><span style="color:var(--text-sub)">売上合計</span><span style="color:var(--teal)">¥${salTotal.toLocaleString('ja-JP')}</span></div>`;
+    html += `<div style="display:flex;justify-content:space-between;border-top:1px solid var(--gold);padding-top:8px;font-size:14px"><span style="font-weight:700">粗利益</span><span style="font-weight:700;color:${profit>=0?'var(--success)':'var(--danger)'}">¥${profit.toLocaleString('ja-JP')}</span></div>`;
     html += `</div>`;
   }
+
   preBox.innerHTML = html;
   preview.style.display = 'block';
 }
