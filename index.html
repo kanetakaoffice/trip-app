@@ -815,30 +815,65 @@ async function lookupJan() {
   if (jan.length < 8) { status.textContent = ''; return; }
   status.textContent = '🔍 商品情報を検索中...';
   status.style.color = 'var(--text-muted)';
+
+  // Try Open Food Facts first
   try {
-    const url = `https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch?appid=${YAHOO_CLIENT_ID}&jan_code=${jan}&results=1&output=json`;
-    const r = await fetch(url);
-    const d = await r.json();
-    const hits = d?.hits;
-    if (hits && hits.length > 0) {
-      const item = hits[0];
-      const name = item.name || '';
-      const brand = item.brand?.name || '';
-      const model = item.janCode || jan;
-      // Fill in fields
-      if (name) document.getElementById('inv-name').value = name;
-      if (brand) document.getElementById('inv-maker').value = brand;
-      document.getElementById('inv-model').value = model;
-      status.textContent = '✅ 商品情報を取得しました！';
-      status.style.color = 'var(--success)';
-    } else {
-      status.textContent = '⚠ 商品が見つかりませんでした。手入力してください。';
-      status.style.color = 'var(--warning)';
+    const r1 = await fetch(`https://world.openfoodfacts.org/api/v0/product/${jan}.json`);
+    const d1 = await r1.json();
+    if (d1.status === 1 && d1.product) {
+      const p = d1.product;
+      const name = p.product_name_ja || p.product_name || '';
+      const brand = p.brands || '';
+      if (name) {
+        if (name) document.getElementById('inv-name').value = name;
+        if (brand) document.getElementById('inv-maker').value = brand;
+        status.textContent = '✅ 商品情報を取得しました！';
+        status.style.color = 'var(--success)';
+        return;
+      }
     }
-  } catch(e) {
-    status.textContent = '⚠ 検索に失敗しました。手入力してください。';
-    status.style.color = 'var(--warning)';
-  }
+  } catch(e) {}
+
+  // Try Open Beauty Facts
+  try {
+    const r2 = await fetch(`https://world.openbeautyfacts.org/api/v0/product/${jan}.json`);
+    const d2 = await r2.json();
+    if (d2.status === 1 && d2.product) {
+      const p = d2.product;
+      const name = p.product_name_ja || p.product_name || '';
+      const brand = p.brands || '';
+      if (name) {
+        document.getElementById('inv-name').value = name;
+        if (brand) document.getElementById('inv-maker').value = brand;
+        status.textContent = '✅ 商品情報を取得しました！';
+        status.style.color = 'var(--success)';
+        return;
+      }
+    }
+  } catch(e) {}
+
+  // Try Open Product Data (jp.jan.la)
+  try {
+    const r3 = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${jan}`);
+    const d3 = await r3.json();
+    if (d3.items && d3.items.length > 0) {
+      const item = d3.items[0];
+      const name = item.title || '';
+      const brand = item.brand || '';
+      if (name) {
+        document.getElementById('inv-name').value = name;
+        if (brand) document.getElementById('inv-maker').value = brand;
+        if (item.model) document.getElementById('inv-model').value = item.model;
+        status.textContent = '✅ 商品情報を取得しました！';
+        status.style.color = 'var(--success)';
+        return;
+      }
+    }
+  } catch(e) {}
+
+  // JANコードのみセット
+  status.textContent = '⚠ データベースに商品情報がありませんでした。手入力してください。';
+  status.style.color = 'var(--warning)';
 }
 
 async function submitProduct() {
