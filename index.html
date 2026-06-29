@@ -25,6 +25,7 @@
   --green: #16a34a; --green-bg: #f0fdf4;
   --purple: #7c3aed; --purple-bg: #f5f3ff;
   --orange: #ea580c; --orange-bg: #fff7ed;
+  --teal: #0f766e; --teal-bg: #f0fdfa; --teal-light: #99f6e4;
   --text: #1a1a1a; --text-sub: #6b7280; --text-muted: #9ca3af;
   --border: #e5e7eb; --surface: #f9f7f2; --white: #ffffff;
   --success: #16a34a; --success-bg: #f0fdf4;
@@ -78,6 +79,8 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 .btn-green { background: #bbf7d0; color: #14532d; border: none; }
 .btn-purple { background: #ddd6fe; color: #4c1d95; border: none; }
 .btn-orange { background: #fed7aa; color: #7c2d12; border: none; }
+.btn-teal { background: #99f6e4; color: #134e4a; border: none; }
+.status-sales { background: #f0fdfa; color: #0f766e; }
 .btn-gold { background: #bfdbfe; color: #1e3a5f; font-weight: 700; border: none; }
 .list-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .list-count { font-size: 14px; color: var(--text-sub); font-weight: 500; }
@@ -310,12 +313,59 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     </div>
   </div>
 
+  <!-- 売上入力フォーム -->
+  <div id="screen-sales" class="screen">
+    <div id="sal-alert-box" class="alert">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span id="sal-alert-msg"></span>
+    </div>
+    <div class="card">
+      <div class="card-title">売上情報</div>
+      <div class="field">
+        <div class="field-label">日付 <span class="req">*</span></div>
+        <input type="date" id="sal-date">
+      </div>
+      <div class="field-divider"></div>
+      <div class="field" style="padding-top:16px">
+        <div class="field-label">区分 <span class="req">*</span></div>
+        <select id="sal-type" onchange="handleSalType()">
+          <option value="">選択してください</option>
+          <option value="domestic">国内（請求書）</option>
+          <option value="overseas">国外（インボイス）</option>
+        </select>
+      </div>
+      <div class="field-divider"></div>
+      <div class="field" style="padding-top:16px">
+        <div class="field-label">卸先 <span class="req">*</span></div>
+        <select id="sal-client">
+          <option value="">先に区分を選択してください</option>
+        </select>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">金額</div>
+      <div class="field">
+        <input type="number" id="sal-amount" placeholder="0" min="0" style="font-size:20px; font-weight:700; text-align:right;">
+        <div style="font-size:12px; color:var(--text-muted); margin-top:6px; text-align:right;">円</div>
+      </div>
+      <div class="field-divider"></div>
+      <div class="field" style="padding-top:16px">
+        <div class="field-label">メモ</div>
+        <input type="text" id="sal-note" placeholder="請求書番号など（任意）">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-teal" onclick="submitSales()">売上を登録する</button>
+    </div>
+  </div>
+
   <!-- 一覧 -->
   <div id="screen-list" class="screen">
     <div class="tab-switch">
       <button class="tab-switch-btn active" id="list-tab-trip" onclick="switchListTab('trip')">✈ 出張</button>
       <button class="tab-switch-btn" id="list-tab-expense" onclick="switchListTab('expense')">💴 経費</button>
       <button class="tab-switch-btn" id="list-tab-purchase" onclick="switchListTab('purchase')">🛒 仕入</button>
+      <button class="tab-switch-btn" id="list-tab-sales" onclick="switchListTab('sales')">💹 売上</button>
     </div>
     <div class="list-toolbar">
       <div class="list-count" id="list-count">0件</div>
@@ -342,7 +392,8 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <div class="export-btn-grid">
           <button class="btn btn-gold" onclick="doExportTrip()">✈ 出張Excel</button>
           <button class="btn btn-purple" onclick="doExportExpense()">💴 経費Excel</button>
-          <button class="btn btn-orange" onclick="doExportPurchase()" style="grid-column:1/-1">🛒 仕入Excel</button>
+          <button class="btn btn-orange" onclick="doExportPurchase()">🛒 仕入Excel</button>
+          <button class="btn btn-teal" onclick="doExportSales()">💹 売上Excel</button>
         </div>
       </div>
       <div id="no-data-msg" style="display:none; text-align:center; padding:20px; color:var(--text-muted); font-size:14px;">この月のデータがありません</div>
@@ -371,6 +422,12 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       仕入
     </button>
   </div>
+  <div class="nav-btn-wrap">
+    <button class="nav-btn" id="nav-sales" onclick="showScreen('sales')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+      売上
+    </button>
+  </div>
   <div class="nav-btn-wrap" style="position:relative">
     <button class="nav-btn" id="nav-list" onclick="showScreen('list')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
@@ -390,10 +447,12 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 
 <script>
 const DB_URL = 'https://trip-app-a1746-default-rtdb.asia-southeast1.firebasedatabase.app';
-let trips = [], expenses = [], purchases = [], selectedMonth = null;
+let trips = [], expenses = [], purchases = [], sales = [], selectedMonth = null;
 const NAME_AMOUNT = { '金髙孝紀': 20000, '金髙裕亮': 10000 };
 const NAMES = ['金髙孝紀', '金髙裕亮'];
 const SUPPLIERS = ['店舗', '電脳', '（株）HAK', '（株）GAIN'];
+const DOMESTIC_CLIENTS = ['昇輝株式会社','株式会社RISE','ピュアクリエイト株式会社','東谷株式会社','株式会社グルラジトレイディングコーポレイション','株式会社サプライズ','エル・ダブル株式会社','環盛株式会社','株式会社HAK'];
+const OVERSEAS_CLIENTS = ['ANGCO INTERNATIONAL TRADING COMPANY（香港）'];
 
 function objToArr(obj) {
   if (!obj) return [];
@@ -402,15 +461,17 @@ function objToArr(obj) {
 
 async function loadAll() {
   try {
-    const [t, e, p] = await Promise.all([
+    const [t, e, p, s] = await Promise.all([
       fetch(DB_URL + '/applications.json').then(r => r.json()),
       fetch(DB_URL + '/expenses.json').then(r => r.json()),
-      fetch(DB_URL + '/purchases.json').then(r => r.json())
+      fetch(DB_URL + '/purchases.json').then(r => r.json()),
+      fetch(DB_URL + '/sales.json').then(r => r.json())
     ]);
     trips     = objToArr(t).sort((a,b) => (b.date||'') > (a.date||'') ? 1 : -1);
     expenses  = objToArr(e).sort((a,b) => (b.date||'') > (a.date||'') ? 1 : -1);
     purchases = objToArr(p).sort((a,b) => (b.date||'') > (a.date||'') ? 1 : -1);
-    console.log('Loaded:', trips.length, expenses.length, purchases.length);
+    sales     = objToArr(s).sort((a,b) => (b.date||'') > (a.date||'') ? 1 : -1);
+    console.log('Loaded:', trips.length, expenses.length, purchases.length, sales.length);
     updateBadge();
     document.getElementById('list-loading').style.display = 'none';
     if (document.getElementById('screen-list').classList.contains('active')) renderList();
@@ -445,9 +506,12 @@ window._fbPushPurchase  = d => fbPush('purchases', d);
 window._fbRemoveTrip     = k => fbRemove('applications', k);
 window._fbRemoveExpense  = k => fbRemove('expenses', k);
 window._fbRemovePurchase = k => fbRemove('purchases', k);
+window._fbPushSales    = d => fbPush('sales', d);
+window._fbRemoveSales  = k => fbRemove('sales', k);
 window._getTrips      = () => trips;
 window._getExpenses   = () => expenses;
 window._getPurchases  = () => purchases;
+window._getSales      = () => sales;
 window._getNames      = () => NAMES;
 window._getSuppliers  = () => SUPPLIERS;
 window._getNameAmount = () => NAME_AMOUNT;
@@ -569,9 +633,50 @@ async function submitPurchase() {
   try { await window._fbPushPurchase(data); clearPurchaseForm(); showToast('仕入を登録しました'); } catch(e) { showAlert('pur-alert-box','pur-alert-msg','登録に失敗しました','error'); }
 }
 
+// ── 売上フォーム ──
+function handleSalType() {
+  const type = document.getElementById('sal-type').value;
+  const sel = document.getElementById('sal-client');
+  sel.innerHTML = '<option value="">選択してください</option>';
+  const DOMESTIC_CLIENTS = ['昇輝株式会社','株式会社RISE','ピュアクリエイト株式会社','東谷株式会社','株式会社グルラジトレイディングコーポレイション','株式会社サプライズ','エル・ダブル株式会社','環盛株式会社','株式会社HAK'];
+  const OVERSEAS_CLIENTS = ['ANGCO INTERNATIONAL TRADING COMPANY（香港）'];
+  const clients = type === 'domestic' ? DOMESTIC_CLIENTS : type === 'overseas' ? OVERSEAS_CLIENTS : [];
+  clients.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; sel.appendChild(o); });
+}
+
+function getSalesData() {
+  const date   = document.getElementById('sal-date').value;
+  const type   = document.getElementById('sal-type').value;
+  const client = document.getElementById('sal-client').value;
+  const amount = document.getElementById('sal-amount').value;
+  const note   = document.getElementById('sal-note').value.trim();
+  if (!date || !type || !client || !amount) return null;
+  const typeLabel = type === 'domestic' ? '国内（請求書）' : '国外（インボイス）';
+  return { type: 'sales', date, salesType: typeLabel, client, amount: parseInt(amount,10), note, submittedAt: new Date().toLocaleDateString('ja-JP') };
+}
+
+function clearSalesForm() {
+  document.getElementById('sal-date').value = '';
+  document.getElementById('sal-type').selectedIndex = 0;
+  document.getElementById('sal-client').innerHTML = '<option value="">先に区分を選択してください</option>';
+  document.getElementById('sal-amount').value = '';
+  document.getElementById('sal-note').value = '';
+}
+
+async function submitSales() {
+  const data = getSalesData();
+  if (!data) { showAlert('sal-alert-box','sal-alert-msg','必須項目をすべて入力してください','error'); return; }
+  try { await window._fbPushSales(data); clearSalesForm(); showToast('売上を登録しました'); } catch(e) { showAlert('sal-alert-box','sal-alert-msg','登録に失敗しました','error'); }
+}
+
+async function deleteSales(key) {
+  if (!confirm('この売上を削除しますか？')) return;
+  try { await window._fbRemoveSales(key); showToast('削除しました'); } catch(e) {}
+}
+
 function switchListTab(tab) {
   currentListTab = tab;
-  ['trip','expense','purchase'].forEach(t => document.getElementById('list-tab-'+t).classList.toggle('active', t === tab));
+  ['trip','expense','purchase','sales'].forEach(t => { const el = document.getElementById('list-tab-'+t); if(el) el.classList.toggle('active', t === tab); });
   renderList();
 }
 
@@ -618,7 +723,7 @@ function renderList() {
           </div>
         </div>
       </div>`).join('');
-  } else {
+  } else if (currentListTab === 'purchase') {
     const items = window._getPurchases ? window._getPurchases() : [];
     document.getElementById('list-count').textContent = items.length + '件';
     if (!items.length) { container.innerHTML = ''; empty.style.display = 'block'; return; }
@@ -637,6 +742,26 @@ function renderList() {
           </div>
         </div>
       </div>`).join('');
+  } else {
+    const items = window._getSales ? window._getSales() : [];
+    document.getElementById('list-count').textContent = items.length + '件';
+    if (!items.length) { container.innerHTML = ''; empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    container.innerHTML = items.map(s => `
+      <div class="trip-card">
+        <div class="trip-card-head">
+          <div class="trip-meta"><span class="trip-date">${s.date}</span><span class="trip-name">${s.salesType||''}</span></div>
+          <span class="trip-status status-sales">売上</span>
+        </div>
+        <div class="trip-card-body">
+          <div class="trip-dest">${s.client}</div>
+          ${s.note ? `<div class="trip-purpose">${s.note}</div>` : ''}
+          <div class="trip-footer">
+            <div class="trip-amount" style="color:var(--teal)">¥${s.amount.toLocaleString('ja-JP')}</div>
+            <button class="delete-btn" onclick="deleteSales('${s._key}')">削除</button>
+          </div>
+        </div>
+      </div>`).join('');
   }
 }
 
@@ -645,7 +770,7 @@ async function deleteExpense(key) { if (!confirm('削除しますか？')) retur
 async function deletePurchase(key) { if (!confirm('削除しますか？')) return; try { await window._fbRemovePurchase(key); showToast('削除しました'); } catch(e) {} }
 
 function updateBadge() {
-  const n = (window._getTrips?.()||[]).length + (window._getExpenses?.()||[]).length + (window._getPurchases?.()||[]).length;
+  const n = (window._getTrips?.()||[]).length + (window._getExpenses?.()||[]).length + (window._getPurchases?.()||[]).length + (window._getSales?.()||[]).length;
   const b = document.getElementById('nav-badge');
   b.style.display = n > 0 ? 'block' : 'none';
   b.textContent = n;
@@ -668,6 +793,7 @@ function getMonthKey(y, m) { return y + '-' + String(m).padStart(2,'0'); }
 function tripsForMonth(y, m)     { return (window._getTrips?.()||[]).filter(a => a.date?.startsWith(getMonthKey(y,m))); }
 function expensesForMonth(y, m)  { return (window._getExpenses?.()||[]).filter(a => a.date?.startsWith(getMonthKey(y,m))); }
 function purchasesForMonth(y, m) { return (window._getPurchases?.()||[]).filter(a => a.date?.startsWith(getMonthKey(y,m))); }
+function salesForMonth(y, m) { return (window._getSales?.()||[]).filter(a => a.date?.startsWith(getMonthKey(y,m))); }
 
 function renderMonthGrid() {
   const year = parseInt(document.getElementById('year-sel').value);
@@ -677,7 +803,7 @@ function renderMonthGrid() {
   document.getElementById('no-data-msg').style.display = 'none';
   grid.innerHTML = '';
   for (let m = 1; m <= 12; m++) {
-    const hasData = tripsForMonth(year,m).length > 0 || expensesForMonth(year,m).length > 0 || purchasesForMonth(year,m).length > 0;
+    const hasData = tripsForMonth(year,m).length > 0 || expensesForMonth(year,m).length > 0 || purchasesForMonth(year,m).length > 0 || salesForMonth(year,m).length > 0;
     const btn = document.createElement('button');
     btn.textContent = m + '月';
     btn.className = 'month-btn' + (hasData ? ' has-data' : ' no-data');
@@ -696,7 +822,8 @@ function selectMonth(year, month, btnEl) {
   const preview = document.getElementById('preview-area');
   const noData  = document.getElementById('no-data-msg');
   const preBox  = document.getElementById('preview-box');
-  if (!tApps.length && !eApps.length && !pApps.length) { preview.style.display='none'; noData.style.display='block'; return; }
+  const sAppsCheck = salesForMonth(year, month);
+  if (!tApps.length && !eApps.length && !pApps.length && !sAppsCheck.length) { preview.style.display='none'; noData.style.display='block'; return; }
   noData.style.display = 'none';
   const NAMES = window._getNames?.() || [];
   const SUPPLIERS = window._getSuppliers?.() || [];
@@ -714,6 +841,8 @@ function selectMonth(year, month, btnEl) {
     html += `<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin:12px 0 4px">💴 経費</div>`;
     html += `<div class="preview-row"><span class="preview-label">${eApps.length}件</span><span class="preview-val">¥${expTotal.toLocaleString('ja-JP')}</span></div>`;
   }
+  const sApps = salesForMonth(year, month);
+
   if (pApps.length) {
     const purTotal = pApps.reduce((s,a) => s+a.amount, 0);
     html += `<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin:12px 0 4px">🛒 仕入</div>`;
@@ -724,6 +853,27 @@ function selectMonth(year, month, btnEl) {
       html += `<div class="preview-row"><span class="preview-label">${sup}</span><span class="preview-val">${rows.length}件 ／ ¥${total.toLocaleString('ja-JP')}</span></div>`;
     });
     html += `<div class="preview-row" style="margin-top:4px;border-top:2px solid var(--border);padding-top:6px"><span class="preview-label" style="font-weight:600">仕入合計</span><span class="preview-val" style="color:var(--gold-dark)">¥${purTotal.toLocaleString('ja-JP')}</span></div>`;
+  }
+  if (sApps.length) {
+    const salTotal = sApps.reduce((s,a) => s+a.amount, 0);
+    html += `<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin:12px 0 4px">💹 売上</div>`;
+    ['国内（請求書）','国外（インボイス）'].forEach(type => {
+      const rows = sApps.filter(a => a.salesType === type);
+      if (!rows.length) return;
+      html += `<div class="preview-row"><span class="preview-label">${type}</span><span class="preview-val">${rows.length}件 ／ ¥${rows.reduce((s,a)=>s+a.amount,0).toLocaleString('ja-JP')}</span></div>`;
+    });
+    html += `<div class="preview-row" style="margin-top:4px;border-top:2px solid var(--border);padding-top:6px"><span class="preview-label" style="font-weight:600">売上合計</span><span class="preview-val" style="color:var(--teal)">¥${salTotal.toLocaleString('ja-JP')}</span></div>`;
+  }
+  if (pApps.length && sApps.length) {
+    const purTotal = pApps.reduce((s,a) => s+a.amount, 0);
+    const salTotal = sApps.reduce((s,a) => s+a.amount, 0);
+    const profit = salTotal - purTotal;
+    html += `<div style="margin-top:12px;padding:12px;background:var(--black);border-radius:8px;color:#fff">`;
+    html += `<div style="font-size:11px;color:#aaa;margin-bottom:8px;font-weight:700">📊 売上 vs 仕入</div>`;
+    html += `<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:#aaa">仕入合計</span><span style="color:#fed7aa">¥${purTotal.toLocaleString('ja-JP')}</span></div>`;
+    html += `<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:#aaa">売上合計</span><span style="color:#99f6e4">¥${salTotal.toLocaleString('ja-JP')}</span></div>`;
+    html += `<div style="display:flex;justify-content:space-between;border-top:1px solid #444;padding-top:8px"><span style="font-weight:700">粗利益</span><span style="font-weight:700;color:${profit>=0?'#4ade80':'#f87171'}">¥${profit.toLocaleString('ja-JP')}</span></div>`;
+    html += `</div>`;
   }
   preBox.innerHTML = html;
   preview.style.display = 'block';
@@ -804,6 +954,36 @@ function doExportPurchase() {
   XLSX.utils.book_append_sheet(wb, ws, `${month}月仕入`);
   XLSX.writeFile(wb, `仕入管理表_${year}年${month}月.xlsx`);
   showToast('仕入Excelを出力しました');
+}
+
+function doExportSales() {
+  const sm = window._getSelectedMonth?.();
+  if (!sm) return;
+  const { year, month } = sm;
+  const rows = salesForMonth(year, month).sort((a,b) => a.date.localeCompare(b.date));
+  if (!rows.length) { showToast('この月の売上データがありません'); return; }
+  const total = rows.reduce((s,a) => s+a.amount, 0);
+  const aoa = [
+    [`売上管理表　${year}年${month}月分`], [],
+    ['日付','区分','卸先','金額（円）','メモ'],
+    ...rows.map(r => [r.date, r.salesType||'', r.client, r.amount, r.note||'']),
+    [], ['','','合計', total, '']
+  ];
+  // 卸先別小計
+  const clients = [...new Set(rows.map(r => r.client))];
+  const subtotals = [[], ['卸先別合計'], ['卸先','件数','合計金額（円）']];
+  clients.forEach(c => {
+    const cRows = rows.filter(r => r.client === c);
+    subtotals.push([c, cRows.length, cRows.reduce((s,r)=>s+r.amount,0)]);
+  });
+  subtotals.push([], ['', '合計', total]);
+  const ws = XLSX.utils.aoa_to_sheet([...aoa, ...subtotals]);
+  ws['!cols'] = [{wch:14},{wch:16},{wch:28},{wch:14},{wch:20}];
+  ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:4}}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, `${month}月売上`);
+  XLSX.writeFile(wb, `売上管理表_${year}年${month}月.xlsx`);
+  showToast('売上Excelを出力しました');
 }
 
 function showScreen(name) {
