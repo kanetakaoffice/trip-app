@@ -5,63 +5,38 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="出張申請">
+<meta name="apple-mobile-web-app-title" content="申請管理">
 <meta name="theme-color" content="#2563eb">
-<title>出張申請</title>
+<title>申請管理</title>
 <link rel="manifest" href="manifest.json">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --blue: #2563eb; --blue-dark: #1d4ed8; --blue-light: #eff6ff;
+  --blue: #2563eb; --blue-light: #eff6ff;
+  --green: #16a34a; --green-bg: #f0fdf4;
+  --purple: #7c3aed; --purple-bg: #f5f3ff;
   --text: #111827; --text-sub: #6b7280; --text-muted: #9ca3af;
   --border: #e5e7eb; --surface: #f9fafb; --white: #ffffff;
   --success: #16a34a; --success-bg: #f0fdf4;
   --danger: #dc2626; --danger-bg: #fef2f2;
   --warning-bg: #fffbeb; --warning: #d97706;
-  --green: #16a34a;
   --radius: 12px; --radius-sm: 8px;
 }
-html, body {
-  height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
-  background: var(--surface); color: var(--text);
-  -webkit-font-smoothing: antialiased;
-}
-.header {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-  background: var(--blue); color: #fff;
-  padding: env(safe-area-inset-top, 0) 0 0;
-}
+html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif; background: var(--surface); color: var(--text); -webkit-font-smoothing: antialiased; }
+.header { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: var(--blue); color: #fff; padding: env(safe-area-inset-top, 0) 0 0; }
 .header-inner { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; }
 .header-title { font-size: 17px; font-weight: 600; }
 .header-sub { font-size: 12px; opacity: 0.8; margin-top: 1px; }
 .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; display: inline-block; margin-left: 6px; }
 .sync-dot.offline { background: #f87171; }
-.bottom-nav {
-  position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
-  background: var(--white); border-top: 1px solid var(--border);
-  display: flex; padding-bottom: env(safe-area-inset-bottom, 0);
-}
-.nav-btn {
-  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 4px; padding: 10px 0 8px; background: none; border: none; cursor: pointer;
-  color: var(--text-muted); font-size: 10px; font-weight: 500;
-  -webkit-tap-highlight-color: transparent;
-}
+.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 100; background: var(--white); border-top: 1px solid var(--border); display: flex; padding-bottom: env(safe-area-inset-bottom, 0); }
+.nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 8px 0 6px; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 9px; font-weight: 500; -webkit-tap-highlight-color: transparent; }
 .nav-btn.active { color: var(--blue); }
-.nav-btn svg { width: 24px; height: 24px; stroke-width: 1.8; }
-.nav-badge {
-  position: absolute; top: 6px; right: calc(50% - 22px);
-  background: var(--danger); color: #fff; font-size: 10px; font-weight: 700;
-  border-radius: 20px; padding: 1px 5px; min-width: 16px; text-align: center; display: none;
-}
+.nav-btn svg { width: 22px; height: 22px; stroke-width: 1.8; }
+.nav-badge { position: absolute; top: 4px; right: calc(50% - 20px); background: var(--danger); color: #fff; font-size: 9px; font-weight: 700; border-radius: 20px; padding: 1px 4px; min-width: 14px; text-align: center; display: none; }
 .nav-btn-wrap { position: relative; flex: 1; display: flex; justify-content: center; }
-.main {
-  padding-top: calc(env(safe-area-inset-top, 0px) + 60px);
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 70px);
-  min-height: 100vh;
-}
+.main { padding-top: calc(env(safe-area-inset-top, 0px) + 60px); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 68px); min-height: 100vh; }
 .screen { display: none; padding: 16px; }
 .screen.active { display: block; }
 .card { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; margin-bottom: 16px; }
@@ -77,59 +52,49 @@ select, input[type="date"], input[type="text"], input[type="number"], textarea {
 }
 select:focus, input:focus, textarea:focus { border-color: var(--blue); }
 select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 36px; }
-textarea { resize: none; height: 90px; line-height: 1.5; }
-.amount-display {
-  width: 100%; padding: 13px 14px; font-size: 22px; font-weight: 700; color: var(--blue);
-  border: 1.5px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--blue-light); text-align: center;
-}
+textarea { resize: none; height: 72px; line-height: 1.5; }
+.amount-display { width: 100%; padding: 13px 14px; font-size: 22px; font-weight: 700; color: var(--blue); border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: var(--blue-light); text-align: center; }
 .alert { display: none; margin: 0 16px 12px; padding: 12px 14px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; align-items: center; gap: 8px; }
 .alert.show { display: flex; }
 .alert.success { background: var(--success-bg); color: var(--success); }
 .alert.error { background: var(--danger-bg); color: var(--danger); }
 .field-divider { height: 1px; background: var(--border); margin: 0 16px; }
 .btn-row { display: flex; gap: 10px; padding: 16px; }
-.btn {
-  flex: 1; padding: 15px; font-size: 16px; font-weight: 600; font-family: inherit;
-  border-radius: var(--radius-sm); border: none; cursor: pointer;
-  transition: opacity 0.15s, transform 0.1s; -webkit-tap-highlight-color: transparent;
-}
+.btn { flex: 1; padding: 15px; font-size: 16px; font-weight: 600; font-family: inherit; border-radius: var(--radius-sm); border: none; cursor: pointer; transition: transform 0.1s; -webkit-tap-highlight-color: transparent; }
 .btn:active { transform: scale(0.97); }
 .btn-primary { background: var(--blue); color: #fff; }
 .btn-secondary { background: var(--surface); color: var(--text); border: 1.5px solid var(--border); }
 .btn-green { background: var(--green); color: #fff; border: none; }
+.btn-purple { background: var(--purple); color: #fff; border: none; }
 .list-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .list-count { font-size: 14px; color: var(--text-sub); font-weight: 500; }
 .trip-card { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 10px; overflow: hidden; }
-.trip-card-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.trip-card-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--surface); }
 .trip-meta { display: flex; align-items: center; gap: 8px; }
 .trip-date { font-size: 13px; font-weight: 600; color: var(--text-sub); }
-.trip-name { font-size: 13px; color: var(--text-muted); }
+.trip-name { font-size: 12px; color: var(--text-muted); }
 .trip-status { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; }
 .status-pending { background: var(--warning-bg); color: var(--warning); }
 .status-draft { background: var(--surface); color: var(--text-muted); border: 1px solid var(--border); }
+.status-expense { background: var(--purple-bg); color: var(--purple); }
 .trip-card-body { padding: 12px 14px; }
-.trip-dest { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.trip-dest { font-size: 15px; font-weight: 700; margin-bottom: 3px; }
 .trip-purpose { font-size: 13px; color: var(--text-sub); margin-bottom: 10px; }
 .trip-footer { display: flex; align-items: center; justify-content: space-between; }
-.trip-amount { font-size: 20px; font-weight: 700; color: var(--blue); }
-.delete-btn { padding: 7px 14px; background: none; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 13px; color: var(--danger); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.trip-amount { font-size: 18px; font-weight: 700; color: var(--blue); }
+.delete-btn { padding: 6px 12px; background: none; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 13px; color: var(--danger); cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
 .empty-state svg { width: 48px; height: 48px; margin-bottom: 12px; opacity: 0.4; }
 .empty-state p { font-size: 15px; }
 .export-section { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); padding: 16px; margin-bottom: 16px; }
 .export-section h3 { font-size: 15px; font-weight: 600; margin-bottom: 14px; color: var(--text); }
 .month-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
-.month-btn {
-  padding: 12px 4px; background: var(--surface); border: 1.5px solid var(--border);
-  border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; color: var(--text-sub);
-  cursor: pointer; text-align: center; -webkit-tap-highlight-color: transparent; transition: all 0.15s;
-}
+.month-btn { padding: 12px 4px; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; color: var(--text-sub); cursor: pointer; text-align: center; -webkit-tap-highlight-color: transparent; transition: all 0.15s; }
 .month-btn.has-data { border-color: var(--blue); color: var(--blue); background: var(--blue-light); }
 .month-btn.selected { background: var(--blue); color: #fff; border-color: var(--blue); }
 .month-btn.no-data { opacity: 0.4; cursor: default; }
 .preview-box { background: var(--surface); border-radius: var(--radius-sm); border: 1px solid var(--border); padding: 14px; margin-bottom: 14px; }
-.preview-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.preview-row { display: flex; justify-content: space-between; font-size: 13px; padding: 5px 0; border-bottom: 1px solid var(--border); }
 .preview-row:last-child { border-bottom: none; }
 .preview-label { color: var(--text-sub); }
 .preview-val { font-weight: 600; color: var(--text); }
@@ -137,16 +102,17 @@ textarea { resize: none; height: 90px; line-height: 1.5; }
 .year-select-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .year-select-row label { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; }
 .year-select-row select { flex: 1; padding: 10px 14px; font-size: 15px; }
+.export-btn-row { display: flex; gap: 10px; padding: 0; }
 .loading { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 14px; }
 .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.toast {
-  position: fixed; bottom: calc(env(safe-area-inset-bottom, 0px) + 80px); left: 16px; right: 16px;
-  background: #1f2937; color: #fff; padding: 14px 16px; border-radius: var(--radius-sm);
-  font-size: 14px; font-weight: 500; text-align: center; z-index: 200;
-  opacity: 0; transform: translateY(10px); transition: opacity 0.2s, transform 0.2s; pointer-events: none;
-}
+.section-label { font-size: 12px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.08em; margin: 16px 0 8px; text-transform: uppercase; }
+.tab-switch { display: flex; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 3px; margin-bottom: 16px; }
+.tab-switch-btn { flex: 1; padding: 8px; font-size: 13px; font-weight: 600; border: none; background: none; border-radius: 6px; cursor: pointer; color: var(--text-muted); -webkit-tap-highlight-color: transparent; }
+.tab-switch-btn.active { background: var(--white); color: var(--blue); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.toast { position: fixed; bottom: calc(env(safe-area-inset-bottom, 0px) + 76px); left: 16px; right: 16px; background: #1f2937; color: #fff; padding: 14px 16px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; text-align: center; z-index: 200; opacity: 0; transform: translateY(10px); transition: opacity 0.2s, transform 0.2s; pointer-events: none; }
 .toast.show { opacity: 1; transform: translateY(0); }
+.expense-tag { display: inline-block; background: var(--purple-bg); color: var(--purple); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; margin-left: 6px; }
 </style>
 </head>
 <body>
@@ -154,7 +120,7 @@ textarea { resize: none; height: 90px; line-height: 1.5; }
 <div class="header">
   <div class="header-inner">
     <div>
-      <div class="header-title">✈ 出張申請 <span class="sync-dot" id="sync-dot"></span></div>
+      <div class="header-title">📋 申請管理 <span class="sync-dot" id="sync-dot"></span></div>
       <div class="header-sub" id="sync-status">接続中...</div>
     </div>
   </div>
@@ -162,13 +128,12 @@ textarea { resize: none; height: 90px; line-height: 1.5; }
 
 <div class="main">
 
-  <!-- 申請フォーム -->
+  <!-- 出張申請フォーム -->
   <div id="screen-form" class="screen active">
     <div id="alert-box" class="alert">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
       <span id="alert-msg"></span>
     </div>
-
     <div class="card">
       <div class="card-title">基本情報</div>
       <div class="field">
@@ -185,7 +150,6 @@ textarea { resize: none; height: 90px; line-height: 1.5; }
         <input type="date" id="trip-date">
       </div>
     </div>
-
     <div class="card">
       <div class="card-title">出張内容</div>
       <div class="field">
@@ -220,7 +184,6 @@ textarea { resize: none; height: 90px; line-height: 1.5; }
         </div>
       </div>
     </div>
-
     <div class="card">
       <div class="card-title">金額</div>
       <div class="field">
@@ -228,22 +191,78 @@ textarea { resize: none; height: 90px; line-height: 1.5; }
         <input type="hidden" id="amount">
       </div>
     </div>
-
     <div class="card">
       <div class="card-title">備考</div>
       <div class="field">
         <textarea id="memo" placeholder="特記事項があれば記載してください"></textarea>
       </div>
     </div>
-
     <div class="btn-row">
       <button class="btn btn-secondary" onclick="saveDraft()">下書き</button>
       <button class="btn btn-primary" onclick="submitForm()">申請する</button>
     </div>
   </div>
 
-  <!-- 申請一覧 -->
+  <!-- 経費入力フォーム -->
+  <div id="screen-expense" class="screen">
+    <div id="exp-alert-box" class="alert">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span id="exp-alert-msg"></span>
+    </div>
+    <div class="card">
+      <div class="card-title">基本情報</div>
+      <div class="field">
+        <div class="field-label">日付 <span class="req">*</span></div>
+        <input type="date" id="exp-date">
+      </div>
+      <div class="field-divider"></div>
+      <div class="field" style="padding-top:16px">
+        <div class="field-label">支払先 <span class="req">*</span></div>
+        <input type="text" id="exp-payee" placeholder="例：コスモ石油、ヤマト運輸">
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">内容</div>
+      <div class="field">
+        <div class="field-label">用途 <span class="req">*</span></div>
+        <select id="exp-category" onchange="handleCategory()">
+          <option value="">選択してください</option>
+          <option>パーキング</option>
+          <option>タクシー</option>
+          <option>定期</option>
+          <option>ガソリン</option>
+          <option>配送</option>
+          <option>備品・業務用品</option>
+          <option>贈答品</option>
+          <option>会議費</option>
+          <option>接待交際費</option>
+          <option value="other">その他</option>
+        </select>
+      </div>
+      <div class="field-divider"></div>
+      <div class="field" style="padding-top:16px">
+        <div class="field-label">詳細メモ</div>
+        <input type="text" id="exp-note" placeholder="自由に入力してください">
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">金額</div>
+      <div class="field">
+        <input type="number" id="exp-amount" placeholder="0" min="0" style="font-size:20px; font-weight:700; text-align:right;">
+        <div style="font-size:12px; color:var(--text-muted); margin-top:6px; text-align:right;">円（税込）</div>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-purple" onclick="submitExpense()">経費を登録する</button>
+    </div>
+  </div>
+
+  <!-- 一覧 -->
   <div id="screen-list" class="screen">
+    <div class="tab-switch">
+      <button class="tab-switch-btn active" id="list-tab-trip" onclick="switchListTab('trip')">✈ 出張申請</button>
+      <button class="tab-switch-btn" id="list-tab-expense" onclick="switchListTab('expense')">💴 経費</button>
+    </div>
     <div class="list-toolbar">
       <div class="list-count" id="list-count">0件</div>
     </div>
@@ -251,7 +270,7 @@ textarea { resize: none; height: 90px; line-height: 1.5; }
     <div id="list-container"></div>
     <div id="empty-state" class="empty-state" style="display:none">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
-      <p>申請がまだありません</p>
+      <p>データがありません</p>
     </div>
   </div>
 
@@ -266,29 +285,35 @@ textarea { resize: none; height: 90px; line-height: 1.5; }
       <div class="month-grid" id="month-grid"></div>
       <div id="preview-area" style="display:none">
         <div class="preview-box" id="preview-box"></div>
-        <div class="btn-row" style="padding:0">
-          <button class="btn btn-green" onclick="doExport()">📊 Excelで出力する</button>
+        <div class="export-btn-row">
+          <button class="btn btn-green" onclick="doExportTrip()" style="flex:1">✈ 出張Excel</button>
+          <button class="btn btn-purple" onclick="doExportExpense()" style="flex:1">💴 経費Excel</button>
         </div>
       </div>
-      <div id="no-data-msg" style="display:none; text-align:center; padding:20px; color:var(--text-muted); font-size:14px;">
-        この月の申請データがありません
-      </div>
+      <div id="no-data-msg" style="display:none; text-align:center; padding:20px; color:var(--text-muted); font-size:14px;">この月のデータがありません</div>
     </div>
   </div>
 
 </div>
 
+<!-- Bottom Nav -->
 <div class="bottom-nav">
   <div class="nav-btn-wrap">
     <button class="nav-btn active" id="nav-form" onclick="showScreen('form')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-      新規申請
+      出張申請
+    </button>
+  </div>
+  <div class="nav-btn-wrap">
+    <button class="nav-btn" id="nav-expense" onclick="showScreen('expense')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      経費入力
     </button>
   </div>
   <div class="nav-btn-wrap" style="position:relative">
     <button class="nav-btn" id="nav-list" onclick="showScreen('list')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-      申請一覧
+      一覧
     </button>
     <span class="nav-badge" id="nav-badge"></span>
   </div>
@@ -302,61 +327,71 @@ textarea { resize: none; height: 90px; line-height: 1.5; }
 
 <div class="toast" id="toast"></div>
 
-<!-- Firebase SDK -->
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getDatabase, ref, push, onValue, remove, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+import { getDatabase, ref, push, onValue, remove } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
 
-// ★ここにFirebaseの設定を入れる★
 const firebaseConfig = {
   databaseURL: "https://trip-app-a1746-default-rtdb.asia-southeast1.firebasedatabase.app"
 };
 
 const app = initializeApp(firebaseConfig);
 const db  = getDatabase(app);
-const appsRef = ref(db, 'applications');
+const tripsRef    = ref(db, 'applications');
+const expensesRef = ref(db, 'expenses');
 
-let applications = [];
+let trips    = [];
+let expenses = [];
 let selectedMonth = null;
 const NAME_AMOUNT = { '金髙孝紀': 20000, '金髙裕亮': 10000 };
 const NAMES = ['金髙孝紀', '金髙裕亮'];
 
-// 接続ステータス
-const connRef = ref(db, '.info/connected');
-onValue(connRef, snap => {
+// 接続状態
+onValue(ref(db, '.info/connected'), snap => {
   const online = snap.val();
   document.getElementById('sync-dot').className = 'sync-dot' + (online ? '' : ' offline');
   document.getElementById('sync-status').textContent = online ? 'リアルタイム同期中' : 'オフライン';
 });
 
-// データをリアルタイムで受信
-onValue(appsRef, snap => {
-  applications = [];
-  snap.forEach(child => {
-    applications.push({ _key: child.key, ...child.val() });
-  });
-  applications.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+// 出張データ
+onValue(tripsRef, snap => {
+  trips = [];
+  snap.forEach(c => trips.push({ _key: c.key, ...c.val() }));
+  trips.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   updateBadge();
-  // 一覧画面が表示中なら即更新
   if (document.getElementById('screen-list').classList.contains('active')) renderList();
   if (document.getElementById('screen-export').classList.contains('active')) renderMonthGrid();
   document.getElementById('list-loading').style.display = 'none';
 });
 
-// グローバルに公開
-window._fbPush = (data) => push(appsRef, { ...data, createdAt: Date.now() });
-window._fbRemove = (key) => remove(ref(db, 'applications/' + key));
-window._getApps = () => applications;
-window._getNames = () => NAMES;
+// 経費データ
+onValue(expensesRef, snap => {
+  expenses = [];
+  snap.forEach(c => expenses.push({ _key: c.key, ...c.val() }));
+  expenses.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  updateBadge();
+  if (document.getElementById('screen-list').classList.contains('active')) renderList();
+  if (document.getElementById('screen-export').classList.contains('active')) renderMonthGrid();
+});
+
+window._fbPushTrip    = d => push(tripsRef,    { ...d, createdAt: Date.now() });
+window._fbPushExpense = d => push(expensesRef, { ...d, createdAt: Date.now() });
+window._fbRemoveTrip    = k => remove(ref(db, 'applications/' + k));
+window._fbRemoveExpense = k => remove(ref(db, 'expenses/' + k));
+window._getTrips    = () => trips;
+window._getExpenses = () => expenses;
+window._getNames    = () => NAMES;
 window._getNameAmount = () => NAME_AMOUNT;
 window._getSelectedMonth = () => selectedMonth;
-window._setSelectedMonth = (v) => { selectedMonth = v; };
+window._setSelectedMonth = v => { selectedMonth = v; };
 
 initYearSelect();
 </script>
 
 <script>
-// ── フォーム ──
+let currentListTab = 'trip';
+
+// ── 出張フォーム ──
 function handleName() {
   const name = document.getElementById('emp-name').value;
   const disp = document.getElementById('amount-display');
@@ -379,7 +414,9 @@ function handlePurpose() {
   if (v !== 'other') document.getElementById('purpose-other').value = '';
 }
 
-function getFormData(status) {
+function handleCategory() {}
+
+function getTripData(status) {
   const name       = document.getElementById('emp-name').value;
   const date       = document.getElementById('trip-date').value;
   const dest       = document.getElementById('dest').value;
@@ -388,17 +425,10 @@ function getFormData(status) {
   const amount     = document.getElementById('amount').value;
   if (!name || !date || !dest || !purposeSel || !amount) return null;
   if (purposeSel === 'other' && !purposeOth) return null;
-  return {
-    name, date, dest,
-    purpose: purposeSel === 'other' ? 'その他：' + purposeOth : purposeSel,
-    amount: parseInt(amount, 10),
-    memo: document.getElementById('memo').value.trim(),
-    status,
-    submittedAt: new Date().toLocaleDateString('ja-JP')
-  };
+  return { type:'trip', name, date, dest, purpose: purposeSel === 'other' ? 'その他：' + purposeOth : purposeSel, amount: parseInt(amount,10), memo: document.getElementById('memo').value.trim(), status, submittedAt: new Date().toLocaleDateString('ja-JP') };
 }
 
-function clearForm() {
+function clearTripForm() {
   ['emp-name','dest','purpose'].forEach(id => document.getElementById(id).selectedIndex = 0);
   document.getElementById('trip-date').value = '';
   document.getElementById('purpose-other').value = '';
@@ -410,65 +440,111 @@ function clearForm() {
 }
 
 async function submitForm() {
-  const data = getFormData('申請中');
-  if (!data) { showAlert('必須項目をすべて入力してください', 'error'); return; }
-  try {
-    await window._fbPush(data);
-    clearForm();
-    showToast('申請を提出しました');
-  } catch(e) { showAlert('送信に失敗しました。接続を確認してください', 'error'); }
+  const data = getTripData('申請中');
+  if (!data) { showAlert('alert-box','alert-msg','必須項目をすべて入力してください','error'); return; }
+  try { await window._fbPushTrip(data); clearTripForm(); showToast('申請を提出しました'); } catch(e) { showAlert('alert-box','alert-msg','送信に失敗しました','error'); }
 }
 
 async function saveDraft() {
-  const data = getFormData('下書き');
-  if (!data) { showAlert('必須項目をすべて入力してください', 'error'); return; }
-  try {
-    await window._fbPush(data);
-    clearForm();
-    showToast('下書きを保存しました');
-  } catch(e) { showAlert('保存に失敗しました。接続を確認してください', 'error'); }
+  const data = getTripData('下書き');
+  if (!data) { showAlert('alert-box','alert-msg','必須項目をすべて入力してください','error'); return; }
+  try { await window._fbPushTrip(data); clearTripForm(); showToast('下書きを保存しました'); } catch(e) { showAlert('alert-box','alert-msg','保存に失敗しました','error'); }
+}
+
+// ── 経費フォーム ──
+function getExpenseData() {
+  const date     = document.getElementById('exp-date').value;
+  const payee    = document.getElementById('exp-payee').value.trim();
+  const category = document.getElementById('exp-category').value;
+  const note     = document.getElementById('exp-note').value.trim();
+  const amount   = document.getElementById('exp-amount').value;
+  if (!date || !payee || !category || !amount) return null;
+  const content = category === 'other' ? (note || 'その他') : category + (note ? '（' + note + '）' : '');
+  return { type:'expense', date, payee, category: category === 'other' ? 'その他' : category, note, content, amount: parseInt(amount,10), submittedAt: new Date().toLocaleDateString('ja-JP') };
+}
+
+function clearExpenseForm() {
+  document.getElementById('exp-date').value = '';
+  document.getElementById('exp-payee').value = '';
+  document.getElementById('exp-category').selectedIndex = 0;
+  document.getElementById('exp-note').value = '';
+  document.getElementById('exp-amount').value = '';
+}
+
+async function submitExpense() {
+  const data = getExpenseData();
+  if (!data) { showAlert('exp-alert-box','exp-alert-msg','必須項目をすべて入力してください','error'); return; }
+  try { await window._fbPushExpense(data); clearExpenseForm(); showToast('経費を登録しました'); } catch(e) { showAlert('exp-alert-box','exp-alert-msg','登録に失敗しました','error'); }
 }
 
 // ── 一覧 ──
-function renderList() {
-  const apps      = window._getApps ? window._getApps() : [];
-  const container = document.getElementById('list-container');
-  const empty     = document.getElementById('empty-state');
-  document.getElementById('list-count').textContent = apps.length + '件';
-  document.getElementById('list-loading').style.display = 'none';
-  if (!apps.length) { container.innerHTML = ''; empty.style.display = 'block'; return; }
-  empty.style.display = 'none';
-  container.innerHTML = apps.map(a => `
-    <div class="trip-card">
-      <div class="trip-card-head">
-        <div class="trip-meta">
-          <span class="trip-date">${a.date}</span>
-          <span class="trip-name">${a.name}</span>
-        </div>
-        <span class="trip-status ${a.status === '申請中' ? 'status-pending' : 'status-draft'}">${a.status}</span>
-      </div>
-      <div class="trip-card-body">
-        <div class="trip-dest">${a.dest}</div>
-        <div class="trip-purpose">${a.purpose}</div>
-        <div class="trip-footer">
-          <div class="trip-amount">¥${a.amount.toLocaleString('ja-JP')}</div>
-          <button class="delete-btn" onclick="deleteApp('${a._key}')">削除</button>
-        </div>
-      </div>
-    </div>`).join('');
+function switchListTab(tab) {
+  currentListTab = tab;
+  document.getElementById('list-tab-trip').classList.toggle('active', tab === 'trip');
+  document.getElementById('list-tab-expense').classList.toggle('active', tab === 'expense');
+  renderList();
 }
 
-async function deleteApp(key) {
+function renderList() {
+  const container = document.getElementById('list-container');
+  const empty     = document.getElementById('empty-state');
+  document.getElementById('list-loading').style.display = 'none';
+
+  if (currentListTab === 'trip') {
+    const trips = window._getTrips ? window._getTrips() : [];
+    document.getElementById('list-count').textContent = trips.length + '件';
+    if (!trips.length) { container.innerHTML = ''; empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    container.innerHTML = trips.map(a => `
+      <div class="trip-card">
+        <div class="trip-card-head">
+          <div class="trip-meta"><span class="trip-date">${a.date}</span><span class="trip-name">${a.name}</span></div>
+          <span class="trip-status ${a.status==='申請中'?'status-pending':'status-draft'}">${a.status}</span>
+        </div>
+        <div class="trip-card-body">
+          <div class="trip-dest">${a.dest}</div>
+          <div class="trip-purpose">${a.purpose}</div>
+          <div class="trip-footer">
+            <div class="trip-amount">¥${a.amount.toLocaleString('ja-JP')}</div>
+            <button class="delete-btn" onclick="deleteTrip('${a._key}')">削除</button>
+          </div>
+        </div>
+      </div>`).join('');
+  } else {
+    const exps = window._getExpenses ? window._getExpenses() : [];
+    document.getElementById('list-count').textContent = exps.length + '件';
+    if (!exps.length) { container.innerHTML = ''; empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    container.innerHTML = exps.map(e => `
+      <div class="trip-card">
+        <div class="trip-card-head">
+          <div class="trip-meta"><span class="trip-date">${e.date}</span><span class="trip-name">${e.payee}</span></div>
+          <span class="trip-status status-expense">${e.category}</span>
+        </div>
+        <div class="trip-card-body">
+          <div class="trip-dest">${e.content}</div>
+          <div class="trip-footer">
+            <div class="trip-amount">¥${e.amount.toLocaleString('ja-JP')}</div>
+            <button class="delete-btn" onclick="deleteExpense('${e._key}')">削除</button>
+          </div>
+        </div>
+      </div>`).join('');
+  }
+}
+
+async function deleteTrip(key) {
   if (!confirm('この申請を削除しますか？')) return;
-  try {
-    await window._fbRemove(key);
-    showToast('削除しました');
-  } catch(e) { showToast('削除に失敗しました'); }
+  try { await window._fbRemoveTrip(key); showToast('削除しました'); } catch(e) { showToast('削除に失敗しました'); }
+}
+async function deleteExpense(key) {
+  if (!confirm('この経費を削除しますか？')) return;
+  try { await window._fbRemoveExpense(key); showToast('削除しました'); } catch(e) { showToast('削除に失敗しました'); }
 }
 
 function updateBadge() {
-  const apps = window._getApps ? window._getApps() : [];
-  const n = apps.length;
+  const t = window._getTrips ? window._getTrips() : [];
+  const e = window._getExpenses ? window._getExpenses() : [];
+  const n = t.length + e.length;
   const b = document.getElementById('nav-badge');
   b.style.display = n > 0 ? 'block' : 'none';
   b.textContent = n;
@@ -476,11 +552,11 @@ function updateBadge() {
 
 // ── 月次出力 ──
 function initYearSelect() {
-  const sel  = document.getElementById('year-sel');
+  const sel = document.getElementById('year-sel');
   if (!sel) return;
   const year = new Date().getFullYear();
   sel.innerHTML = '';
-  for (let y = year + 1; y >= year - 2; y--) {
+  for (let y = year+1; y >= year-2; y--) {
     const opt = document.createElement('option');
     opt.value = y; opt.textContent = y + '年';
     if (y === year) opt.selected = true;
@@ -488,14 +564,15 @@ function initYearSelect() {
   }
 }
 
-function getMonthKey(year, month) {
-  return year + '-' + String(month).padStart(2, '0');
-}
+function getMonthKey(year, month) { return year + '-' + String(month).padStart(2,'0'); }
 
-function appsForMonth(year, month) {
-  const apps = window._getApps ? window._getApps() : [];
-  const key  = getMonthKey(year, month);
-  return apps.filter(a => a.date && a.date.startsWith(key));
+function tripsForMonth(year, month) {
+  const t = window._getTrips ? window._getTrips() : [];
+  return t.filter(a => a.date && a.date.startsWith(getMonthKey(year,month)));
+}
+function expensesForMonth(year, month) {
+  const e = window._getExpenses ? window._getExpenses() : [];
+  return e.filter(a => a.date && a.date.startsWith(getMonthKey(year,month)));
 }
 
 function renderMonthGrid() {
@@ -506,18 +583,18 @@ function renderMonthGrid() {
   document.getElementById('no-data-msg').style.display  = 'none';
   grid.innerHTML = '';
   for (let m = 1; m <= 12; m++) {
-    const cnt = appsForMonth(year, m).length;
+    const hasData = tripsForMonth(year,m).length > 0 || expensesForMonth(year,m).length > 0;
     const btn = document.createElement('button');
-    btn.textContent   = m + '月';
-    btn.className     = 'month-btn' + (cnt > 0 ? ' has-data' : ' no-data');
-    btn.dataset.month = m;
-    btn.onclick       = () => selectMonth(year, m, btn);
+    btn.textContent = m + '月';
+    btn.className = 'month-btn' + (hasData ? ' has-data' : ' no-data');
+    btn.onclick = () => selectMonth(year, m, btn);
     grid.appendChild(btn);
   }
 }
 
 function selectMonth(year, month, btnEl) {
-  const apps = appsForMonth(year, month);
+  const tApps = tripsForMonth(year, month);
+  const eApps = expensesForMonth(year, month);
   document.querySelectorAll('.month-btn').forEach(b => b.classList.remove('selected'));
   btnEl.classList.add('selected');
   if (window._setSelectedMonth) window._setSelectedMonth({ year, month });
@@ -526,47 +603,75 @@ function selectMonth(year, month, btnEl) {
   const noData  = document.getElementById('no-data-msg');
   const preBox  = document.getElementById('preview-box');
 
-  if (!apps.length) { preview.style.display = 'none'; noData.style.display = 'block'; return; }
+  if (!tApps.length && !eApps.length) { preview.style.display='none'; noData.style.display='block'; return; }
   noData.style.display = 'none';
 
   const NAMES = window._getNames ? window._getNames() : [];
-  let html = '';
-  NAMES.forEach(name => {
-    const rows  = apps.filter(a => a.name === name);
-    const total = rows.reduce((s, a) => s + a.amount, 0);
-    html += `<div class="preview-row"><span class="preview-label">${name}</span><span class="preview-val">${rows.length}件 ／ ¥${total.toLocaleString('ja-JP')}</span></div>`;
-  });
-  const grandTotal = apps.reduce((s, a) => s + a.amount, 0);
-  html += `<div class="preview-row" style="margin-top:6px;padding-top:10px;border-top:2px solid var(--border)"><span class="preview-label" style="font-weight:600">合計</span><span class="preview-val preview-total">¥${grandTotal.toLocaleString('ja-JP')}</span></div>`;
-  preBox.innerHTML = `<div style="font-size:13px;font-weight:700;color:var(--text-sub);margin-bottom:10px">${year}年${month}月分 ／ ${apps.length}件</div>` + html;
+  let html = `<div style="font-size:13px;font-weight:700;color:var(--text-sub);margin-bottom:10px">${year}年${month}月分</div>`;
+
+  if (tApps.length) {
+    html += `<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin:8px 0 4px">✈ 出張申請</div>`;
+    NAMES.forEach(name => {
+      const rows = tApps.filter(a => a.name === name);
+      const total = rows.reduce((s,a) => s+a.amount, 0);
+      html += `<div class="preview-row"><span class="preview-label">${name}</span><span class="preview-val">${rows.length}件 ／ ¥${total.toLocaleString('ja-JP')}</span></div>`;
+    });
+  }
+  if (eApps.length) {
+    const expTotal = eApps.reduce((s,a) => s+a.amount, 0);
+    html += `<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin:12px 0 4px">💴 経費</div>`;
+    html += `<div class="preview-row"><span class="preview-label">${eApps.length}件</span><span class="preview-val">¥${expTotal.toLocaleString('ja-JP')}</span></div>`;
+  }
+  preBox.innerHTML = html;
   preview.style.display = 'block';
 }
 
-function doExport() {
+function doExportTrip() {
   const sm = window._getSelectedMonth ? window._getSelectedMonth() : null;
   if (!sm) return;
   const { year, month } = sm;
-  const monthApps = appsForMonth(year, month);
-  if (!monthApps.length) { showToast('この月のデータがありません'); return; }
-
+  const monthApps = tripsForMonth(year, month);
+  if (!monthApps.length) { showToast('この月の出張データがありません'); return; }
   const NAMES = window._getNames ? window._getNames() : [];
   const wb = XLSX.utils.book_new();
   NAMES.forEach(name => {
-    const rows = monthApps.filter(a => a.name === name).sort((a,b) => a.date.localeCompare(b.date));
-    const title = `旅費日程申請書　${year}年${month}月分`;
+    const rows = monthApps.filter(a => a.name===name).sort((a,b) => a.date.localeCompare(b.date));
     const aoa = [
-      [title], ['申請者：' + name], [],
-      ['日付', '出張先', '出張目的', '金額（円）'],
+      [`旅費日程申請書　${year}年${month}月分`], ['申請者：' + name], [],
+      ['日付','出張先','出張目的','金額（円）'],
       ...rows.map(a => [a.date, a.dest, a.purpose, a.amount]),
-      [], ['', '', '合計', rows.reduce((s,a) => s + a.amount, 0)]
+      [], ['','','合計', rows.reduce((s,a)=>s+a.amount,0)]
     ];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols'] = [{ wch: 14 }, { wch: 18 }, { wch: 26 }, { wch: 14 }];
-    ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:3} }, { s:{r:1,c:0}, e:{r:1,c:3} }];
-    XLSX.utils.book_append_sheet(wb, ws, name.length > 15 ? name.slice(0,15) : name);
+    ws['!cols'] = [{wch:14},{wch:18},{wch:26},{wch:14}];
+    ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:3}},{s:{r:1,c:0},e:{r:1,c:3}}];
+    XLSX.utils.book_append_sheet(wb, ws, name.slice(0,15));
   });
   XLSX.writeFile(wb, `旅費申請_${year}年${month}月.xlsx`);
-  showToast(year + '年' + month + '月分を出力しました');
+  showToast('出張Excelを出力しました');
+}
+
+function doExportExpense() {
+  const sm = window._getSelectedMonth ? window._getSelectedMonth() : null;
+  if (!sm) return;
+  const { year, month } = sm;
+  const rows = expensesForMonth(year, month).sort((a,b) => a.date.localeCompare(b.date));
+  if (!rows.length) { showToast('この月の経費データがありません'); return; }
+  const headers = ['日付','支払先','用途','詳細','金額（円）'];
+  const total   = rows.reduce((s,a) => s+a.amount, 0);
+  const aoa = [
+    [`経費一覧　${year}年${month}月分`], [],
+    headers,
+    ...rows.map(r => [r.date, r.payee, r.category, r.note||'', r.amount]),
+    [], ['','','','合計', total]
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{wch:14},{wch:18},{wch:14},{wch:20},{wch:14}];
+  ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:4}}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, `${month}月経費`);
+  XLSX.writeFile(wb, `経費一覧_${year}年${month}月.xlsx`);
+  showToast('経費Excelを出力しました');
 }
 
 // ── ナビ ──
@@ -579,11 +684,11 @@ function showScreen(name) {
   if (name === 'export') renderMonthGrid();
 }
 
-function showAlert(msg, type) {
-  const box = document.getElementById('alert-box');
+function showAlert(boxId, msgId, msg, type) {
+  const box = document.getElementById(boxId);
   box.className = 'alert show ' + type;
   box.style.display = 'flex';
-  document.getElementById('alert-msg').textContent = msg;
+  document.getElementById(msgId).textContent = msg;
   setTimeout(() => { box.className = 'alert'; box.style.display = 'none'; }, 3000);
 }
 
@@ -593,9 +698,7 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
-}
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
 </script>
 </body>
 </html>
