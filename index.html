@@ -766,9 +766,12 @@ function switchMode(mode) {
     invNav.style.display = 'flex';
     document.querySelector('.main').style.paddingTop = 'calc(env(safe-area-inset-top, 0px) + 58px)';
     // Hide all biz screens first
-    document.querySelectorAll('.screen').forEach(s => { s.classList.remove('active'); s.style.display = 'none'; });
+    document.querySelectorAll('.screen:not([id^="screen-inv"])').forEach(s => {
+      s.classList.remove('active');
+      s.style.display = 'none';
+    });
     window.scrollTo(0, 0);
-    showInvScreen('inv-add');
+    setTimeout(() => { showInvScreen('inv-add'); }, 50);
     loadInventory();
   }
 }
@@ -776,11 +779,16 @@ function switchMode(mode) {
 function showInvScreen(name) {
   ['inv-add','inv-move','inv-list'].forEach(s => {
     const el = document.getElementById('screen-' + s);
-    if (el) { el.style.display = 'none'; el.classList.remove('active'); }
+    if (el) {
+      el.style.cssText = 'display:none !important; padding-top:8px;';
+    }
   });
   document.querySelectorAll('#inv-nav .nav-btn').forEach(b => b.classList.remove('active'));
   const target = document.getElementById('screen-' + name);
-  if (target) { target.style.display = 'block'; target.classList.add('active'); window.scrollTo(0,0); }
+  if (target) {
+    target.style.cssText = 'display:block !important; padding-top:8px;';
+    window.scrollTo(0,0);
+  }
   const navBtn = document.getElementById('nav-' + name);
   if (navBtn) navBtn.classList.add('active');
   if (name === 'inv-list') renderInventoryList();
