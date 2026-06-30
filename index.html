@@ -170,7 +170,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 .stock-ok { background: var(--success-bg); color: var(--success); }
 .stock-low { background: var(--danger-bg); color: var(--danger); }
 .stock-zero { background: #1f2937; color: #fff; }
-.scan-btn { width: 100%; padding: 16px; background: var(--black); color: var(--gold-light); border: 2px dashed var(--gold-dark); border-radius: var(--radius-sm); font-size: 15px; font-weight: 600; cursor: pointer; text-align: center; margin-bottom: 12px; }
+.scan-btn { width: 100%; padding: 16px; background: var(--gold-bg); color: var(--gold-dark); border: 1.5px solid var(--gold); border-radius: var(--radius-sm); font-size: 15px; font-weight: 600; cursor: pointer; text-align: center; margin-bottom: 12px; }
 .img-preview { width: 100%; max-height: 200px; object-fit: cover; border-radius: var(--radius-sm); margin-top: 8px; display: none; }
 #scan-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 300; flex-direction: column; align-items: center; justify-content: center; }
 #scan-overlay.show { display: flex; }
@@ -711,9 +711,9 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 </div>
 
 <div class="toast" id="toast"></div>
-
 <script>
 const DB_URL = 'https://trip-app-a1746-default-rtdb.asia-southeast1.firebasedatabase.app';
+function authedUrl(path) { return DB_URL + path + (window._idToken ? (path.includes('?') ? '&' : '?') + 'auth=' + window._idToken : ''); }
 let trips = [], expenses = [], purchases = [], sales = [], selectedMonth = null;
 const NAME_AMOUNT = { '金髙孝紀': 20000, '金髙裕亮': 10000 };
 const NAMES = ['金髙孝紀', '金髙裕亮'];
@@ -729,10 +729,10 @@ function objToArr(obj) {
 async function loadAll() {
   try {
     const [t, e, p, s] = await Promise.all([
-      fetch(DB_URL + '/applications.json').then(r => r.json()),
-      fetch(DB_URL + '/expenses.json').then(r => r.json()),
-      fetch(DB_URL + '/purchases.json').then(r => r.json()),
-      fetch(DB_URL + '/sales.json').then(r => r.json())
+      fetch(authedUrl('/applications.json')).then(r => r.json()),
+      fetch(authedUrl('/expenses.json')).then(r => r.json()),
+      fetch(authedUrl('/purchases.json')).then(r => r.json()),
+      fetch(authedUrl('/sales.json')).then(r => r.json())
     ]);
     trips     = objToArr(t).sort((a,b) => (b.date||'') > (a.date||'') ? 1 : -1);
     expenses  = objToArr(e).sort((a,b) => (b.date||'') > (a.date||'') ? 1 : -1);
@@ -754,7 +754,7 @@ async function loadAll() {
 }
 
 async function fbPush(path, data) {
-  const r = await fetch(DB_URL + '/' + path + '.json', {
+  const r = await fetch(authedUrl('/' + path + '.json'), {
     method: 'POST',
     body: JSON.stringify({ ...data, createdAt: Date.now() })
   });
@@ -763,7 +763,7 @@ async function fbPush(path, data) {
 }
 
 async function fbRemove(path, key) {
-  const r = await fetch(DB_URL + '/' + path + '/' + key + '.json', { method: 'DELETE' });
+  const r = await fetch(authedUrl('/' + path + '/' + key + '.json'), { method: 'DELETE' });
   if (!r.ok) throw new Error('delete failed');
   await loadAll();
 }
@@ -806,17 +806,18 @@ function switchMode(mode) {
     bizNav.style.display = 'flex';
     invNav.style.display = 'none';
     document.querySelector('.main').style.paddingTop = '';
-    // Hide inventory screens
     ['inv-add','inv-move','inv-list'].forEach(s => {
       const el = document.getElementById('screen-' + s);
       if (el) { el.style.display = 'none'; el.classList.remove('active'); }
+    });
+    document.querySelectorAll('.screen:not([id^="screen-inv"])').forEach(s => {
+      s.style.display = '';
     });
     showScreen('form');
   } else {
     bizNav.style.display = 'none';
     invNav.style.display = 'flex';
     document.querySelector('.main').style.paddingTop = 'calc(env(safe-area-inset-top, 0px) + 58px)';
-    // Hide all biz screens first
     document.querySelectorAll('.screen:not([id^="screen-inv"])').forEach(s => {
       s.classList.remove('active');
       s.style.display = 'none';
@@ -848,8 +849,8 @@ function showInvScreen(name) {
 async function loadInventory() {
   try {
     const [p, m] = await Promise.all([
-      fetch(DB_URL + '/products.json').then(r => r.json()),
-      fetch(DB_URL + '/stockMoves.json').then(r => r.json())
+      fetch(authedUrl('/products.json')).then(r => r.json()),
+      fetch(authedUrl('/stockMoves.json')).then(r => r.json())
     ]);
     products   = objToArr(p);
     stockMoves = objToArr(m);
@@ -867,7 +868,6 @@ async function lookupJan() {
   const status = document.getElementById('jan-lookup-status');
   if (!jan) { status.textContent = ''; return; }
 
-  // まず登録済み商品を検索
   const found = products.find(p => p.jan === jan);
   if (found) {
     document.getElementById('inv-name').value = found.name || '';
@@ -878,7 +878,6 @@ async function lookupJan() {
     return;
   }
 
-  // Google Custom Search APIで価格.comを検索
   status.innerHTML = '🔍 価格.comで商品情報を検索中...';
   status.style.color = 'var(--text-muted)';
 
@@ -893,7 +892,6 @@ async function lookupJan() {
       const title = item.title || '';
       const snippet = item.snippet || '';
 
-      // 商品名をタイトルから抽出（「価格.com」「- 最安値・」などを除去）
       let productName = title
         .replace(/[-|｜].*価格\.com.*/gi, '')
         .replace(/価格\.com.*/gi, '')
@@ -948,8 +946,7 @@ async function submitProduct() {
   };
 
   try {
-    await fetch(DB_URL + '/products.json', { method: 'POST', body: JSON.stringify(data) });
-    // Clear form
+    await fetch(authedUrl('/products.json'), { method: 'POST', body: JSON.stringify(data) });
     ['inv-maker','inv-name','inv-model','inv-jan','inv-stock','inv-cost','inv-location','inv-memo'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('inv-image').value = '';
     document.getElementById('inv-img-preview').style.display = 'none';
@@ -1006,8 +1003,8 @@ async function submitMove() {
 
   try {
     await Promise.all([
-      fetch(DB_URL + '/products/' + prodKey + '/stock.json', { method: 'PUT', body: JSON.stringify(newStock) }),
-      fetch(DB_URL + '/stockMoves.json', { method: 'POST', body: JSON.stringify({
+      fetch(authedUrl('/products/' + prodKey + '/stock.json'), { method: 'PUT', body: JSON.stringify(newStock) }),
+      fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
         productKey: prodKey, productName: prod.name, jan,
         type, qty, date, memo: document.getElementById('move-memo').value.trim(),
         stockBefore: prod.stock, stockAfter: newStock, createdAt: Date.now()
@@ -1087,7 +1084,6 @@ async function startScan(targetId) {
   scanTarget = targetId;
   document.getElementById('scan-overlay').classList.add('show');
 
-  // Load ZXing library dynamically
   if (!window.ZXing) {
     try {
       await new Promise((resolve, reject) => {
@@ -1141,14 +1137,12 @@ function stopScan() {
   document.getElementById('scan-overlay').classList.remove('show');
 }
 
-// initYearSelect and loadAll called after DOM scripts load
 window._initApp = function() {
   initYearSelect();
   loadAll();
   setInterval(loadAll, 30000);
 };
 </script>
-
 <script>
 let currentListTab = 'trip';
 
@@ -1256,7 +1250,6 @@ async function submitPurchase() {
   try { await window._fbPushPurchase(data); clearPurchaseForm(); showToast('仕入を登録しました'); } catch(e) { showAlert('pur-alert-box','pur-alert-msg','登録に失敗しました','error'); }
 }
 
-// ── 売上フォーム ──
 function handleSalType() {
   const type = document.getElementById('sal-type').value;
   const sel = document.getElementById('sal-client');
@@ -1465,7 +1458,6 @@ function selectMonth(year, month, btnEl) {
   const SUPPLIERS = window._getSuppliers?.() || [];
   let html = `<div style="font-size:13px;font-weight:700;color:var(--gold-dark);margin-bottom:10px">${year}年${month}月分</div>`;
 
-  // ✈ 出張
   if (tApps.length) {
     const tripTotal = tApps.reduce((s,a) => s+a.amount, 0);
     const sorted = [...tApps].sort((a,b) => a.date.localeCompare(b.date));
@@ -1486,7 +1478,6 @@ function selectMonth(year, month, btnEl) {
       <div class="accordion-body" id="acc-body-trip">${detailHtml}</div>`;
   }
 
-  // 💴 経費
   if (eApps.length) {
     const expTotal = eApps.reduce((s,a) => s+a.amount, 0);
     const sorted = [...eApps].sort((a,b) => a.date.localeCompare(b.date));
@@ -1507,7 +1498,6 @@ function selectMonth(year, month, btnEl) {
       <div class="accordion-body" id="acc-body-expense">${detailHtml}</div>`;
   }
 
-  // 🛒 仕入
   if (pApps.length) {
     const purTotal = pApps.reduce((s,a) => s+a.amount, 0);
     const sorted = [...pApps].sort((a,b) => a.date.localeCompare(b.date));
@@ -1528,7 +1518,6 @@ function selectMonth(year, month, btnEl) {
       <div class="accordion-body" id="acc-body-purchase">${detailHtml}</div>`;
   }
 
-  // 💹 売上
   if (sApps.length) {
     const salTotal = sApps.reduce((s,a) => s+a.amount, 0);
     const sorted = [...sApps].sort((a,b) => a.date.localeCompare(b.date));
@@ -1549,7 +1538,6 @@ function selectMonth(year, month, btnEl) {
       <div class="accordion-body" id="acc-body-sales">${detailHtml}</div>`;
   }
 
-  // 📊 売上 vs 仕入
   if (pApps.length && sApps.length) {
     const purTotal = pApps.reduce((s,a) => s+a.amount, 0);
     const salTotal = sApps.reduce((s,a) => s+a.amount, 0);
@@ -1643,7 +1631,6 @@ function doExportPurchase() {
   showToast('仕入Excelを出力しました');
 }
 
-// ── 売掛金管理 ──
 function renderReceivable() {
   const allSales = window._getSales ? window._getSales() : [];
   const container = document.getElementById('recv-container');
@@ -1703,7 +1690,7 @@ function renderReceivable() {
 async function markPaid(key) {
   if (!confirm('入金済みにしますか？')) return;
   try {
-    const r = await fetch(DB_URL + '/sales/' + key + '/payStatus.json', {
+    const r = await fetch(authedUrl('/sales/' + key + '/payStatus.json'), {
       method: 'PUT',
       body: JSON.stringify('入金済み')
     });
@@ -1748,7 +1735,6 @@ function doExportSales() {
     ...rows.map(r => [r.date, r.salesType||'', r.client, r.amount, r.note||'']),
     [], ['','','合計', total, '']
   ];
-  // 卸先別小計
   const clients = [...new Set(rows.map(r => r.client))];
   const subtotals = [[], ['卸先別合計'], ['卸先','件数','合計金額（円）']];
   clients.forEach(c => {
@@ -1790,7 +1776,7 @@ function showToast(msg) {
 }
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
-// ── Pull to Refresh ──
+
 (function() {
   let startY = 0;
   let pulling = false;
@@ -1881,8 +1867,8 @@ async function doLogin() {
     });
     const d = await r.json();
     if (d.idToken) {
-      // セッションのみ保持（タブを閉じると消える＝毎回ログインが必要）
-      sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ email: d.email, loggedInAt: Date.now() }));
+      sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ email: d.email, idToken: d.idToken, loggedInAt: Date.now() }));
+      window._idToken = d.idToken;
       document.getElementById('login-screen').style.display = 'none';
       if (window._initApp) window._initApp();
     } else {
@@ -1900,10 +1886,11 @@ async function doLogin() {
 function checkAuth() {
   const session = sessionStorage.getItem(AUTH_STORAGE_KEY);
   if (session) {
+    const parsed = JSON.parse(session);
+    window._idToken = parsed.idToken;
     document.getElementById('login-screen').style.display = 'none';
     if (window._initApp) window._initApp();
   }
-  // セッションがなければログイン画面を表示したまま待機
 }
 
 checkAuth();
