@@ -2473,9 +2473,21 @@ async function doChangeEmail() {
       throw new Error(d.error?.message || 'エラー');
     }
   } catch(e) {
-    const msg = e.message && e.message.includes('INVALID_PASSWORD')
-      ? '現在のパスワードが正しくありません'
-      : 'メールアドレスの変更に失敗しました';
+    let msg = 'メールアドレスの変更に失敗しました';
+    const code = e.message || '';
+    if (code.includes('INVALID_PASSWORD') || code.includes('INVALID_LOGIN_CREDENTIALS')) {
+      msg = '現在のパスワードが正しくありません';
+    } else if (code.includes('EMAIL_EXISTS')) {
+      msg = 'そのメールアドレスはすでに使用されています';
+    } else if (code.includes('INVALID_EMAIL')) {
+      msg = 'メールアドレスの形式が正しくありません';
+    } else if (code.includes('TOO_MANY_REQUESTS')) {
+      msg = 'しばらく時間をおいてから再試行してください';
+    } else if (code.includes('CREDENTIAL_TOO_OLD')) {
+      msg = 'セキュリティのため再ログインが必要です。一度ログアウトして再度ログインしてください';
+    } else if (code) {
+      msg = 'エラー: ' + code;
+    }
     showAlert('settings-alert', 'settings-alert-msg', msg, 'error');
   }
 }
