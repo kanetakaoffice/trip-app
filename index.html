@@ -1893,9 +1893,38 @@ function renderChart(container) {
 
   const currentYear = new Date().getFullYear();
   const prevYear    = currentYear - 1;
-
-  // 月ごとに集計（今年・去年）
   const months = Array.from({length:12}, (_,i) => String(i+1).padStart(2,'0'));
+
+  // 仕入先ごとの色定義
+  const SUPPLIER_COLORS = {
+    '店舗': '#f97316',
+    '電脳': '#06b6d4',
+    '（株）HAK': '#34d399',
+    '（株）GAIN': '#ef4444',
+  };
+  function getSupplierColor(supplier) {
+    if (!supplier) return '#aaaaaa';
+    if (supplier.startsWith('店舗')) return SUPPLIER_COLORS['店舗'];
+    for (const [key, color] of Object.entries(SUPPLIER_COLORS)) {
+      if (supplier === key) return color;
+    }
+    return '#aaaaaa';
+  }
+
+  // 今年の仕入先一覧（店舗系はすべて「店舗」にまとめる）
+  function normalizeSupplier(supplier) {
+    return supplier && supplier.startsWith('店舗') ? '店舗' : supplier;
+  }
+
+  const allSuppliers = [...new Set(
+    purchases.filter(p => p.date?.startsWith(currentYear+'')).map(p => normalizeSupplier(p.supplier)).filter(Boolean)
+  )];
+
+  const purBySupplier = allSuppliers.map(sup => ({
+    supplier: sup,
+    color: getSupplierColor(sup),
+    curr: months.map(m => purchases.filter(p => p.date?.startsWith(currentYear+'-'+m) && normalizeSupplier(p.supplier) === sup).reduce((s,p)=>s+p.amount,0))
+  }));
 
   const purCurr  = months.map(m => purchases.filter(p => p.date?.startsWith(currentYear+'-'+m)).reduce((s,p)=>s+p.amount,0));
   const purPrev  = months.map(m => purchases.filter(p => p.date?.startsWith(prevYear+'-'+m)).reduce((s,p)=>s+p.amount,0));
@@ -1903,59 +1932,87 @@ function renderChart(container) {
   const salPrev  = months.map(m => sales.filter(s => s.date?.startsWith(prevYear+'-'+m)).reduce((s,p)=>s+p.amount,0));
 
   const maxVal = Math.max(...purCurr, ...purPrev, ...salCurr, ...salPrev, 1);
-  const barH = 160; // グラフ高さ(px)
+  const barH = 180;
 
-  function bar(val, color, opacity=1) {
+  function stackedBar(monthIdx) {
+    const total = purCurr[monthIdx];
+    if (total === 0) return `<div style="width:100%;height:${barH}px"></div>`;
+    // 大きい順にソート（下から大きい順）
+    const segments = purBySupplier
+      .map(s => ({ val: s.curr[monthIdx], color: s.color }))
+      .filter(s => s.val > 0)
+      .sort((a, b) => b.val - a.val);
+    let bars = '';
+    [...segments].reverse().forEach((seg, idx) => {
+      const h = Math.round((seg.val / maxVal) * barH);
+      const isTop = idx === segments.length - 1;
+      bars += `<div style="width:100%;height:${h}px;background:${seg.color};border-radius:${isTop?'3px 3px 0 0':'0'};min-height:${h>0?2:0}px"></div>`;
+    });
+    return `<div style="width:100%;height:${barH}px;display:flex;flex-direction:column;justify-content:flex-end">${bars}</div>`;
+  }
+
+  function simpleBar(val, color, opacity) {
     const h = Math.round((val / maxVal) * barH);
-    return `<div style="width:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:${barH}px">
+    return `<div style="width:100%;height:${barH}px;display:flex;flex-direction:column;justify-content:flex-end">
       <div style="width:100%;height:${h}px;background:${color};opacity:${opacity};border-radius:3px 3px 0 0;min-height:${val>0?2:0}px"></div>
     </div>`;
   }
 
   const cols = months.map((m, i) => {
-    const label = parseInt(m) + '月';
     return `
     <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:1px">
-      <div style="width:100%;display:flex;gap:1px;align-items:flex-end;height:${barH}px">
-        <div style="flex:1">${bar(purPrev[i], '#fed7aa', 0.6)}</div>
-        <div style="flex:1">${bar(purCurr[i], '#ea580c', 1)}</div>
-        <div style="flex:1">${bar(salPrev[i], '#99f6e4', 0.6)}</div>
-        <div style="flex:1">${bar(salCurr[i], '#0f766e', 1)}</div>
+      <div style="width:100%;display:flex;gap:2px;align-items:flex-end;height:${barH}px">
+        <div style="flex:1">${simpleBar(purPrev[i], '#d1d5db', 0.8)}</div>
+        <div style="flex:1">${stackedBar(i)}</div>
+        <div style="flex:1">${simpleBar(salPrev[i], '#99f6e4', 0.6)}</div>
+        <div style="flex:1">${simpleBar(salCurr[i], '#0f766e', 1)}</div>
       </div>
-      <div style="font-size:9px;color:var(--text-muted);margin-top:3px">${label}</div>
+      <div style="font-size:9px;color:var(--text-muted);margin-top:3px">${parseInt(m)}月</div>
     </div>`;
   }).join('');
 
-  // 月別サマリー（今年のみ）
+  const supplierLegend = allSuppliers.map(sup =>
+    `<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;background:${getSupplierColor(sup)};border-radius:2px"></span>${sup}</span>`
+  ).join('');
+
   const summaryRows = months.map((m, i) => {
     const p = purCurr[i], s = salCurr[i];
     if (p === 0 && s === 0) return '';
     const profit = s - p;
+    const breakdown = purBySupplier.filter(sup => sup.curr[i] > 0).map(sup =>
+      `<span style="display:inline-flex;align-items:center;gap:3px;margin-right:8px;font-size:10px;color:#666">
+        <span style="display:inline-block;width:8px;height:8px;background:${sup.color};border-radius:2px"></span>
+        ${sup.supplier} ${yen(sup.curr[i])}
+      </span>`
+    ).join('');
     return `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px">
-      <span style="font-weight:600;color:var(--text)">${currentYear}年${parseInt(m)}月</span>
-      <span style="color:var(--orange)">${yen(p)}</span>
-      <span style="color:var(--teal)">${yen(s)}</span>
-      <span style="font-weight:700;color:${profit>=0?'var(--success)':'var(--danger)'}">${yen(profit)}</span>
+    <div style="border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;font-size:12px">
+        <span style="font-weight:600;color:var(--text)">${currentYear}年${parseInt(m)}月</span>
+        <span style="color:#4a4a4a">${yen(p)}</span>
+        <span style="color:var(--teal)">${yen(s)}</span>
+        <span style="font-weight:700;color:${profit>=0?'var(--success)':'var(--danger)'}">${yen(profit)}</span>
+      </div>
+      ${breakdown ? `<div style="padding:0 12px 8px;flex-wrap:wrap;display:flex">${breakdown}</div>` : ''}
     </div>`;
   }).filter(Boolean).join('');
 
   container.innerHTML = `
   <div style="background:var(--white);border-radius:var(--radius);border:1px solid var(--border);padding:14px;margin-bottom:16px">
-    <div style="font-size:12px;font-weight:700;color:#909090;margin-bottom:12px">仕入 vs 売上（月別比較）</div>
+    <div style="font-size:12px;font-weight:700;color:#909090;margin-bottom:12px">仕入（仕入先別） vs 売上（月別）</div>
     <div style="display:flex;gap:2px;align-items:flex-end;overflow-x:auto;padding-bottom:4px">
       ${cols}
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;font-size:11px">
-      <span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;background:#fed7aa;border-radius:2px;opacity:0.6"></span>仕入(${prevYear})</span>
-      <span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;background:#ea580c;border-radius:2px"></span>仕入(${currentYear})</span>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;font-size:11px">
+      <span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;background:#d1d5db;border-radius:2px"></span>仕入(${prevYear})</span>
+      ${supplierLegend}
       <span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;background:#99f6e4;border-radius:2px;opacity:0.6"></span>売上(${prevYear})</span>
       <span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;background:#0f766e;border-radius:2px"></span>売上(${currentYear})</span>
     </div>
   </div>
   <div style="background:var(--white);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--surface);font-size:11px;font-weight:700;color:var(--text-muted);border-bottom:1px solid var(--border)">
-      <span>月</span><span style="color:var(--orange)">仕入合計</span><span style="color:var(--teal)">売上合計</span><span>粗利益</span>
+      <span>月</span><span>仕入合計</span><span style="color:var(--teal)">売上合計</span><span>粗利益</span>
     </div>
     ${summaryRows || '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">データがありません</div>'}
   </div>`;
