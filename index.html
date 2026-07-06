@@ -390,13 +390,34 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       <div class="field-divider"></div>
       <div class="field" style="padding-top:16px">
         <div class="field-label">仕入先 <span class="req">*</span></div>
-        <select id="pur-supplier">
+        <select id="pur-supplier" onchange="handlePurSupplier()">
           <option value="">選択してください</option>
           <option>店舗</option>
           <option>電脳</option>
           <option>（株）HAK</option>
           <option>（株）GAIN</option>
         </select>
+      </div>
+      <div id="pur-store-wrap" style="display:none">
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">店舗名 <span class="req">*</span></div>
+          <select id="pur-store" onchange="handlePurStore()">
+            <option value="">選択してください</option>
+            <option>ヤマダデンキ</option>
+            <option>エディオン</option>
+            <option>ケーズデンキ</option>
+            <option>ジョーシン</option>
+            <option value="other">その他</option>
+          </select>
+        </div>
+        <div id="pur-store-other-wrap" style="display:none">
+          <div class="field-divider"></div>
+          <div class="field" style="padding-top:16px">
+            <div class="field-label">店舗名を入力 <span class="req">*</span></div>
+            <input type="text" id="pur-store-other" placeholder="店舗名を入力してください">
+          </div>
+        </div>
       </div>
       <div class="field-divider"></div>
       <div class="field" style="padding-top:16px">
@@ -1357,18 +1378,52 @@ function resetExpDay() {
   clearExpenseForm(false);
 }
 
+function handlePurSupplier() {
+  const v = document.getElementById('pur-supplier').value;
+  const wrap = document.getElementById('pur-store-wrap');
+  wrap.style.display = v === '店舗' ? 'block' : 'none';
+  if (v !== '店舗') {
+    document.getElementById('pur-store').selectedIndex = 0;
+    document.getElementById('pur-store-other-wrap').style.display = 'none';
+    document.getElementById('pur-store-other').value = '';
+  }
+}
+
+function handlePurStore() {
+  const v = document.getElementById('pur-store').value;
+  document.getElementById('pur-store-other-wrap').style.display = v === 'other' ? 'block' : 'none';
+  if (v !== 'other') document.getElementById('pur-store-other').value = '';
+}
+
 function getPurchaseData() {
   const date = document.getElementById('pur-date').value;
-  const supplier = document.getElementById('pur-supplier').value;
+  const supplierBase = document.getElementById('pur-supplier').value;
   const amount = document.getElementById('pur-amount').value;
   const note = document.getElementById('pur-note').value.trim();
-  if (!date || !supplier || !amount) return null;
+  if (!date || !supplierBase || !amount) return null;
+
+  let supplier = supplierBase;
+  if (supplierBase === '店舗') {
+    const store = document.getElementById('pur-store').value;
+    if (!store) return null;
+    if (store === 'other') {
+      const other = document.getElementById('pur-store-other').value.trim();
+      if (!other) return null;
+      supplier = '店舗（' + other + '）';
+    } else {
+      supplier = '店舗（' + store + '）';
+    }
+  }
   return { type:'purchase', date, supplier, amount: parseInt(amount,10), note, submittedAt: new Date().toLocaleDateString('ja-JP') };
 }
 
 function clearPurchaseForm(keepDate) {
   if (!keepDate) document.getElementById('pur-date').value = '';
   document.getElementById('pur-supplier').selectedIndex = 0;
+  document.getElementById('pur-store-wrap').style.display = 'none';
+  document.getElementById('pur-store').selectedIndex = 0;
+  document.getElementById('pur-store-other-wrap').style.display = 'none';
+  document.getElementById('pur-store-other').value = '';
   document.getElementById('pur-amount').value = '';
   document.getElementById('pur-note').value = '';
 }
@@ -1378,7 +1433,7 @@ let _purDayTotal = 0;
 
 async function submitPurchase() {
   const data = getPurchaseData();
-  if (!data) { showAlert('pur-alert-box','pur-alert-msg','必須項目をすべて入力してください','error'); return; }
+  if (!data) { showAlert('pur-alert-box','pur-alert-msg','必須項目をすべて入力してください（仕入先が「店舗」の場合は店舗名も必須です）','error'); return; }
   try {
     await window._fbPushPurchase(data);
     _purDayCount++;
