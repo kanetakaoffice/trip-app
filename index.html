@@ -421,14 +421,15 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       </div>
       <div class="field-divider"></div>
       <div class="field" style="padding-top:16px">
-        <div class="field-label">金額 <span class="req">*</span></div>
-        <input type="number" id="pur-amount" placeholder="0" min="0" style="font-size:20px; font-weight:700; text-align:right;">
-        <div style="font-size:12px; color:var(--text-muted); margin-top:6px; text-align:right;">円（税込）</div>
-      </div>
-      <div class="field-divider"></div>
-      <div class="field" style="padding-top:16px">
-        <div class="field-label">メモ</div>
-        <input type="text" id="pur-note" placeholder="領収書番号など（任意）">
+        <div class="field-label">金額・メモ <span class="req">*</span></div>
+        <div id="pur-items">
+          <div class="pur-item" data-index="0" style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+            <input type="number" class="pur-amount-input" placeholder="金額" min="0" style="flex:1;font-size:16px;font-weight:700;text-align:right;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm)">
+            <input type="text" class="pur-note-input" placeholder="メモ（任意）" style="flex:1.2;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:14px">
+          </div>
+        </div>
+        <button onclick="addPurItem()" style="width:100%;padding:10px;background:none;border:1.5px dashed var(--border);border-radius:var(--radius-sm);font-size:13px;color:var(--text-sub);cursor:pointer;margin-top:4px">＋ 行を追加する</button>
+        <div id="pur-items-total" style="text-align:right;font-size:13px;color:#4a4a4a;margin-top:8px;font-weight:600"></div>
       </div>
     </div>
     <div id="pur-day-summary" style="display:none;justify-content:space-between;align-items:center;padding:10px 16px;background:var(--orange-bg);border-radius:var(--radius-sm);margin:0 16px 8px;font-size:13px;gap:12px"></div>
@@ -462,9 +463,16 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       <div class="field-divider"></div>
       <div class="field" style="padding-top:16px">
         <div class="field-label">卸先 <span class="req">*</span></div>
-        <select id="sal-client">
+        <select id="sal-client" onchange="handleSalClient()">
           <option value="">先に区分を選択してください</option>
         </select>
+      </div>
+      <div id="sal-client-other-wrap" style="display:none">
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">卸先名を入力 <span class="req">*</span></div>
+          <input type="text" id="sal-client-other" placeholder="卸先名を入力してください">
+        </div>
       </div>
     </div>
     <div class="card">
@@ -1395,12 +1403,64 @@ function handlePurStore() {
   if (v !== 'other') document.getElementById('pur-store-other').value = '';
 }
 
+function addPurItem() {
+  const container = document.getElementById('pur-items');
+  const idx = container.querySelectorAll('.pur-item').length;
+  const div = document.createElement('div');
+  div.className = 'pur-item';
+  div.dataset.index = idx;
+  div.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px';
+  div.innerHTML = `
+    <input type="number" class="pur-amount-input" placeholder="金額" min="0" style="flex:1;font-size:16px;font-weight:700;text-align:right;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm)" oninput="updatePurTotal()">
+    <input type="text" class="pur-note-input" placeholder="メモ（任意）" style="flex:1.2;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:14px">
+    <button onclick="removePurItem(this)" style="flex:none;width:28px;height:28px;background:none;border:1px solid var(--border);border-radius:6px;font-size:14px;cursor:pointer;color:var(--text-muted)">✕</button>`;
+  container.appendChild(div);
+  // 最初の行にも✕ボタンを追加（2行目以降）
+  if (idx === 1) {
+    const first = container.querySelector('.pur-item');
+    if (!first.querySelector('button')) {
+      const btn = document.createElement('button');
+      btn.onclick = function(){ removePurItem(this); };
+      btn.style.cssText = 'flex:none;width:28px;height:28px;background:none;border:1px solid var(--border);border-radius:6px;font-size:14px;cursor:pointer;color:var(--text-muted)';
+      btn.textContent = '✕';
+      first.appendChild(btn);
+    }
+  }
+}
+
+function removePurItem(btn) {
+  const container = document.getElementById('pur-items');
+  if (container.querySelectorAll('.pur-item').length <= 1) return;
+  btn.closest('.pur-item').remove();
+  // 1行になったら✕ボタンを非表示
+  if (container.querySelectorAll('.pur-item').length === 1) {
+    const removeBtn = container.querySelector('.pur-item button');
+    if (removeBtn) removeBtn.remove();
+  }
+  updatePurTotal();
+}
+
+function updatePurTotal() {
+  const inputs = document.querySelectorAll('.pur-amount-input');
+  const total = Array.from(inputs).reduce((s, el) => s + (parseInt(el.value)||0), 0);
+  const el = document.getElementById('pur-items-total');
+  el.textContent = total > 0 ? '合計 ¥' + total.toLocaleString('ja-JP') : '';
+}
+
+function getPurItems() {
+  const items = [];
+  document.querySelectorAll('.pur-item').forEach(row => {
+    const amount = parseInt(row.querySelector('.pur-amount-input').value) || 0;
+    const note   = row.querySelector('.pur-note-input').value.trim();
+    if (amount > 0) items.push({ amount, note });
+  });
+  return items;
+}
+
 function getPurchaseData() {
   const date = document.getElementById('pur-date').value;
   const supplierBase = document.getElementById('pur-supplier').value;
-  const amount = document.getElementById('pur-amount').value;
-  const note = document.getElementById('pur-note').value.trim();
-  if (!date || !supplierBase || !amount) return null;
+  if (!date || !supplierBase) return null;
 
   let supplier = supplierBase;
   if (supplierBase === '店舗') {
@@ -1414,7 +1474,10 @@ function getPurchaseData() {
       supplier = '店舗（' + store + '）';
     }
   }
-  return { type:'purchase', date, supplier, amount: parseInt(amount,10), note, submittedAt: new Date().toLocaleDateString('ja-JP') };
+
+  const items = getPurItems();
+  if (!items.length) return null;
+  return { date, supplier, items };
 }
 
 function clearPurchaseForm(keepDate) {
@@ -1424,8 +1487,13 @@ function clearPurchaseForm(keepDate) {
   document.getElementById('pur-store').selectedIndex = 0;
   document.getElementById('pur-store-other-wrap').style.display = 'none';
   document.getElementById('pur-store-other').value = '';
-  document.getElementById('pur-amount').value = '';
-  document.getElementById('pur-note').value = '';
+  // 金額行を1行にリセット
+  const container = document.getElementById('pur-items');
+  container.innerHTML = `<div class="pur-item" data-index="0" style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+    <input type="number" class="pur-amount-input" placeholder="金額" min="0" style="flex:1;font-size:16px;font-weight:700;text-align:right;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm)" oninput="updatePurTotal()">
+    <input type="text" class="pur-note-input" placeholder="メモ（任意）" style="flex:1.2;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:14px">
+  </div>`;
+  document.getElementById('pur-items-total').textContent = '';
 }
 
 let _purDayCount = 0;
@@ -1435,12 +1503,15 @@ async function submitPurchase() {
   const data = getPurchaseData();
   if (!data) { showAlert('pur-alert-box','pur-alert-msg','必須項目をすべて入力してください（仕入先が「店舗」の場合は店舗名も必須です）','error'); return; }
   try {
-    await window._fbPushPurchase(data);
-    _purDayCount++;
-    _purDayTotal += data.amount;
-    clearPurchaseForm(true); // 日付はキープ
+    for (const item of data.items) {
+      await window._fbPushPurchase({ type:'purchase', date: data.date, supplier: data.supplier, amount: item.amount, note: item.note, submittedAt: new Date().toLocaleDateString('ja-JP') });
+      _purDayCount++;
+      _purDayTotal += item.amount;
+    }
+    clearPurchaseForm(true);
     updatePurDaySummary();
-    showToast('登録しました（本日 ' + _purDayCount + '件 合計 ¥' + _purDayTotal.toLocaleString('ja-JP') + '）');
+    const cnt = data.items.length;
+    showToast(`${cnt}件登録しました（本日 ${_purDayCount}件 合計 ¥${_purDayTotal.toLocaleString('ja-JP')}）`);
   } catch(e) { showAlert('pur-alert-box','pur-alert-msg','登録に失敗しました','error'); }
 }
 
@@ -1466,16 +1537,34 @@ function handleSalType() {
   const OVERSEAS_CLIENTS = ['ANGCO INTERNATIONAL TRADING COMPANY（香港）'];
   const clients = type === 'domestic' ? DOMESTIC_CLIENTS : type === 'overseas' ? OVERSEAS_CLIENTS : [];
   clients.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; sel.appendChild(o); });
+  if (clients.length > 0) {
+    const other = document.createElement('option');
+    other.value = 'other'; other.textContent = 'その他';
+    sel.appendChild(other);
+  }
+  document.getElementById('sal-client-other-wrap').style.display = 'none';
+  document.getElementById('sal-client-other').value = '';
+}
+
+function handleSalClient() {
+  const v = document.getElementById('sal-client').value;
+  document.getElementById('sal-client-other-wrap').style.display = v === 'other' ? 'block' : 'none';
+  if (v !== 'other') document.getElementById('sal-client-other').value = '';
 }
 
 function getSalesData() {
   const date   = document.getElementById('sal-date').value;
   const type   = document.getElementById('sal-type').value;
-  const client = document.getElementById('sal-client').value;
+  const clientSel = document.getElementById('sal-client').value;
   const amount = document.getElementById('sal-amount').value;
   const due    = document.getElementById('sal-due').value;
   const note   = document.getElementById('sal-note').value.trim();
-  if (!date || !type || !client || !amount) return null;
+  if (!date || !type || !clientSel || !amount) return null;
+  let client = clientSel;
+  if (clientSel === 'other') {
+    client = document.getElementById('sal-client-other').value.trim();
+    if (!client) return null;
+  }
   const typeLabel = type === 'domestic' ? '国内（請求書）' : '国外（インボイス）';
   return { type: 'sales', date, salesType: typeLabel, client, amount: parseInt(amount,10), due: due||'', note, payStatus: '未入金', submittedAt: new Date().toLocaleDateString('ja-JP') };
 }
@@ -1484,6 +1573,8 @@ function clearSalesForm() {
   document.getElementById('sal-date').value = '';
   document.getElementById('sal-type').selectedIndex = 0;
   document.getElementById('sal-client').innerHTML = '<option value="">先に区分を選択してください</option>';
+  document.getElementById('sal-client-other-wrap').style.display = 'none';
+  document.getElementById('sal-client-other').value = '';
   document.getElementById('sal-amount').value = '';
   document.getElementById('sal-due').value = '';
   document.getElementById('sal-note').value = '';
