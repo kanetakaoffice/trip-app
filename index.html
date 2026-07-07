@@ -2108,11 +2108,26 @@ function renderChart(container) {
   const currentYear = new Date().getFullYear();
   const prevYear    = currentYear - 1;
   const months = Array.from({length:12}, (_,i) => String(i+1).padStart(2,'0'));
-  const SUPPLIER_COLORS = { '店舗':'#fdba74','電脳':'#06b6d4','（株）HAK':'#eab308','（株）GAIN':'#fca5a5' };
-  function getSupplierColor(s) { if (!s) return '#aaaaaa'; if (s.startsWith('店舗')) return SUPPLIER_COLORS['店舗']; return SUPPLIER_COLORS[s]||'#aaaaaa'; }
+
+  const SUPPLIER_COLORS = { '店舗':'#fdba74','電脳':'#a5f3fc','（株）HAK':'#fde68a','（株）GAIN':'#fca5a5' };
+  // 売上：国内＝薄いネイビー、国外＝やや濃いネイビー
+  const SAL_COLORS = { '国内（請求書）':'#99c4bf', '国外（インボイス）':'#0f766e' };
+  function getSalColor(type) { return SAL_COLORS[type] || '#93c5fd'; }
+
+  function getSupplierColor(s) {
+    if (!s) return '#bbf7d0';
+    if (s.startsWith('店舗')) return SUPPLIER_COLORS['店舗'];
+    return SUPPLIER_COLORS[s] || '#bbf7d0';
+  }
   function normalizeSupplier(s) { return s&&s.startsWith('店舗')?'店舗':s; }
+
   const allSuppliers = [...new Set(purchases.filter(p=>p.date?.startsWith(currentYear+'')).map(p=>normalizeSupplier(p.supplier)).filter(Boolean))];
   const purBySupplier = allSuppliers.map(sup=>({ supplier:sup, color:getSupplierColor(sup), curr:months.map(m=>purchases.filter(p=>p.date?.startsWith(currentYear+'-'+m)&&normalizeSupplier(p.supplier)===sup).reduce((s,p)=>s+p.amount,0)) }));
+
+  // 売上：国内・国外で積み上げ
+  const salTypes = ['国内（請求書）','国外（インボイス）'];
+  const salByType = salTypes.map(type=>({ type, color:getSalColor(type), curr:months.map(m=>sales.filter(s=>s.date?.startsWith(currentYear+'-'+m)&&s.salesType===type).reduce((s,p)=>s+p.amount,0)) }));
+
   const purCurr = months.map(m=>purchases.filter(p=>p.date?.startsWith(currentYear+'-'+m)).reduce((s,p)=>s+p.amount,0));
   const purPrev = months.map(m=>purchases.filter(p=>p.date?.startsWith(prevYear+'-'+m)).reduce((s,p)=>s+p.amount,0));
   const salCurr = months.map(m=>sales.filter(s=>s.date?.startsWith(currentYear+'-'+m)).reduce((s,p)=>s+p.amount,0));
@@ -2126,143 +2141,106 @@ function renderChart(container) {
   const barH = 160;
   const maxBar = Math.max(...purCurr,...purPrev,...salCurr,...salPrev,1);
 
-  // Y軸の目盛りを生成（最大値から4段階）
   function makeYAxis(maxV) {
-    const step = Math.ceil(maxV / 4 / 10000) * 10000 || 10000;
-    const ticks = [0,1,2,3,4].map(i => i * step).filter(v => v <= maxV * 1.1);
-    return ticks.map(v => {
-      const y = barH - (v / maxV) * barH;
-      const label = v >= 10000 ? (v/10000)+'万' : v.toLocaleString('ja-JP');
-      return { v, y, label };
-    });
+    const step=Math.ceil(maxV/4/10000)*10000||10000;
+    const ticks=[0,1,2,3,4].map(i=>i*step).filter(v=>v<=maxV*1.1);
+    return ticks.map(v=>({ v, y:barH-(v/maxV)*barH, label:v>=10000?(v/10000)+'万':v.toLocaleString('ja-JP') }));
   }
+  function yAxisSvg(ticks,w) { return ticks.map(t=>`<line x1="0" y1="${t.y}" x2="${w}" y2="${t.y}" stroke="#e5e7eb" stroke-width="0.8"/>`).join(''); }
 
-  function yAxisSvg(ticks, svgW) {
-    return ticks.map(t =>
-      `<line x1="0" y1="${t.y}" x2="${svgW}" y2="${t.y}" stroke="#e5e7eb" stroke-width="0.8"/>`)
-      .join('');
-  }
-
-  function yAxisLabels(ticks) {
-    return ticks.map(t =>
-      `<div style="position:absolute;right:4px;top:${t.y - 8}px;font-size:9px;color:#a0a0a0;white-space:nowrap">${t.label}</div>`)
-      .join('');
-  }
-
-  function stackedBar(mi) {
+  function stackedPurBar(mi) {
     if (purCurr[mi]===0) return `<div style="width:100%;height:${barH}px"></div>`;
-    const segs = purBySupplier.map(s=>({val:s.curr[mi],color:s.color})).filter(s=>s.val>0).sort((a,b)=>b.val-a.val);
+    const segs=purBySupplier.map(s=>({val:s.curr[mi],color:s.color})).filter(s=>s.val>0).sort((a,b)=>b.val-a.val);
     let bars=''; [...segs].reverse().forEach((seg,idx)=>{ const h=Math.round((seg.val/maxBar)*barH); bars+=`<div style="width:100%;height:${h}px;background:${seg.color};border-radius:${idx===segs.length-1?'3px 3px 0 0':'0'};min-height:${h>0?2:0}px"></div>`; });
     return `<div style="width:100%;height:${barH}px;display:flex;flex-direction:column;justify-content:flex-end">${bars}</div>`;
   }
-  function simpleBar(val,color,opacity) {
-    const h=Math.round((val/maxBar)*barH);
-    return `<div style="width:100%;height:${barH}px;display:flex;flex-direction:column;justify-content:flex-end"><div style="width:100%;height:${h}px;background:${color};opacity:${opacity};border-radius:3px 3px 0 0;min-height:${h>0?2:0}px"></div></div>`;
+  function stackedSalBar(mi) {
+    if (salCurr[mi]===0) return `<div style="width:100%;height:${barH}px"></div>`;
+    const segs=salByType.map(s=>({val:s.curr[mi],color:s.color})).filter(s=>s.val>0).sort((a,b)=>b.val-a.val);
+    let bars=''; [...segs].reverse().forEach((seg,idx)=>{ const h=Math.round((seg.val/maxBar)*barH); bars+=`<div style="width:100%;height:${h}px;background:${seg.color};border-radius:${idx===segs.length-1?'3px 3px 0 0':'0'};min-height:${h>0?2:0}px"></div>`; });
+    return `<div style="width:100%;height:${barH}px;display:flex;flex-direction:column;justify-content:flex-end">${bars}</div>`;
   }
-
   function makeLine(values,color,maxV,w,h,dashed) {
     if (!values.some(v=>v!==0)) return '';
     const pts=values.map((v,i)=>`${(i/11)*w},${h-(v/maxV)*h}`).join(' ');
     return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5" ${dashed?'stroke-dasharray="4 3"':''} stroke-linejoin="round" stroke-linecap="round"/>`;
   }
-
-  // タップで金額ポップアップ付きドット
-  function makeDotsWithLabel(values,color,maxV,w,h,formatter) {
+  function makeDotsWithLabel(values,color,maxV,w,h) {
     return values.map((v,i)=>{
-      if (v===0) return '';
+      if(v===0) return '';
       const x=(i/11)*w; const y=h-(v/maxV)*h;
-      const label = formatter ? formatter(v) : yen(v);
-      const labelX = i > 9 ? x - 60 : x + 6;
-      const labelY = y > 20 ? y - 18 : y + 14;
-      return `<g style="cursor:pointer" onclick="this.querySelector('.tip').style.display=this.querySelector('.tip').style.display==='none'?'block':'none'">
-        <circle cx="${x}" cy="${y}" r="4" fill="${color}" stroke="white" stroke-width="1.5"/>
-        <text class="tip" x="${labelX}" y="${labelY}" font-size="9" fill="${color}" font-weight="700" style="display:none">${label}</text>
-      </g>`;
+      const lx=i>9?x-62:x+6; const ly=y>20?y-18:y+14;
+      return `<g style="cursor:pointer" onclick="this.querySelector('.tip').style.display=this.querySelector('.tip').style.display==='none'?'block':'none'"><circle cx="${x}" cy="${y}" r="4" fill="${color}" stroke="white" stroke-width="1.5"/><text class="tip" x="${lx}" y="${ly}" font-size="9" fill="${color}" font-weight="700" style="display:none">${yen(v)}</text></g>`;
     }).join('');
   }
 
-  const supplierLegend = allSuppliers.map(sup=>`<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;background:${getSupplierColor(sup)};border-radius:2px"></span>${sup}</span>`).join('');
+  const svgW=360, svgH=barH;
+  const yTicks=makeYAxis(maxBar);
+  const gridLines=yAxisSvg(yTicks,svgW);
+  const yLabels=yTicks.map(t=>`<div style="position:absolute;right:2px;top:${t.y-7}px;font-size:9px;color:#a0a0a0;white-space:nowrap">${t.label}</div>`).join('');
 
-  const summaryRows = months.map((m,i)=>{
-    const p=purCurr[i],s=salCurr[i]; if(p===0&&s===0) return '';
-    const pr=s-p;
-    const bd=purBySupplier.filter(sup=>sup.curr[i]>0).map(sup=>`<span style="display:inline-flex;align-items:center;gap:3px;margin-right:8px;font-size:10px;color:#666"><span style="display:inline-block;width:8px;height:8px;background:${sup.color};border-radius:2px"></span>${sup.supplier} ${yen(sup.curr[i])}</span>`).join('');
-    return `<div style="border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;font-size:12px"><span style="font-weight:600;color:var(--text)">${currentYear}年${parseInt(m)}月</span><span style="color:#4a4a4a">${yen(p)}</span><span style="color:var(--teal)">${yen(s)}</span><span style="font-weight:700;color:${pr>=0?'var(--success)':'var(--danger)'}">${yen(pr)}</span></div>${bd?`<div style="padding:0 12px 8px;flex-wrap:wrap;display:flex">${bd}</div>`:''}</div>`;
-  }).filter(Boolean).join('');
-  const summaryTable = `<div style="background:var(--white);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;margin-bottom:16px"><div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--surface);font-size:11px;font-weight:700;color:var(--text-muted);border-bottom:1px solid var(--border)"><span>月</span><span>仕入合計</span><span style="color:var(--teal)">売上合計</span><span>粗利益</span></div>${summaryRows||'<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">データがありません</div>'}</div>`;
+  const maxProfit=Math.max(...profit.map(Math.abs),1);
+  const midY=svgH/2;
+  const profitPts=profit.map((v,i)=>`${(i/11)*svgW},${midY-(v/maxProfit)*(svgH/2)}`).join(' ');
+  const profitDots=profit.map((v,i)=>{ const x=(i/11)*svgW; const y=midY-(v/maxProfit)*(svgH/2); const col=v>=0?'#16a34a':'#dc2626'; const lx=i>9?x-62:x+6; const ly=y>20?y-18:y+14; return `<g style="cursor:pointer" onclick="this.querySelector('.tip').style.display=this.querySelector('.tip').style.display==='none'?'block':'none'"><circle cx="${x}" cy="${y}" r="4" fill="${col}" stroke="white" stroke-width="1.5"/><text class="tip" x="${lx}" y="${ly}" font-size="9" fill="${col}" font-weight="700" style="display:none">${yen(v)}</text></g>`; }).join('');
 
-  const baseCols = months.map((m,i)=>`
+  const maxAll=Math.max(...purCurr,...salCurr,...salPrev,...purPrev,1);
+  const salPrevLine=makeLine(salPrev,'#0d9488',maxAll,svgW,svgH,true);
+  const purPrevLine=makeLine(purPrev,'#9ca3af',maxAll,svgW,svgH,true);
+  const salPrevDots=makeDotsWithLabel(salPrev,'#0d9488',maxAll,svgW,svgH);
+  const maxCumul=Math.max(...salCumul,...salCumulP,1);
+  const cumulLine=makeLine(salCumul,'#f59e0b',maxCumul,svgW,svgH,false);
+  const cumulLineP=makeLine(salCumulP,'#fcd34d',maxCumul,svgW,svgH,true);
+  const cumulDots=makeDotsWithLabel(salCumul,'#d97706',maxCumul,svgW,svgH);
+  const maxRecv=Math.max(...recv,1);
+  const recvLine=makeLine(recv,'#dc2626',maxRecv,svgW,svgH,false);
+  const recvDots=makeDotsWithLabel(recv,'#dc2626',maxRecv,svgW,svgH);
+
+  const baseCols=months.map((m,i)=>`
     <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:1px">
       <div style="width:100%;display:flex;gap:2px;align-items:flex-end;height:${barH}px">
-        <div style="flex:1">${stackedBar(i)}</div>
-        <div style="flex:1">${simpleBar(salCurr[i],'#0f766e',1)}</div>
+        <div style="flex:1">${stackedPurBar(i)}</div>
+        <div style="flex:1">${stackedSalBar(i)}</div>
       </div>
       <div style="font-size:9px;color:var(--text-muted);margin-top:3px">${parseInt(m)}月</div>
     </div>`).join('');
 
-  const svgW=360, svgH=barH;
-
-  // ── SVGパターン（ライン＋タップで金額表示ドット）──
-  const yTicks = makeYAxis(maxBar);
-  const gridLines = yAxisSvg(yTicks, svgW);
-
-  // g1 粗利益
-  const maxProfit = Math.max(...profit.map(Math.abs),1);
-  const midY = svgH/2;
-  const profitPts = profit.map((v,i)=>`${(i/11)*svgW},${midY-(v/maxProfit)*(svgH/2)}`).join(' ');
-  const profitDots = profit.map((v,i)=>{
-    const x=(i/11)*svgW; const y=midY-(v/maxProfit)*(svgH/2);
-    const col = v>=0?'#16a34a':'#dc2626';
-    const lx = i>9?x-62:x+6; const ly = y>20?y-18:y+14;
-    return `<g style="cursor:pointer" onclick="this.querySelector('.tip').style.display=this.querySelector('.tip').style.display==='none'?'block':'none'"><circle cx="${x}" cy="${y}" r="4" fill="${col}" stroke="white" stroke-width="1.5"/><text class="tip" x="${lx}" y="${ly}" font-size="9" fill="${col}" font-weight="700" style="display:none">${yen(v)}</text></g>`;
-  }).join('');
-
-  // g2 前年比
-  const maxAll = Math.max(...purCurr,...salCurr,...salPrev,...purPrev,1);
-  const salPrevLine = makeLine(salPrev,'#0d9488',maxAll,svgW,svgH,true);
-  const purPrevLine = makeLine(purPrev,'#9ca3af',maxAll,svgW,svgH,true);
-  const salPrevDots = makeDotsWithLabel(salPrev,'#0d9488',maxAll,svgW,svgH,null);
-
-  // g3 累計
-  const maxCumul = Math.max(...salCumul,...salCumulP,1);
-  const cumulLine  = makeLine(salCumul,'#f59e0b',maxCumul,svgW,svgH,false);
-  const cumulLineP = makeLine(salCumulP,'#fcd34d',maxCumul,svgW,svgH,true);
-  const cumulDots  = makeDotsWithLabel(salCumul,'#d97706',maxCumul,svgW,svgH,null);
-
-  // g4 売掛金
-  const maxRecv = Math.max(...recv,1);
-  const recvLine = makeLine(recv,'#dc2626',maxRecv,svgW,svgH,false);
-  const recvDots = makeDotsWithLabel(recv,'#dc2626',maxRecv,svgW,svgH,null);
-
-  const svgPatterns = {
-    g1: `${gridLines}<line x1="0" y1="${midY}" x2="${svgW}" y2="${midY}" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/><polyline points="${profitPts}" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${profitDots}`,
-    g2: `${gridLines}${purPrevLine}${salPrevLine}${salPrevDots}`,
-    g3: `${gridLines}${cumulLineP}${cumulLine}${cumulDots}`,
-    g4: `${gridLines}${recvLine}${recvDots}`
+  const svgPatterns={
+    g1:`${gridLines}<line x1="0" y1="${midY}" x2="${svgW}" y2="${midY}" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/><polyline points="${profitPts}" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${profitDots}`,
+    g2:`${gridLines}${purPrevLine}${salPrevLine}${salPrevDots}`,
+    g3:`${gridLines}${cumulLineP}${cumulLine}${cumulDots}`,
+    g4:`${gridLines}${recvLine}${recvDots}`
   };
-  const legends = {
-    g1: `<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:3px;background:#7c3aed;border-radius:2px"></span>粗利益</span>`,
-    g2: `<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:2px;border-top:2px dashed #9ca3af"></span>仕入(前年)</span><span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:2px;border-top:2px dashed #0d9488"></span>売上(前年)</span>`,
-    g3: `<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:3px;background:#f59e0b;border-radius:2px"></span>累計売上(今年)</span><span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:2px;border-top:2px dashed #fcd34d"></span>累計売上(前年)</span>`,
-    g4: `<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:3px;background:#dc2626;border-radius:2px"></span>未回収売掛金</span>`
+  const legends={
+    g1:`<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:3px;background:#7c3aed;border-radius:2px"></span>粗利益</span>`,
+    g2:`<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:2px;border-top:2px dashed #9ca3af"></span>仕入(前年)</span><span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:2px;border-top:2px dashed #0d9488"></span>売上(前年)</span>`,
+    g3:`<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:3px;background:#f59e0b;border-radius:2px"></span>累計売上(今年)</span><span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:2px;border-top:2px dashed #fcd34d"></span>累計売上(前年)</span>`,
+    g4:`<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:3px;background:#dc2626;border-radius:2px"></span>未回収売掛金</span>`
   };
-  const titles = { g1:'粗利益ライン', g2:'前年比ライン', g3:'累計売上ライン', g4:'売掛金残高ライン' };
+  const titles={g1:'粗利益ライン',g2:'前年比ライン',g3:'累計売上ライン',g4:'売掛金残高ライン'};
 
-  // Y軸ラベル
-  const yLabels = yTicks.map(t=>`<div style="position:absolute;right:2px;top:${t.y-7}px;font-size:9px;color:#a0a0a0;white-space:nowrap">${t.label}</div>`).join('');
+  const supplierLegend=allSuppliers.map(sup=>`<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;background:${getSupplierColor(sup)};border-radius:2px"></span>${sup}</span>`).join('');
+  const salTypeLegend=salTypes.map(t=>`<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;background:${getSalColor(t)};border-radius:2px"></span>${t==='国内（請求書）'?'国内':'国外'}</span>`).join('');
 
-  container.innerHTML = `
+  const summaryRows=months.map((m,i)=>{
+    const p=purCurr[i],s=salCurr[i]; if(p===0&&s===0) return '';
+    const pr=s-p;
+    const bd=purBySupplier.filter(sup=>sup.curr[i]>0).map(sup=>`<span style="display:inline-flex;align-items:center;gap:3px;margin-right:8px;font-size:10px;color:#666"><span style="display:inline-block;width:8px;height:8px;background:${sup.color};border-radius:2px"></span>${sup.supplier} ${yen(sup.curr[i])}</span>`).join('');
+    const sd=salByType.filter(t=>t.curr[i]>0).map(t=>`<span style="display:inline-flex;align-items:center;gap:3px;margin-right:8px;font-size:10px;color:#666"><span style="display:inline-block;width:8px;height:8px;background:${t.color};border-radius:2px"></span>${t.type==='国内（請求書）'?'国内':'国外'} ${yen(t.curr[i])}</span>`).join('');
+    return `<div style="border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;font-size:12px"><span style="font-weight:600;color:var(--text)">${currentYear}年${parseInt(m)}月</span><span style="color:#4a4a4a">${yen(p)}</span><span style="color:var(--teal)">${yen(s)}</span><span style="font-weight:700;color:${pr>=0?'var(--success)':'var(--danger)'}">${yen(pr)}</span></div>${bd?`<div style="padding:0 12px 4px;flex-wrap:wrap;display:flex">${bd}</div>`:''}${sd?`<div style="padding:0 12px 8px;flex-wrap:wrap;display:flex">${sd}</div>`:''}</div>`;
+  }).filter(Boolean).join('');
+  const summaryTable=`<div style="background:var(--white);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;margin-bottom:16px"><div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--surface);font-size:11px;font-weight:700;color:var(--text-muted);border-bottom:1px solid var(--border)"><span>月</span><span>仕入合計</span><span style="color:var(--teal)">売上合計</span><span>粗利益</span></div>${summaryRows||'<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">データがありません</div>'}</div>`;
+
+  container.innerHTML=`
   <div style="background:var(--white);border-radius:var(--radius);border:1px solid var(--border);padding:14px;margin-bottom:16px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px">
-      <div style="font-size:12px;font-weight:700;color:#909090" id="chart-title">仕入 vs 売上 ＋ 粗利益ライン</div>
+      <div style="font-size:12px;font-weight:700;color:#909090" id="chart-title">仕入（仕入先別） vs 売上（国内・国外）＋ 粗利益ライン</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         ${Object.entries(titles).map(([key,label])=>`<button onclick="switchChartLine('${key}')" id="chart-btn-${key}" style="padding:4px 10px;font-size:11px;font-weight:600;border:1.5px solid ${key==='g1'?'#3a3a3a':'#d1d5db'};border-radius:20px;background:${key==='g1'?'#3a3a3a':'none'};color:${key==='g1'?'#fff':'#909090'};cursor:pointer">${label}</button>`).join('')}
       </div>
     </div>
     <div style="display:flex;gap:0">
-      <!-- Y軸ラベル -->
       <div style="position:relative;width:32px;flex-shrink:0;height:${barH}px">${yLabels}</div>
-      <!-- グラフ本体 -->
       <div style="flex:1;position:relative">
         <div style="display:flex;gap:2px;align-items:flex-end;overflow-x:hidden;padding-bottom:4px">${baseCols}</div>
         <svg id="chart-svg-overlay" style="position:absolute;top:0;left:0;width:100%;height:${barH}px;pointer-events:all" viewBox="0 0 ${svgW} ${svgH}" preserveAspectRatio="none">
@@ -2271,39 +2249,35 @@ function renderChart(container) {
       </div>
     </div>
     <div style="font-size:10px;color:#b0b0b0;margin-top:4px;margin-left:32px">※ ● をタップすると金額が表示されます</div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;font-size:11px" id="chart-legend">
-      ${supplierLegend}
-      <span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;background:#0f766e;border-radius:2px"></span>売上</span>
-      ${legends.g1}
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:11px">
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+        <span style="font-size:10px;font-weight:700;color:#909090">仕入</span>${supplierLegend}
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+        <span style="font-size:10px;font-weight:700;color:#909090">売上</span>${salTypeLegend}
+      </div>
+      <div id="chart-legend" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${legends.g1}</div>
     </div>
   </div>
   ${summaryTable}`;
 
-  window._chartSvgPatterns = svgPatterns;
-  window._chartLegends = legends;
-  window._chartTitles = titles;
-  window._chartSupplierLegend = supplierLegend;
-  window._currentChartKey = 'g1';
+  window._chartSvgPatterns=svgPatterns;
+  window._chartLegends=legends;
+  window._chartTitles=titles;
+  window._chartSupplierLegend=supplierLegend;
+  window._currentChartKey='g1';
 }
 
 function switchChartLine(key) {
-  const svg = document.getElementById('chart-svg-overlay');
-  const legend = document.getElementById('chart-legend');
-  const title = document.getElementById('chart-title');
-  if (!svg || !window._chartSvgPatterns) return;
-  svg.innerHTML = window._chartSvgPatterns[key];
-  legend.innerHTML = window._chartSupplierLegend +
-    `<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;background:#0f766e;border-radius:2px"></span>売上</span>` +
-    window._chartLegends[key];
-  title.textContent = '仕入 vs 売上 ＋ ' + window._chartTitles[key];
-  Object.keys(window._chartSvgPatterns).forEach(k => {
-    const btn = document.getElementById('chart-btn-' + k);
-    if (!btn) return;
-    btn.style.background = k===key?'#3a3a3a':'none';
-    btn.style.color = k===key?'#fff':'#909090';
-    btn.style.borderColor = k===key?'#3a3a3a':'#d1d5db';
-  });
-  window._currentChartKey = key;
+  const svg=document.getElementById('chart-svg-overlay');
+  const legend=document.getElementById('chart-legend');
+  const title=document.getElementById('chart-title');
+  if (!svg||!window._chartSvgPatterns) return;
+  svg.innerHTML=window._chartSvgPatterns[key];
+  legend.innerHTML=window._chartLegends[key];
+  title.textContent='仕入（仕入先別） vs 売上（国内・国外）＋ '+window._chartTitles[key];
+  Object.keys(window._chartSvgPatterns).forEach(k=>{ const btn=document.getElementById('chart-btn-'+k); if(!btn) return; btn.style.background=k===key?'#3a3a3a':'none'; btn.style.color=k===key?'#fff':'#909090'; btn.style.borderColor=k===key?'#3a3a3a':'#d1d5db'; });
+  window._currentChartKey=key;
 }
 
 
