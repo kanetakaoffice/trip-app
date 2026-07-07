@@ -549,11 +549,17 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       <div class="month-grid" id="month-grid"></div>
       <div id="preview-area" style="display:none">
         <div class="preview-box" id="preview-box"></div>
-        <div class="export-btn-grid">
-          <button class="btn" style="background:none;border:1.5px solid #c8c8c8;color:#787878;font-weight:600" onclick="doExportTrip()">✈ 出張Excel</button>
-          <button class="btn" style="background:none;border:1.5px solid #c8c8c8;color:#787878;font-weight:600" onclick="doExportExpense()">💴 経費Excel</button>
-          <button class="btn" style="background:none;border:1.5px solid #c8c8c8;color:#787878;font-weight:600" onclick="doExportPurchase()">🛒 仕入Excel</button>
-          <button class="btn" style="background:none;border:1.5px solid #c8c8c8;color:#787878;font-weight:600" onclick="doExportSales()">💹 売上Excel</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div style="text-align:center;font-size:10px;color:#a0a0a0;font-weight:600;letter-spacing:0.05em;padding-bottom:2px">Excel</div>
+          <div style="text-align:center;font-size:10px;color:#a0a0a0;font-weight:600;letter-spacing:0.05em;padding-bottom:2px">PDF</div>
+          <button class="btn" style="background:none;border:1.5px solid #c8c8c8;color:#787878;font-weight:600;font-size:13px" onclick="doExportTrip()">✈ 出張</button>
+          <button class="btn" style="background:linear-gradient(135deg,#d8d8d8,#a8a8a8);border:none;color:#1a1a1a;font-weight:600;font-size:13px" onclick="doExportTripPDF()">✈ 出張</button>
+          <button class="btn" style="background:none;border:1.5px solid #c8c8c8;color:#787878;font-weight:600;font-size:13px" onclick="doExportExpense()">💴 経費</button>
+          <button class="btn" style="background:linear-gradient(135deg,#d8d8d8,#a8a8a8);border:none;color:#1a1a1a;font-weight:600;font-size:13px" onclick="doExportExpensePDF()">💴 経費</button>
+          <button class="btn" style="background:none;border:1.5px solid #c8c8c8;color:#787878;font-weight:600;font-size:13px" onclick="doExportPurchase()">🛒 仕入</button>
+          <button class="btn" style="background:linear-gradient(135deg,#d8d8d8,#a8a8a8);border:none;color:#1a1a1a;font-weight:600;font-size:13px" onclick="doExportPurchasePDF()">🛒 仕入</button>
+          <button class="btn" style="background:none;border:1.5px solid #c8c8c8;color:#787878;font-weight:600;font-size:13px" onclick="doExportSales()">💹 売上</button>
+          <button class="btn" style="background:linear-gradient(135deg,#d8d8d8,#a8a8a8);border:none;color:#1a1a1a;font-weight:600;font-size:13px" onclick="doExportSalesPDF()">💹 売上</button>
         </div>
       </div>
       <div id="no-data-msg" style="display:none; text-align:center; padding:20px; color:var(--text-muted); font-size:14px;">この月のデータがありません</div>
@@ -872,8 +878,12 @@ async function loadAll() {
     console.log('Loaded:', trips.length, expenses.length, purchases.length, sales.length);
     updateBadge();
     document.getElementById('list-loading').style.display = 'none';
-    if (document.getElementById('screen-list').classList.contains('active')) renderList();
-    if (document.getElementById('screen-export').classList.contains('active')) renderMonthGrid();
+    if (document.getElementById('screen-list').classList.contains('active')) {
+      saveOpenGroups();
+      renderList();
+      restoreOpenGroups();
+    }
+    if (document.getElementById('screen-export').classList.contains('active')) renderMonthGrid(true);
     if (document.getElementById('screen-receivable').classList.contains('active')) renderReceivable();
     document.getElementById('sync-dot').className = 'sync-dot';
     document.getElementById('sync-status').textContent = '同期済み';
@@ -1608,7 +1618,29 @@ async function deleteSales(key) {
   try { await window._fbRemoveSales(key); showToast('削除しました'); } catch(e) {}
 }
 
+// 開いているアコーディオンのIDを記憶
+let _openGroups = new Set();
+
+function saveOpenGroups() {
+  _openGroups = new Set();
+  document.querySelectorAll('[id^="month_"],[id^="trip_"],[id^="exp_"],[id^="pur_"],[id^="sal_"]').forEach(el => {
+    if (el.style.display !== 'none') _openGroups.add(el.id);
+  });
+}
+
+function restoreOpenGroups() {
+  _openGroups.forEach(id => {
+    const el = document.getElementById(id);
+    const arr = document.getElementById('arr_' + id);
+    if (el) {
+      el.style.display = 'block';
+      if (arr) arr.style.transform = 'rotate(180deg)';
+    }
+  });
+}
+
 function switchListTab(tab) {
+  _openGroups = new Set(); // タブ切替時はリセット
   currentListTab = tab;
   ['trip','expense','purchase','sales','chart'].forEach(t => {
     const el = document.getElementById('list-tab-' + t);
@@ -1713,14 +1745,46 @@ async function saveExpense(key, rowId) {
 }
 async function savePurchase(key, rowId) {
   const date = document.getElementById('ep_date_'+rowId).value;
-  const supplier = document.getElementById('ep_sup_'+rowId).value;
+  const supplierBase = document.getElementById('ep_sup_'+rowId).value;
   const amount = parseInt(document.getElementById('ep_amount_'+rowId).value)||0;
   const note = document.getElementById('ep_note_'+rowId).value.trim();
-  if (!date||!supplier||!amount) { showToast('必須項目を入力してください'); return; }
+  if (!date||!supplierBase||!amount) { showToast('必須項目を入力してください'); return; }
+
+  let supplier = supplierBase;
+  if (supplierBase === '店舗') {
+    const store = document.getElementById('ep_store_'+rowId)?.value || '';
+    if (!store) { showToast('店舗名を選択してください'); return; }
+    if (store === 'other') {
+      const other = document.getElementById('ep_store_other_'+rowId)?.value.trim() || '';
+      if (!other) { showToast('店舗名を入力してください'); return; }
+      supplier = '店舗（' + other + '）';
+    } else {
+      supplier = '店舗（' + store + '）';
+    }
+  } else if (supplierBase === 'other') {
+    const other = document.getElementById('ep_sup_other_'+rowId)?.value.trim() || '';
+    if (!other) { showToast('仕入先名を入力してください'); return; }
+    supplier = other;
+  }
+
   try {
     await fetch(authedUrl('/purchases/'+key+'.json'), {method:'PATCH', body:JSON.stringify({date,supplier,amount,note})});
     await loadAll(); showToast('更新しました');
   } catch(e) { showToast('更新に失敗しました'); }
+}
+
+function handleEditPurSupplier(rowId) {
+  const v = document.getElementById('ep_sup_'+rowId).value;
+  const storeWrap = document.getElementById('ep_store_wrap_'+rowId);
+  const otherWrap = document.getElementById('ep_sup_other_wrap_'+rowId);
+  if (storeWrap) storeWrap.style.display = v === '店舗' ? 'block' : 'none';
+  if (otherWrap) otherWrap.style.display = v === 'other' ? 'block' : 'none';
+}
+
+function handleEditPurStore(rowId) {
+  const v = document.getElementById('ep_store_'+rowId)?.value;
+  const wrap = document.getElementById('ep_store_other_wrap_'+rowId);
+  if (wrap) wrap.style.display = v === 'other' ? 'block' : 'none';
 }
 async function saveSales(key, rowId) {
   const date = document.getElementById('es_date_'+rowId).value;
@@ -1759,10 +1823,14 @@ function renderList() {
   }
 
   // 共通ヘッダー（月セクション）
-  function monthHeader(month, total, color='#4a4a4a') {
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:linear-gradient(135deg,#c8c8c8,#b8b8b8);border-radius:10px;margin-bottom:8px;border:1px solid #a8a8a8">
+  function monthHeader(month, total, color='#4a4a4a', mid='') {
+    if (!mid) mid = 'month_' + month.replace('-','');
+    return `<div onclick="toggleDayGroup('${mid}')" style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:linear-gradient(135deg,#c8c8c8,#b8b8b8);border-radius:10px;margin-bottom:4px;border:1px solid #a8a8a8;cursor:pointer">
       <span style="font-size:13px;font-weight:700;color:#3a3a3a">${fmtYM(month)}</span>
-      <span style="font-size:13px;font-weight:700;color:${color}">${yen(total)}</span>
+      <span style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:13px;font-weight:700;color:${color}">${yen(total)}</span>
+        <span id="arr_${mid}" style="font-size:11px;color:#a0a0a0;transition:transform 0.2s;">▼</span>
+      </span>
     </div>`;
   }
   function dayHeader(uid, date, total, color='#4a4a4a') {
@@ -1790,7 +1858,7 @@ function renderList() {
       const monthTotal = mi.reduce((s,a) => s+a.amount, 0);
       const byDay = groupByDay(mi);
       return `<div style="margin-bottom:20px">
-        ${monthHeader(month, monthTotal)}
+        ${(()=>{ const mid='month_trip_'+month.replace('-',''); return monthHeader(month, monthTotal, '#4a4a4a', mid) + '<div id="'+mid+'" style="display:none">'; })()}
         ${byDay.map(({ date, items: di }, di_idx) => {
           const dayTotal = di.reduce((s,a) => s+a.amount, 0);
           const uid = 'trip_'+month.replace('-','')+'_'+di_idx;
@@ -1828,7 +1896,7 @@ function renderList() {
             </div>
           </div>`;
         }).join('')}
-      </div>`;
+      </div></div>`;
     }).join('');
 
   } else if (currentListTab === 'expense') {
@@ -1840,7 +1908,7 @@ function renderList() {
       const monthTotal = mi.reduce((s,e) => s+e.amount, 0);
       const byDay = groupByDay(mi);
       return `<div style="margin-bottom:20px">
-        ${monthHeader(month, monthTotal, '#4a4a4a')}
+        ${(()=>{ const mid='month_exp_'+month.replace('-',''); return monthHeader(month, monthTotal, '#4a4a4a', mid) + '<div id="'+mid+'" style="display:none">'; })()}
         ${byDay.map(({ date, items: di }, di_idx) => {
           const dayTotal = di.reduce((s,e) => s+e.amount, 0);
           const uid = 'exp_'+month.replace('-','')+'_'+di_idx;
@@ -1878,7 +1946,7 @@ function renderList() {
             </div>
           </div>`;
         }).join('')}
-      </div>`;
+      </div></div>`;
     }).join('');
 
   } else if (currentListTab === 'purchase') {
@@ -1890,7 +1958,7 @@ function renderList() {
       const monthTotal = mi.reduce((s,p) => s+p.amount, 0);
       const byDay = groupByDay(mi);
       return `<div style="margin-bottom:20px">
-        ${monthHeader(month, monthTotal, '#4a4a4a')}
+        ${(()=>{ const mid='month_pur_'+month.replace('-',''); return monthHeader(month, monthTotal, '#4a4a4a', mid) + '<div id="'+mid+'" style="display:none">'; })()}
         ${byDay.map(({ date, items: di }, di_idx) => {
           const dayTotal = di.reduce((s,p) => s+p.amount, 0);
           const uid = 'pur_'+month.replace('-','')+'_'+di_idx;
@@ -1915,7 +1983,45 @@ function renderList() {
                   <div id="edit_${rid}" style="display:none;padding:12px 14px;background:#fffde7">
                     <div style="display:grid;gap:8px">
                       <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">日付</div>${inp(p.date,'ep_date_'+rid,'date')}</div>
-                      <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">仕入先</div>${sel(PUR_SUPS,p.supplier,'ep_sup_'+rid)}</div>
+                      <div>
+                        <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">仕入先</div>
+                        ${(()=>{
+                          // 現在の仕入先から基本仕入先と店舗名を判定
+                          let baseVal = p.supplier || '';
+                          let storeVal = '';
+                          let storeOther = '';
+                          let supOther = '';
+                          const storeMatch = baseVal.match(/^店舗（(.+)）$/);
+                          if (storeMatch) {
+                            baseVal = '店舗';
+                            const storeName = storeMatch[1];
+                            const stores = ['ヤマダデンキ','エディオン','ケーズデンキ','ジョーシン'];
+                            if (stores.includes(storeName)) { storeVal = storeName; }
+                            else { storeVal = 'other'; storeOther = storeName; }
+                          } else if (!['店舗','電脳','（株）HAK','（株）GAIN'].includes(baseVal)) {
+                            supOther = baseVal; baseVal = 'other';
+                          }
+                          const supOpts = ['店舗','電脳','（株）HAK','（株）GAIN','other'].map(o=>
+                            `<option value="${o}"${o===baseVal?' selected':''}>${o==='other'?'その他':o}</option>`).join('');
+                          const storeOpts = ['ヤマダデンキ','エディオン','ケーズデンキ','ジョーシン','other'].map(o=>
+                            `<option value="${o}"${o===storeVal?' selected':''}>${o==='other'?'その他':o}</option>`).join('');
+                          return `
+                          <select id="ep_sup_${rid}" onchange="handleEditPurSupplier('${rid}')" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;background:var(--white);width:100%">
+                            <option value="">選択してください</option>${supOpts}
+                          </select>
+                          <div id="ep_store_wrap_${rid}" style="display:${baseVal==='店舗'?'block':'none'};margin-top:6px">
+                            <select id="ep_store_${rid}" onchange="handleEditPurStore('${rid}')" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;background:var(--white);width:100%">
+                              <option value="">店舗を選択</option>${storeOpts}
+                            </select>
+                            <div id="ep_store_other_wrap_${rid}" style="display:${storeVal==='other'?'block':'none'};margin-top:6px">
+                              <input id="ep_store_other_${rid}" type="text" value="${storeOther}" placeholder="店舗名を入力" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;width:100%;box-sizing:border-box">
+                            </div>
+                          </div>
+                          <div id="ep_sup_other_wrap_${rid}" style="display:${baseVal==='other'?'block':'none'};margin-top:6px">
+                            <input id="ep_sup_other_${rid}" type="text" value="${supOther}" placeholder="仕入先名を入力" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;width:100%;box-sizing:border-box">
+                          </div>`;
+                        })()}
+                      </div>
                       <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">金額（円）</div>${inp(p.amount,'ep_amount_'+rid,'number')}</div>
                       <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">メモ</div>${inp(p.note||'','ep_note_'+rid,'text','メモ')}</div>
                     </div>
@@ -1926,7 +2032,7 @@ function renderList() {
             </div>
           </div>`;
         }).join('')}
-      </div>`;
+      </div></div>`;
     }).join('');
 
   } else if (currentListTab === 'sales') {
@@ -1992,6 +2098,7 @@ function toggleDayGroup(uid) {
   const open = el.style.display !== 'none';
   el.style.display = open ? 'none' : 'block';
   if (arr) arr.style.transform = open ? '' : 'rotate(180deg)';
+  if (open) { _openGroups.delete(uid); } else { _openGroups.add(uid); }
 }
 
 // ── グラフ描画 ──
@@ -2171,12 +2278,15 @@ function expensesForMonth(y, m)  { return (window._getExpenses?.()||[]).filter(a
 function purchasesForMonth(y, m) { return (window._getPurchases?.()||[]).filter(a => a.date?.startsWith(getMonthKey(y,m))); }
 function salesForMonth(y, m) { return (window._getSales?.()||[]).filter(a => a.date?.startsWith(getMonthKey(y,m))); }
 
-function renderMonthGrid() {
+function renderMonthGrid(restoreState) {
   const year = parseInt(document.getElementById('year-sel').value);
   const grid = document.getElementById('month-grid');
-  if (window._setSelectedMonth) window._setSelectedMonth(null);
-  document.getElementById('preview-area').style.display = 'none';
-  document.getElementById('no-data-msg').style.display = 'none';
+  const prevMonth = window._getSelectedMonth?.();
+  if (!restoreState) {
+    if (window._setSelectedMonth) window._setSelectedMonth(null);
+    document.getElementById('preview-area').style.display = 'none';
+    document.getElementById('no-data-msg').style.display = 'none';
+  }
   grid.innerHTML = '';
   for (let m = 1; m <= 12; m++) {
     const hasData = tripsForMonth(year,m).length > 0 || expensesForMonth(year,m).length > 0 || purchasesForMonth(year,m).length > 0 || salesForMonth(year,m).length > 0;
@@ -2185,6 +2295,15 @@ function renderMonthGrid() {
     btn.className = 'month-btn' + (hasData ? ' has-data' : ' no-data');
     btn.onclick = () => selectMonth(year, m, btn);
     grid.appendChild(btn);
+  }
+  // 前回選択していた月を復元
+  if (restoreState && prevMonth) {
+    const { year: py, month: pm } = prevMonth;
+    if (py === year) {
+      const btns = grid.querySelectorAll('.month-btn');
+      const targetBtn = btns[parseInt(pm) - 1];
+      if (targetBtn) selectMonth(py, parseInt(pm), targetBtn);
+    }
   }
 }
 
@@ -2259,12 +2378,29 @@ function selectMonth(year, month, btnEl) {
   if (pApps.length) {
     const purTotal = pApps.reduce((s,a) => s+a.amount, 0);
     const sorted = [...pApps].sort((a,b) => a.date.localeCompare(b.date));
-    let detailHtml = sorted.map(p => `
-      <div class="detail-row">
-        <span class="detail-date">${p.date}</span>
-        <span class="detail-name">${p.supplier}${p.note ? ' / ' + p.note : ''}</span>
-        <span class="detail-amount">¥${p.amount.toLocaleString('ja-JP')}</span>
-      </div>`).join('');
+    const purBySupplier = {};
+    sorted.forEach(p => { const k = p.supplier||'不明'; if(!purBySupplier[k]) purBySupplier[k]=[]; purBySupplier[k].push(p); });
+    const supSections = Object.entries(purBySupplier).sort((a,b)=>b[1].reduce((s,p)=>s+p.amount,0)-a[1].reduce((s,p)=>s+p.amount,0)).map(([sup, rows], idx)=>{
+      const supTotal = rows.reduce((s,p)=>s+p.amount,0);
+      const aid = 'pur_sup_'+idx;
+      const detail = rows.map(p=>`
+        <div class="detail-row" style="cursor:pointer" onclick="jumpToEdit('purchase','${p._key}')">
+          <span class="detail-date">${p.date}</span>
+          <span class="detail-name">${p.note||'　'}</span>
+          <span class="detail-amount">¥${p.amount.toLocaleString('ja-JP')}</span>
+          <span style="font-size:10px;color:#a0a0a0;margin-left:4px">✏️</span>
+        </div>`).join('');
+      return `<div style="margin-bottom:4px">
+        <div onclick="toggleAccordion('${aid}')" style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:#f8f8f8;border-radius:6px;cursor:pointer;border:1px solid #e8e8e8">
+          <span style="font-size:12px;font-weight:700;color:#3a3a3a">${sup} <span style="font-weight:400;color:var(--text-muted)">${rows.length}件</span></span>
+          <span style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:12px;font-weight:700;color:#4a4a4a">¥${supTotal.toLocaleString('ja-JP')}</span>
+            <span class="accordion-arrow" id="acc-arrow-${aid}">▼</span>
+          </span>
+        </div>
+        <div class="accordion-body" id="acc-body-${aid}">${detail}</div>
+      </div>`;
+    }).join('');
     html += `
       <div class="accordion-header" onclick="toggleAccordion('purchase')">
         <span class="accordion-title">🛒 仕入 <span style="font-size:11px;color:var(--text-muted);font-weight:400">${pApps.length}件</span></span>
@@ -2273,18 +2409,35 @@ function selectMonth(year, month, btnEl) {
           <span class="accordion-arrow" id="acc-arrow-purchase">▼</span>
         </span>
       </div>
-      <div class="accordion-body" id="acc-body-purchase">${detailHtml}</div>`;
+      <div class="accordion-body" id="acc-body-purchase">${supSections}</div>`;
   }
 
   if (sApps.length) {
     const salTotal = sApps.reduce((s,a) => s+a.amount, 0);
     const sorted = [...sApps].sort((a,b) => a.date.localeCompare(b.date));
-    let detailHtml = sorted.map(s => `
-      <div class="detail-row">
-        <span class="detail-date">${s.date}</span>
-        <span class="detail-name">${s.client}</span>
-        <span class="detail-amount" style="color:var(--teal)">¥${s.amount.toLocaleString('ja-JP')}</span>
-      </div>`).join('');
+    const salByClient = {};
+    sorted.forEach(s => { const k = s.client||'不明'; if(!salByClient[k]) salByClient[k]=[]; salByClient[k].push(s); });
+    const clientSections = Object.entries(salByClient).sort((a,b)=>b[1].reduce((s,p)=>s+p.amount,0)-a[1].reduce((s,p)=>s+p.amount,0)).map(([client, rows], idx)=>{
+      const clientTotal = rows.reduce((s,p)=>s+p.amount,0);
+      const aid = 'sal_client_'+idx;
+      const detail = rows.map(s=>`
+        <div class="detail-row" style="cursor:pointer" onclick="jumpToEdit('sales','${s._key}')">
+          <span class="detail-date">${s.date}</span>
+          <span class="detail-name">${s.salesType||''}</span>
+          <span class="detail-amount" style="color:var(--teal)">¥${s.amount.toLocaleString('ja-JP')}</span>
+          <span style="font-size:10px;color:#a0a0a0;margin-left:4px">✏️</span>
+        </div>`).join('');
+      return `<div style="margin-bottom:4px">
+        <div onclick="toggleAccordion('${aid}')" style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:#f8f8f8;border-radius:6px;cursor:pointer;border:1px solid #e8e8e8">
+          <span style="font-size:12px;font-weight:700;color:#3a3a3a">${client} <span style="font-weight:400;color:var(--text-muted)">${rows.length}件</span></span>
+          <span style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:12px;font-weight:700;color:var(--teal)">¥${clientTotal.toLocaleString('ja-JP')}</span>
+            <span class="accordion-arrow" id="acc-arrow-${aid}">▼</span>
+          </span>
+        </div>
+        <div class="accordion-body" id="acc-body-${aid}">${detail}</div>
+      </div>`;
+    }).join('');
     html += `
       <div class="accordion-header" onclick="toggleAccordion('sales')">
         <span class="accordion-title">💹 売上 <span style="font-size:11px;color:var(--text-muted);font-weight:400">${sApps.length}件</span></span>
@@ -2293,7 +2446,7 @@ function selectMonth(year, month, btnEl) {
           <span class="accordion-arrow" id="acc-arrow-sales">▼</span>
         </span>
       </div>
-      <div class="accordion-body" id="acc-body-sales">${detailHtml}</div>`;
+      <div class="accordion-body" id="acc-body-sales">${clientSections}</div>`;
   }
 
   if (pApps.length && sApps.length) {
@@ -2849,6 +3002,152 @@ async function doReset() {
     btn.disabled = false;
     btn.textContent = '送信';
   }
+}
+
+
+// ── PDF出力（印刷版）──
+function buildPrintHtml(title, tableHtml) {
+  return `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
+  <title>${title}</title>
+  <style>
+    body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif; font-size:12px; color:#1a1a1a; margin:20px; }
+    h2 { font-size:16px; margin-bottom:4px; }
+    p { font-size:11px; color:#666; margin-bottom:16px; }
+    table { width:100%; border-collapse:collapse; }
+    th { background:#e8e8e8; padding:7px 10px; text-align:left; font-size:11px; border:1px solid #ccc; }
+    td { padding:7px 10px; border:1px solid #ddd; font-size:11px; }
+    tr:nth-child(even) td { background:#f9f9f9; }
+    .total td { font-weight:700; background:#f0f0f0; }
+    .subtitle { font-size:13px; font-weight:700; margin:16px 0 6px; }
+    @media print { body { margin:10px; } }
+  </style></head><body>
+  ${tableHtml}
+  <scr'+'ipt>window.onload=()=>{ window.print(); }</scr'+'ipt>
+  </body></html>`;
+}
+
+function doExportTripPDF() {
+  const sm = window._getSelectedMonth?.();
+  if (!sm) return;
+  const { year, month } = sm;
+  const monthApps = tripsForMonth(year, month);
+  if (!monthApps.length) { showToast('この月の出張データがありません'); return; }
+  const NAMES = window._getNames?.() || [];
+  let html = `<h2>旅費日程申請書　${year}年${month}月分</h2><p>出力日: ${new Date().toLocaleDateString('ja-JP')}</p>`;
+  NAMES.forEach(name => {
+    const rows = monthApps.filter(a => a.name===name).sort((a,b)=>a.date.localeCompare(b.date));
+    if (!rows.length) return;
+    const total = rows.reduce((s,a)=>s+a.amount,0);
+    html += `<div class="subtitle">申請者：${name}</div>
+    <table><tr><th>日付</th><th>出張先</th><th>出張目的</th><th>金額（円）</th></tr>
+    ${rows.map(a=>`<tr><td>${a.date}</td><td>${a.dest}</td><td>${a.purpose}</td><td style="text-align:right">¥${a.amount.toLocaleString('ja-JP')}</td></tr>`).join('')}
+    <tr class="total"><td colspan="3" style="text-align:right">合計</td><td style="text-align:right">¥${total.toLocaleString('ja-JP')}</td></tr>
+    </table>`;
+  });
+  const w = window.open('','_blank');
+  w.document.write(buildPrintHtml(`旅費申請_${year}年${month}月`, html));
+  w.document.close();
+  showToast('印刷ダイアログを開きました');
+}
+
+function doExportExpensePDF() {
+  const sm = window._getSelectedMonth?.();
+  if (!sm) return;
+  const { year, month } = sm;
+  const rows = expensesForMonth(year, month).sort((a,b)=>a.date.localeCompare(b.date));
+  if (!rows.length) { showToast('この月の経費データがありません'); return; }
+  const total = rows.reduce((s,a)=>s+a.amount,0);
+  const html = `<h2>経費一覧　${year}年${month}月分</h2><p>出力日: ${new Date().toLocaleDateString('ja-JP')}</p>
+  <table><tr><th>日付</th><th>支払先</th><th>用途</th><th>詳細</th><th>金額（円）</th></tr>
+  ${rows.map(r=>`<tr><td>${r.date}</td><td>${r.payee}</td><td>${r.category}</td><td>${r.note||''}</td><td style="text-align:right">¥${r.amount.toLocaleString('ja-JP')}</td></tr>`).join('')}
+  <tr class="total"><td colspan="4" style="text-align:right">合計</td><td style="text-align:right">¥${total.toLocaleString('ja-JP')}</td></tr>
+  </table>`;
+  const w = window.open('','_blank');
+  w.document.write(buildPrintHtml(`経費一覧_${year}年${month}月`, html));
+  w.document.close();
+  showToast('印刷ダイアログを開きました');
+}
+
+function doExportPurchasePDF() {
+  const sm = window._getSelectedMonth?.();
+  if (!sm) return;
+  const { year, month } = sm;
+  const rows = purchasesForMonth(year, month).sort((a,b)=>a.date.localeCompare(b.date));
+  if (!rows.length) { showToast('この月の仕入データがありません'); return; }
+  const total = rows.reduce((s,a)=>s+a.amount,0);
+  // 仕入先別集計
+  const supMap = {};
+  rows.forEach(r => { const k = r.supplier||'不明'; supMap[k]=(supMap[k]||0)+r.amount; });
+  const supRows = Object.entries(supMap).map(([k,v])=>`<tr><td>${k}</td><td style="text-align:right">¥${v.toLocaleString('ja-JP')}</td></tr>`).join('');
+  const html = `<h2>仕入管理表　${year}年${month}月分</h2><p>出力日: ${new Date().toLocaleDateString('ja-JP')}</p>
+  <table><tr><th>日付</th><th>仕入先</th><th>金額（円）</th><th>メモ</th></tr>
+  ${rows.map(r=>`<tr><td>${r.date}</td><td>${r.supplier}</td><td style="text-align:right">¥${r.amount.toLocaleString('ja-JP')}</td><td>${r.note||''}</td></tr>`).join('')}
+  <tr class="total"><td colspan="2" style="text-align:right">合計</td><td style="text-align:right">¥${total.toLocaleString('ja-JP')}</td><td></td></tr>
+  </table>
+  <div class="subtitle">仕入先別合計</div>
+  <table><tr><th>仕入先</th><th>金額（円）</th></tr>${supRows}
+  <tr class="total"><td style="text-align:right">合計</td><td style="text-align:right">¥${total.toLocaleString('ja-JP')}</td></tr>
+  </table>`;
+  const w = window.open('','_blank');
+  w.document.write(buildPrintHtml(`仕入管理表_${year}年${month}月`, html));
+  w.document.close();
+  showToast('印刷ダイアログを開きました');
+}
+
+function doExportSalesPDF() {
+  const sm = window._getSelectedMonth?.();
+  if (!sm) return;
+  const { year, month } = sm;
+  const rows = salesForMonth(year, month).sort((a,b)=>a.date.localeCompare(b.date));
+  if (!rows.length) { showToast('この月の売上データがありません'); return; }
+  const total = rows.reduce((s,a)=>s+a.amount,0);
+  const clientMap = {};
+  rows.forEach(r => { const k = r.client||'不明'; clientMap[k]=(clientMap[k]||0)+r.amount; });
+  const clientRows = Object.entries(clientMap).map(([k,v])=>`<tr><td>${k}</td><td style="text-align:right">¥${v.toLocaleString('ja-JP')}</td></tr>`).join('');
+  const html = `<h2>売上管理表　${year}年${month}月分</h2><p>出力日: ${new Date().toLocaleDateString('ja-JP')}</p>
+  <table><tr><th>日付</th><th>区分</th><th>卸先</th><th>金額（円）</th><th>メモ</th></tr>
+  ${rows.map(r=>`<tr><td>${r.date}</td><td>${r.salesType||''}</td><td>${r.client}</td><td style="text-align:right">¥${r.amount.toLocaleString('ja-JP')}</td><td>${r.note||''}</td></tr>`).join('')}
+  <tr class="total"><td colspan="3" style="text-align:right">合計</td><td style="text-align:right">¥${total.toLocaleString('ja-JP')}</td><td></td></tr>
+  </table>
+  <div class="subtitle">卸先別合計</div>
+  <table><tr><th>卸先</th><th>金額（円）</th></tr>${clientRows}
+  <tr class="total"><td style="text-align:right">合計</td><td style="text-align:right">¥${total.toLocaleString('ja-JP')}</td></tr>
+  </table>`;
+  const w = window.open('','_blank');
+  w.document.write(buildPrintHtml(`売上管理表_${year}年${month}月`, html));
+  w.document.close();
+  showToast('印刷ダイアログを開きました');
+}
+
+function jumpToEdit(type, key) {
+  showScreen('list');
+  const tabMap = { purchase: 'purchase', sales: 'sales', expense: 'expense', trip: 'trip' };
+  switchListTab(tabMap[type] || type);
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      document.querySelectorAll('[id^="month_"]').forEach(el => {
+        if (el.style.display === 'none') {
+          el.style.display = 'block';
+          const arr = document.getElementById('arr_' + el.id);
+          if (arr) arr.style.transform = 'rotate(180deg)';
+          _openGroups.add(el.id);
+        }
+      });
+      document.querySelectorAll('[id^="trip_"],[id^="exp_"],[id^="pur_"],[id^="sal_"]').forEach(el => {
+        if (el.style.display === 'none') {
+          el.style.display = 'block';
+          const arr = document.getElementById('arr_' + el.id);
+          if (arr) arr.style.transform = 'rotate(180deg)';
+          _openGroups.add(el.id);
+        }
+      });
+      const prefixMap = { purchase: 'pu_', sales: 'sa_', expense: 'ex_', trip: 'tr_' };
+      const rid = prefixMap[type] + key;
+      openEditRow(rid);
+      const viewEl = document.getElementById('edit_' + rid);
+      if (viewEl) viewEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
 }
 
 function checkAuth() {
