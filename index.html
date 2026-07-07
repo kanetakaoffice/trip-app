@@ -396,6 +396,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
           <option>電脳</option>
           <option>（株）HAK</option>
           <option>（株）GAIN</option>
+          <option value="other">その他</option>
         </select>
       </div>
       <div id="pur-store-wrap" style="display:none">
@@ -417,6 +418,13 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
             <div class="field-label">店舗名を入力 <span class="req">*</span></div>
             <input type="text" id="pur-store-other" placeholder="店舗名を入力してください">
           </div>
+        </div>
+      </div>
+      <div id="pur-supplier-other-wrap" style="display:none">
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">仕入先名を入力 <span class="req">*</span></div>
+          <input type="text" id="pur-supplier-other" placeholder="仕入先名を入力してください">
         </div>
       </div>
       <div class="field-divider"></div>
@@ -1388,12 +1396,15 @@ function resetExpDay() {
 
 function handlePurSupplier() {
   const v = document.getElementById('pur-supplier').value;
-  const wrap = document.getElementById('pur-store-wrap');
-  wrap.style.display = v === '店舗' ? 'block' : 'none';
+  document.getElementById('pur-store-wrap').style.display = v === '店舗' ? 'block' : 'none';
+  document.getElementById('pur-supplier-other-wrap').style.display = v === 'other' ? 'block' : 'none';
   if (v !== '店舗') {
     document.getElementById('pur-store').selectedIndex = 0;
     document.getElementById('pur-store-other-wrap').style.display = 'none';
     document.getElementById('pur-store-other').value = '';
+  }
+  if (v !== 'other') {
+    document.getElementById('pur-supplier-other').value = '';
   }
 }
 
@@ -1473,6 +1484,10 @@ function getPurchaseData() {
     } else {
       supplier = '店舗（' + store + '）';
     }
+  } else if (supplierBase === 'other') {
+    const other = document.getElementById('pur-supplier-other').value.trim();
+    if (!other) return null;
+    supplier = other;
   }
 
   const items = getPurItems();
@@ -1487,6 +1502,8 @@ function clearPurchaseForm(keepDate) {
   document.getElementById('pur-store').selectedIndex = 0;
   document.getElementById('pur-store-other-wrap').style.display = 'none';
   document.getElementById('pur-store-other').value = '';
+  document.getElementById('pur-supplier-other-wrap').style.display = 'none';
+  document.getElementById('pur-supplier-other').value = '';
   // 金額行を1行にリセット
   const container = document.getElementById('pur-items');
   container.innerHTML = `<div class="pur-item" data-index="0" style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
