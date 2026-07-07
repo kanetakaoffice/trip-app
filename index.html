@@ -500,8 +500,10 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <input type="text" id="sal-note" placeholder="請求書番号など（任意）">
       </div>
     </div>
+    <div id="sal-day-summary" style="display:none;justify-content:space-between;align-items:center;padding:10px 16px;background:var(--teal-bg);border-radius:var(--radius-sm);margin:0 16px 8px;font-size:13px;gap:12px"></div>
     <div class="btn-row">
-      <button class="btn btn-teal" onclick="submitSales()">売上を登録する</button>
+      <button class="btn btn-secondary" onclick="resetSalDay()">日付リセット</button>
+      <button class="btn btn-teal" onclick="submitSales()">追加登録する</button>
     </div>
   </div>
 
@@ -1596,8 +1598,8 @@ function getSalesData() {
   return { type: 'sales', date, salesType: typeLabel, client, amount: parseInt(amount,10), due: due||'', note, payStatus: '未入金', submittedAt: new Date().toLocaleDateString('ja-JP') };
 }
 
-function clearSalesForm() {
-  document.getElementById('sal-date').value = '';
+function clearSalesForm(keepDate) {
+  if (!keepDate) document.getElementById('sal-date').value = '';
   document.getElementById('sal-type').selectedIndex = 0;
   document.getElementById('sal-client').innerHTML = '<option value="">先に区分を選択してください</option>';
   document.getElementById('sal-client-other-wrap').style.display = 'none';
@@ -1607,10 +1609,34 @@ function clearSalesForm() {
   document.getElementById('sal-note').value = '';
 }
 
+let _salDayCount = 0;
+let _salDayTotal = 0;
+
 async function submitSales() {
   const data = getSalesData();
   if (!data) { showAlert('sal-alert-box','sal-alert-msg','必須項目をすべて入力してください','error'); return; }
-  try { await window._fbPushSales(data); clearSalesForm(); showToast('売上を登録しました'); } catch(e) { showAlert('sal-alert-box','sal-alert-msg','登録に失敗しました','error'); }
+  try {
+    await window._fbPushSales(data);
+    _salDayCount++;
+    _salDayTotal += data.amount;
+    clearSalesForm(true); // 日付はキープ
+    updateSalDaySummary();
+    showToast('登録しました（本日 ' + _salDayCount + '件 合計 ¥' + _salDayTotal.toLocaleString('ja-JP') + '）');
+  } catch(e) { showAlert('sal-alert-box','sal-alert-msg','登録に失敗しました','error'); }
+}
+
+function updateSalDaySummary() {
+  const el = document.getElementById('sal-day-summary');
+  if (!el) return;
+  if (_salDayCount === 0) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  el.innerHTML = `<span>本日 <b>${_salDayCount}件</b></span><span>小計 <b style="color:var(--teal)">¥${_salDayTotal.toLocaleString('ja-JP')}</b></span><button onclick="resetSalDay()" style="background:none;border:none;font-size:11px;color:var(--text-muted);cursor:pointer;padding:0">リセット</button>`;
+}
+
+function resetSalDay() {
+  _salDayCount = 0; _salDayTotal = 0;
+  updateSalDaySummary();
+  clearSalesForm(false);
 }
 
 async function deleteSales(key) {
@@ -2111,18 +2137,24 @@ function renderChart(container) {
 
   const SUPPLIER_COLORS = { '店舗':'#fdba74','電脳':'#a5f3fc','（株）HAK':'#fde68a','（株）GAIN':'#fca5a5' };
   // 売上：国内＝薄いネイビー、国外＝やや濃いネイビー
-  const SAL_COLORS = { '国内（請求書）':'#99c4bf', '国外（インボイス）':'#0f766e' };
+  const SAL_COLORS = { '国内（請求書）':'#0f766e', '国外（インボイス）':'#99c4bf' };
   function getSalColor(type) { return SAL_COLORS[type] || '#93c5fd'; }
 
   function getSupplierColor(s) {
-    if (!s) return '#bbf7d0';
+    if (!s) return '#d1d5db';
     if (s.startsWith('店舗')) return SUPPLIER_COLORS['店舗'];
-    return SUPPLIER_COLORS[s] || '#bbf7d0';
+    return SUPPLIER_COLORS[s] || '#d1d5db';
   }
   function normalizeSupplier(s) { return s&&s.startsWith('店舗')?'店舗':s; }
 
   const allSuppliers = [...new Set(purchases.filter(p=>p.date?.startsWith(currentYear+'')).map(p=>normalizeSupplier(p.supplier)).filter(Boolean))];
-  const purBySupplier = allSuppliers.map(sup=>({ supplier:sup, color:getSupplierColor(sup), curr:months.map(m=>purchases.filter(p=>p.date?.startsWith(currentYear+'-'+m)&&normalizeSupplier(p.supplier)===sup).reduce((s,p)=>s+p.amount,0)) }));
+  // 固定順：店舗→電脳→HAK→GAIN→その他
+  const SUPPLIER_ORDER = ['店舗','電脳','（株）HAK','（株）GAIN'];
+  const sortedSuppliers = [
+    ...SUPPLIER_ORDER.filter(s=>allSuppliers.includes(s)),
+    ...allSuppliers.filter(s=>!SUPPLIER_ORDER.includes(s))
+  ];
+  const purBySupplier = sortedSuppliers.map(sup=>({ supplier:sup, color:getSupplierColor(sup), curr:months.map(m=>purchases.filter(p=>p.date?.startsWith(currentYear+'-'+m)&&normalizeSupplier(p.supplier)===sup).reduce((s,p)=>s+p.amount,0)) }));
 
   // 売上：国内・国外で積み上げ
   const salTypes = ['国内（請求書）','国外（インボイス）'];
@@ -2140,24 +2172,28 @@ function renderChart(container) {
 
   const barH = 160;
   const maxBar = Math.max(...purCurr,...purPrev,...salCurr,...salPrev,1);
+  const displayMax = (() => { const ceilV=Math.ceil(maxBar*1.3/10000)*10000||10000; const step=Math.ceil(ceilV/4/10000)*10000||10000; return Math.ceil(ceilV/step)*step; })();
 
   function makeYAxis(maxV) {
-    const step=Math.ceil(maxV/4/10000)*10000||10000;
-    const ticks=[0,1,2,3,4].map(i=>i*step).filter(v=>v<=maxV*1.1);
-    return ticks.map(v=>({ v, y:barH-(v/maxV)*barH, label:v>=10000?(v/10000)+'万':v.toLocaleString('ja-JP') }));
+    // 最大値の1.3倍を上限にして余裕を持たせる
+    const ceilV = Math.ceil(maxV * 1.3 / 10000) * 10000 || 10000;
+    const step = Math.ceil(ceilV / 4 / 10000) * 10000 || 10000;
+    const ticks = [0,1,2,3,4].map(i=>i*step).filter(v=>v<=ceilV);
+    const displayMax = ticks[ticks.length-1] || ceilV;
+    return ticks.map(v=>({ v, y:barH-(v/displayMax)*barH, label:v>=10000?(v/10000)+'万':v.toLocaleString('ja-JP'), displayMax }));
   }
   function yAxisSvg(ticks,w) { return ticks.map(t=>`<line x1="0" y1="${t.y}" x2="${w}" y2="${t.y}" stroke="#e5e7eb" stroke-width="0.8"/>`).join(''); }
 
   function stackedPurBar(mi) {
     if (purCurr[mi]===0) return `<div style="width:100%;height:${barH}px"></div>`;
-    const segs=purBySupplier.map(s=>({val:s.curr[mi],color:s.color})).filter(s=>s.val>0).sort((a,b)=>b.val-a.val);
-    let bars=''; [...segs].reverse().forEach((seg,idx)=>{ const h=Math.round((seg.val/maxBar)*barH); bars+=`<div style="width:100%;height:${h}px;background:${seg.color};border-radius:${idx===segs.length-1?'3px 3px 0 0':'0'};min-height:${h>0?2:0}px"></div>`; });
+    const segs=purBySupplier.map(s=>({val:s.curr[mi],color:s.color})).filter(s=>s.val>0);
+    let bars=''; [...segs].reverse().forEach((seg,idx)=>{ const h=Math.round((seg.val/displayMax)*barH); bars+=`<div style="width:100%;height:${h}px;background:${seg.color};border-radius:${idx===segs.length-1?'3px 3px 0 0':'0'};min-height:${h>0?2:0}px"></div>`; });
     return `<div style="width:100%;height:${barH}px;display:flex;flex-direction:column;justify-content:flex-end">${bars}</div>`;
   }
   function stackedSalBar(mi) {
     if (salCurr[mi]===0) return `<div style="width:100%;height:${barH}px"></div>`;
-    const segs=salByType.map(s=>({val:s.curr[mi],color:s.color})).filter(s=>s.val>0).sort((a,b)=>b.val-a.val);
-    let bars=''; [...segs].reverse().forEach((seg,idx)=>{ const h=Math.round((seg.val/maxBar)*barH); bars+=`<div style="width:100%;height:${h}px;background:${seg.color};border-radius:${idx===segs.length-1?'3px 3px 0 0':'0'};min-height:${h>0?2:0}px"></div>`; });
+    const segs=salByType.map(s=>({val:s.curr[mi],color:s.color})).filter(s=>s.val>0);
+    let bars=''; [...segs].reverse().forEach((seg,idx)=>{ const h=Math.round((seg.val/displayMax)*barH); bars+=`<div style="width:100%;height:${h}px;background:${seg.color};border-radius:${idx===segs.length-1?'3px 3px 0 0':'0'};min-height:${h>0?2:0}px"></div>`; });
     return `<div style="width:100%;height:${barH}px;display:flex;flex-direction:column;justify-content:flex-end">${bars}</div>`;
   }
   function makeLine(values,color,maxV,w,h,dashed) {
@@ -2179,22 +2215,26 @@ function renderChart(container) {
   const gridLines=yAxisSvg(yTicks,svgW);
   const yLabels=yTicks.map(t=>`<div style="position:absolute;right:2px;top:${t.y-7}px;font-size:9px;color:#a0a0a0;white-space:nowrap">${t.label}</div>`).join('');
 
-  const maxProfit=Math.max(...profit.map(Math.abs),1);
+  // 粗利益：最大絶対値の1.4倍で上下に余裕を持たせる
+  const maxProfitRaw=Math.max(...profit.map(Math.abs),1);
+  const maxProfit=Math.ceil(maxProfitRaw*1.4/10000)*10000||10000;
   const midY=svgH/2;
   const profitPts=profit.map((v,i)=>`${(i/11)*svgW},${midY-(v/maxProfit)*(svgH/2)}`).join(' ');
   const profitDots=profit.map((v,i)=>{ const x=(i/11)*svgW; const y=midY-(v/maxProfit)*(svgH/2); const col=v>=0?'#16a34a':'#dc2626'; const lx=i>9?x-62:x+6; const ly=y>20?y-18:y+14; return `<g style="cursor:pointer" onclick="this.querySelector('.tip').style.display=this.querySelector('.tip').style.display==='none'?'block':'none'"><circle cx="${x}" cy="${y}" r="4" fill="${col}" stroke="white" stroke-width="1.5"/><text class="tip" x="${lx}" y="${ly}" font-size="9" fill="${col}" font-weight="700" style="display:none">${yen(v)}</text></g>`; }).join('');
 
-  const maxAll=Math.max(...purCurr,...salCurr,...salPrev,...purPrev,1);
-  const salPrevLine=makeLine(salPrev,'#0d9488',maxAll,svgW,svgH,true);
-  const purPrevLine=makeLine(purPrev,'#9ca3af',maxAll,svgW,svgH,true);
-  const salPrevDots=makeDotsWithLabel(salPrev,'#0d9488',maxAll,svgW,svgH);
-  const maxCumul=Math.max(...salCumul,...salCumulP,1);
+  // g2：前年比はdisplayMaxに合わせる
+  const salPrevLine=makeLine(salPrev,'#0d9488',displayMax,svgW,svgH,true);
+  const purPrevLine=makeLine(purPrev,'#9ca3af',displayMax,svgW,svgH,true);
+  const salPrevDots=makeDotsWithLabel(salPrev,'#0d9488',displayMax,svgW,svgH);
+  // g3：累計もdisplayMaxの1.3倍に余裕を持たせる
+  const maxCumulRaw=Math.max(...salCumul,...salCumulP,1);
+  const maxCumul=Math.ceil(maxCumulRaw*1.3/10000)*10000||10000;
   const cumulLine=makeLine(salCumul,'#f59e0b',maxCumul,svgW,svgH,false);
   const cumulLineP=makeLine(salCumulP,'#fcd34d',maxCumul,svgW,svgH,true);
   const cumulDots=makeDotsWithLabel(salCumul,'#d97706',maxCumul,svgW,svgH);
-  const maxRecv=Math.max(...recv,1);
-  const recvLine=makeLine(recv,'#dc2626',maxRecv,svgW,svgH,false);
-  const recvDots=makeDotsWithLabel(recv,'#dc2626',maxRecv,svgW,svgH);
+  // g4：売掛金もdisplayMaxに合わせる
+  const recvLine=makeLine(recv,'#dc2626',displayMax,svgW,svgH,false);
+  const recvDots=makeDotsWithLabel(recv,'#dc2626',displayMax,svgW,svgH);
 
   const baseCols=months.map((m,i)=>`
     <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:1px">
@@ -2219,7 +2259,7 @@ function renderChart(container) {
   };
   const titles={g1:'粗利益ライン',g2:'前年比ライン',g3:'累計売上ライン',g4:'売掛金残高ライン'};
 
-  const supplierLegend=allSuppliers.map(sup=>`<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;background:${getSupplierColor(sup)};border-radius:2px"></span>${sup}</span>`).join('');
+  const supplierLegend=sortedSuppliers.map(sup=>`<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;background:${getSupplierColor(sup)};border-radius:2px"></span>${sup}</span>`).join('');
   const salTypeLegend=salTypes.map(t=>`<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;background:${getSalColor(t)};border-radius:2px"></span>${t==='国内（請求書）'?'国内':'国外'}</span>`).join('');
 
   const summaryRows=months.map((m,i)=>{
