@@ -314,8 +314,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       </div>
     </div>
     <div class="btn-row">
-      <button class="btn btn-secondary" onclick="saveDraft()">下書き</button>
-      <button class="btn btn-primary" onclick="submitForm()">申請する</button>
+      <button class="btn btn-primary" onclick="submitForm()">登録する</button>
     </div>
   </div>
 
@@ -1346,7 +1345,7 @@ function clearTripForm() {
 }
 
 async function submitForm() {
-  const data = getTripData('申請中');
+  const data = getTripData('登録済み');
   if (!data) { showAlert('alert-box','alert-msg','必須項目をすべて入力してください','error'); return; }
   try { await window._fbPushTrip(data); clearTripForm(); showToast('申請を提出しました'); } catch(e) { showAlert('alert-box','alert-msg','送信に失敗しました','error'); }
 }
@@ -1899,7 +1898,7 @@ function renderList() {
                       <div>
                         <div style="font-size:13px;font-weight:600;color:var(--text)">${a.name} → ${a.dest}</div>
                         <div style="font-size:12px;color:var(--text-sub);margin-top:2px">${a.purpose}</div>
-                        <span style="display:inline-block;margin-top:4px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:${a.status==='申請中'?'var(--warning-bg)':'var(--surface)'};color:${a.status==='申請中'?'var(--warning)':'var(--text-muted)'}">${a.status}</span>
+    
                       </div>
                       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
                         <span style="font-size:16px;font-weight:700;color:#4a4a4a">${yen(a.amount)}</span>
@@ -1913,7 +1912,7 @@ function renderList() {
                       <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">申請者</div>${sel(NAMES_LIST,a.name,'et_name_'+rid)}</div>
                       <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">出張先</div>${sel(TRIP_DESTS,a.dest,'et_dest_'+rid)}</div>
                       <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">目的</div>${sel(TRIP_PURPOSES,a.purpose,'et_purpose_'+rid)}</div>
-                      <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">ステータス</div>${sel(['申請中','下書き'],a.status,'et_status_'+rid)}</div>
+                      <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">ステータス</div>${sel(['登録済み'],a.status,'et_status_'+rid)}</div>
                     </div>
                     ${editBtnRow(`saveTrip('${a._key}','${rid}')`, `closeEditRow('${rid}')`)}
                   </div>
@@ -2651,13 +2650,11 @@ function renderReceivable() {
   summary.innerHTML = `未回収: <span style="color:var(--danger);font-weight:700">¥${unpaidTotal.toLocaleString('ja-JP')}</span> ／ 入金済: <span style="color:var(--success);font-weight:700">¥${paidTotal.toLocaleString('ja-JP')}</span>`;
 
   const today = new Date().toISOString().slice(0,10);
-  const sorted = [...allSales].sort((a,b) => {
-    if (a.payStatus === '入金済み' && b.payStatus !== '入金済み') return 1;
-    if (a.payStatus !== '入金済み' && b.payStatus === '入金済み') return -1;
-    return (a.due||'9999') > (b.due||'9999') ? 1 : -1;
-  });
 
-  container.innerHTML = sorted.map(s => {
+  // 月別にグループ化（新しい月が上）
+  const byMonth = groupByMonth([...allSales].sort((a,b) => (b.date||'') > (a.date||'') ? 1 : -1));
+
+  function cardHtml(s) {
     const isOverdue = s.payStatus !== '入金済み' && s.due && s.due < today;
     const statusClass = s.payStatus === '入金済み' ? 'status-paid' : 'status-unpaid';
     const statusLabel = s.payStatus === '入金済み' ? '入金済み' : isOverdue ? '⚠ 期限超過' : '未入金';
@@ -2681,6 +2678,58 @@ function renderReceivable() {
             : `<button class="delete-btn" onclick="deleteSales('${s._key}')">削除</button>`
           }
         </div>
+      </div>
+    </div>`;
+  }
+
+  container.innerHTML = byMonth.map(({ month, items: mi }, m_idx) => {
+    const monthTotal  = mi.reduce((s,a) => s+a.amount, 0);
+    const unpaidItems = mi.filter(s=>s.payStatus!=='入金済み').sort((a,b)=>(a.due||'9999')>(b.due||'9999')?1:-1);
+    const paidItems   = mi.filter(s=>s.payStatus==='入金済み').sort((a,b)=>a.date>b.date?-1:1);
+    const monthUnpaid = unpaidItems.reduce((s,a)=>s+a.amount,0);
+    const uid = 'recv_' + month.replace('-','') + '_' + m_idx;
+    const hasOverdue = unpaidItems.some(s=>s.due&&s.due<today);
+
+    // 回収済みを日付別にグループ化
+    const paidByDay = groupByDay(paidItems);
+
+    const paidDayHtml = paidByDay.map(({ date, items: di }, di_idx) => {
+      const dayTotal = di.reduce((s,a)=>s+a.amount,0);
+      const duid = 'recv_paid_' + month.replace('-','') + '_' + di_idx;
+      return `
+      <div style="margin-bottom:6px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--white)">
+        <div onclick="toggleDayGroup('${duid}')" style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;cursor:pointer;background:var(--surface)">
+          <div>
+            <span style="font-size:12px;font-weight:700;color:var(--text)">${fmtDate(date)}</span>
+            ${di.length===1 ? `<span style="font-size:11px;color:var(--text-sub);margin-left:6px">${di[0].client}</span>` : `<span style="font-size:11px;color:var(--text-sub);margin-left:6px">${di.map(s=>s.client).join('・')}</span>`}
+          </div>
+          <span style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:12px;font-weight:700;color:var(--success)">¥${dayTotal.toLocaleString('ja-JP')}</span>
+            <span id="arr_${duid}" style="font-size:10px;color:var(--text-muted);transition:transform 0.2s">▼</span>
+          </span>
+        </div>
+        <div id="${duid}" style="display:none">
+          ${di.map(s=>cardHtml(s)).join('')}
+        </div>
+      </div>`;
+    }).join('');
+
+    return `
+    <div style="margin-bottom:20px">
+      <div onclick="toggleDayGroup('${uid}')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:linear-gradient(135deg,#c8c8c8,#b8b8b8);border-radius:10px;margin-bottom:8px;border:1px solid ${hasOverdue?'#fca5a5':'#a8a8a8'};cursor:pointer">
+        <span style="font-size:13px;font-weight:700;color:#3a3a3a">${fmtYM(month)}</span>
+        <span style="display:flex;align-items:center;gap:10px">
+          ${monthUnpaid > 0 ? `<span style="font-size:11px;color:var(--danger);font-weight:600">未回収 ¥${monthUnpaid.toLocaleString('ja-JP')}</span>` : '<span style="font-size:11px;color:var(--success);font-weight:600">回収済み</span>'}
+          <span id="arr_${uid}" style="font-size:11px;color:#a0a0a0;transition:transform 0.2s">▼</span>
+        </span>
+      </div>
+      <div id="${uid}" style="display:none">
+        ${unpaidItems.length > 0 ? `
+        <div style="font-size:11px;font-weight:700;color:var(--danger);padding:4px 4px 6px;letter-spacing:0.05em">⚠ 未回収</div>
+        ${unpaidItems.map(s=>cardHtml(s)).join('')}` : ''}
+        ${paidItems.length > 0 ? `
+        <div style="font-size:11px;font-weight:700;color:var(--success);padding:${unpaidItems.length>0?'12px':'4px'} 4px 6px;letter-spacing:0.05em">✓ 回収済み</div>
+        ${paidDayHtml}` : ''}
       </div>
     </div>`;
   }).join('');
