@@ -885,7 +885,7 @@ async function loadAll() {
       restoreOpenGroups();
     }
     if (document.getElementById('screen-export').classList.contains('active')) renderMonthGrid(true);
-    if (document.getElementById('screen-receivable').classList.contains('active')) renderReceivable();
+    if (document.getElementById('screen-receivable').classList.contains('active')) renderReceivable(true);
     document.getElementById('sync-dot').className = 'sync-dot';
     document.getElementById('sync-status').textContent = '同期済み';
   } catch(e) {
@@ -2065,7 +2065,15 @@ function renderList() {
     countEl.textContent = items.length + '件';
     if (!items.length) { empty.style.display = 'block'; return; }
     const byMonth = groupByMonth(items);
-    container.innerHTML = byMonth.map(({ month, items: mi }, m_idx) => {
+    // 現在開いているグループを記憶
+  const _recvOpenBefore = new Set();
+  if (restoreState) {
+    document.querySelectorAll('[id^="recv_"]').forEach(el => {
+      if (el.style.display !== 'none') _recvOpenBefore.add(el.id);
+    });
+  }
+
+  container.innerHTML = byMonth.map(({ month, items: mi }, m_idx) => {
       const monthTotal = mi.reduce((s,s2) => s+s2.amount, 0);
       const uid = 'sal_'+month.replace('-','')+'_'+m_idx;
       const sorted = [...mi].sort((a,b) => a.date.localeCompare(b.date));
@@ -2629,7 +2637,7 @@ function doExportPurchase() {
   showToast('仕入Excelを出力しました');
 }
 
-function renderReceivable() {
+function renderReceivable(restoreState) {
   const allSales = window._getSales ? window._getSales() : [];
   const container = document.getElementById('recv-container');
   const empty = document.getElementById('recv-empty');
@@ -2733,6 +2741,18 @@ function renderReceivable() {
       </div>
     </div>`;
   }).join('');
+
+  // 開閉状態を復元
+  if (restoreState) {
+    requestAnimationFrame(() => {
+      _recvOpenBefore.forEach(id => {
+        const el = document.getElementById(id);
+        const arr = document.getElementById('arr_' + id);
+        if (el) { el.style.display = 'block'; }
+        if (arr) { arr.style.transform = 'rotate(180deg)'; }
+      });
+    });
+  }
 }
 
 async function markPaid(key) {
