@@ -2074,15 +2074,7 @@ function renderList() {
     countEl.textContent = items.length + '件';
     if (!items.length) { empty.style.display = 'block'; return; }
     const byMonth = groupByMonth(items);
-    // 現在開いているグループを記憶
-  const _recvOpenBefore = new Set();
-  if (restoreState) {
-    document.querySelectorAll('[id^="recv_"]').forEach(el => {
-      if (el.style.display !== 'none') _recvOpenBefore.add(el.id);
-    });
-  }
-
-  container.innerHTML = byMonth.map(({ month, items: mi }, m_idx) => {
+    container.innerHTML = byMonth.map(({ month, items: mi }, m_idx) => {
       const monthTotal = mi.reduce((s,s2) => s+s2.amount, 0);
       const uid = 'sal_'+month.replace('-','')+'_'+m_idx;
       const sorted = [...mi].sort((a,b) => a.date.localeCompare(b.date));
