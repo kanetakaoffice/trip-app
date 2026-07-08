@@ -848,6 +848,15 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
   </div>
 </div>
 
+<div id="confirm-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:24px">
+  <div style="background:var(--white);border-radius:16px;padding:24px;width:100%;max-width:320px;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+    <div id="confirm-msg" style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:20px;text-align:center"></div>
+    <div style="display:flex;gap:10px">
+      <button onclick="closeConfirm(false)" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">キャンセル</button>
+      <button onclick="closeConfirm(true)" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8d8d8,#a8a8a8);color:#1a1a1a;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">OK</button>
+    </div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 <script>
 const DB_URL = 'https://trip-app-a1746-default-rtdb.asia-southeast1.firebasedatabase.app';
@@ -1639,7 +1648,7 @@ function resetSalDay() {
 }
 
 async function deleteSales(key) {
-  if (!confirm('この売上を削除しますか？')) return;
+  if (!await showConfirm('この売上を削除しますか？')) return;
   try { await window._fbRemoveSales(key); showToast('削除しました'); } catch(e) {}
 }
 
@@ -2328,9 +2337,9 @@ function switchChartLine(key) {
 }
 
 
-async function deleteTrip(key) { if (!confirm('削除しますか？')) return; try { await window._fbRemoveTrip(key); showToast('削除しました'); } catch(e) {} }
-async function deleteExpense(key) { if (!confirm('削除しますか？')) return; try { await window._fbRemoveExpense(key); showToast('削除しました'); } catch(e) {} }
-async function deletePurchase(key) { if (!confirm('削除しますか？')) return; try { await window._fbRemovePurchase(key); showToast('削除しました'); } catch(e) {} }
+async function deleteTrip(key) { if (!await showConfirm('削除しますか？')) return; try { await window._fbRemoveTrip(key); showToast('削除しました'); } catch(e) {} }
+async function deleteExpense(key) { if (!await showConfirm('削除しますか？')) return; try { await window._fbRemoveExpense(key); showToast('削除しました'); } catch(e) {} }
+async function deletePurchase(key) { if (!await showConfirm('削除しますか？')) return; try { await window._fbRemovePurchase(key); showToast('削除しました'); } catch(e) {} }
 
 let _lastSeenCount = parseInt(sessionStorage.getItem('kanetaka_seen_count') || '0');
 
@@ -2756,7 +2765,7 @@ function renderReceivable(restoreState) {
 }
 
 async function markPaid(key) {
-  if (!confirm('入金済みにしますか？')) return;
+  if (!await showConfirm('入金済みにしますか？')) return;
   try {
     const r = await fetch(authedUrl('/sales/' + key + '/payStatus.json'), {
       method: 'PUT',
@@ -3099,11 +3108,27 @@ async function doChangePassword() {
   }
 }
 
-function doLogout() {
-  if (!confirm('ログアウトしますか？')) return;
+async function doLogout() {
+  if (!await showConfirm('ログアウトしますか？')) return;
   sessionStorage.removeItem('kanetaka_auth_token');
   window._idToken = null;
   location.reload();
+}
+
+// ── カスタム確認ダイアログ ──
+let _confirmResolve = null;
+
+function showConfirm(msg) {
+  return new Promise(resolve => {
+    _confirmResolve = resolve;
+    document.getElementById('confirm-msg').textContent = msg;
+    document.getElementById('confirm-modal').style.display = 'flex';
+  });
+}
+
+function closeConfirm(result) {
+  document.getElementById('confirm-modal').style.display = 'none';
+  if (_confirmResolve) { _confirmResolve(result); _confirmResolve = null; }
 }
 
 function showResetModal() {
