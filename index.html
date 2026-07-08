@@ -172,11 +172,12 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 .stock-zero { background: #1f2937; color: #fff; }
 .scan-btn { width: 100%; padding: 16px; background: var(--gold-bg); color: var(--gold-dark); border: 1.5px solid var(--gold); border-radius: var(--radius-sm); font-size: 15px; font-weight: 600; cursor: pointer; text-align: center; margin-bottom: 12px; }
 .img-preview { width: 100%; max-height: 200px; object-fit: cover; border-radius: var(--radius-sm); margin-top: 8px; display: none; }
-#scan-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 300; flex-direction: column; align-items: center; justify-content: center; }
+#scan-overlay { display: none; position: fixed; inset: 0; background: #000; z-index: 300; flex-direction: column; align-items: center; }
 #scan-overlay.show { display: flex; }
-#scan-video { width: 100%; max-width: 400px; border-radius: 12px; }
-.scan-guide { position: absolute; width: 240px; height: 120px; border: 3px solid var(--gold); border-radius: 8px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.5); }
-.scan-close { margin-top: 24px; padding: 12px 32px; background: var(--gold); color: var(--black); border: none; border-radius: var(--radius-sm); font-size: 16px; font-weight: 700; cursor: pointer; }
+#scan-video { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; }
+.scan-guide { position: absolute; width: 72%; max-width: 300px; height: 140px; border: 2.5px solid #c8c8c8; border-radius: 12px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.55); top: 50%; left: 50%; transform: translate(-50%, -60%); }
+.scan-close { position: absolute; bottom: calc(env(safe-area-inset-bottom,0px) + 40px); left: 50%; transform: translateX(-50%); padding: 16px 48px; background: rgba(255,255,255,0.15); color: #fff; border: 1.5px solid rgba(255,255,255,0.4); border-radius: 50px; font-size: 16px; font-weight: 600; cursor: pointer; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 10; }
+.scan-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%, 80px); color: rgba(255,255,255,0.7); font-size: 13px; z-index: 10; white-space: nowrap; }
 .ptr-indicator { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 58px); left: 0; right: 0; display: flex; justify-content: center; align-items: center; height: 0; overflow: hidden; transition: height 0.2s; z-index: 150; pointer-events: none; }
 .ptr-indicator.active { height: 50px; }
 .ptr-spinner { width: 24px; height: 24px; border: 3px solid var(--border); border-top-color: var(--gold); border-radius: 50%; }
@@ -656,10 +657,8 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     <div class="field-divider"></div>
     <div class="field" style="padding-top:16px">
       <div class="field-label">JANコード</div>
-      <div style="display:flex;gap:8px">
-        <input type="text" id="inv-jan" placeholder="スキャンまたは手入力" style="flex:1" oninput="lookupJan()">
-        <button class="btn btn-secondary" style="flex:none;padding:12px 14px;font-size:13px" onclick="startScan('inv-jan')">📷</button>
-      </div>
+      <button class="scan-btn" onclick="startScan('inv-jan')" style="margin-bottom:8px">📷 JANコードをスキャン</button>
+      <input type="text" id="inv-jan" placeholder="または手入力" oninput="lookupJan()">
       <div id="jan-lookup-status" style="font-size:12px;margin-top:6px;color:var(--text-muted)"></div>
     </div>
   </div>
@@ -763,11 +762,9 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 
 <!-- カメラスキャンオーバーレイ -->
 <div id="scan-overlay">
-  <div style="color:var(--gold-light);font-size:14px;margin-bottom:16px">バーコードを枠内に合わせてください</div>
-  <div style="position:relative;display:inline-block">
-    <video id="scan-video" autoplay playsinline></video>
-    <div class="scan-guide"></div>
-  </div>
+  <video id="scan-video" autoplay playsinline></video>
+  <div class="scan-guide"></div>
+  <div class="scan-hint">バーコードを枠内に合わせてください</div>
   <button class="scan-close" onclick="stopScan()">キャンセル</button>
 </div>
 
@@ -3182,21 +3179,32 @@ async function doReset() {
 // ── PDF出力（印刷版）──
 function buildPrintHtml(title, tableHtml) {
   return `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${title}</title>
   <style>
-    body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif; font-size:12px; color:#1a1a1a; margin:20px; }
+    * { box-sizing:border-box; }
+    body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif; font-size:12px; color:#1a1a1a; margin:0; padding:0; }
+    .btn-bar { display:flex; gap:10px; padding:12px 16px; background:#f0f0f0; border-bottom:1px solid #ddd; position:sticky; top:0; z-index:10; }
+    .btn-print { flex:1; padding:12px; background:linear-gradient(135deg,#d8d8d8,#a8a8a8); color:#1a1a1a; border:none; border-radius:8px; font-size:15px; font-weight:700; cursor:pointer; }
+    .btn-close { flex:1; padding:12px; background:#fff; color:#555; border:1.5px solid #ccc; border-radius:8px; font-size:15px; cursor:pointer; }
+    .content { padding:20px; }
     h2 { font-size:16px; margin-bottom:4px; }
     p { font-size:11px; color:#666; margin-bottom:16px; }
-    table { width:100%; border-collapse:collapse; }
+    table { width:100%; border-collapse:collapse; margin-bottom:16px; }
     th { background:#e8e8e8; padding:7px 10px; text-align:left; font-size:11px; border:1px solid #ccc; }
     td { padding:7px 10px; border:1px solid #ddd; font-size:11px; }
     tr:nth-child(even) td { background:#f9f9f9; }
     .total td { font-weight:700; background:#f0f0f0; }
     .subtitle { font-size:13px; font-weight:700; margin:16px 0 6px; }
-    @media print { body { margin:10px; } }
+    @media print { .btn-bar { display:none; } .content { padding:10px; } }
   </style></head><body>
+  <div class="btn-bar">
+    <button class="btn-print" onclick="window.print()">🖨 印刷 / PDF保存</button>
+    <button class="btn-close" onclick="window.close()">✕ 閉じる</button>
+  </div>
+  <div class="content">
   ${tableHtml}
-  <scr'+'ipt>window.onload=()=>{ window.print(); }</scr'+'ipt>
+  </div>
   </body></html>`;
 }
 
