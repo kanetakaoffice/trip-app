@@ -1671,7 +1671,8 @@ function restoreOpenGroups() {
 }
 
 function switchListTab(tab) {
-  _openGroups = new Set(); // タブ切替時はリセット
+  _openGroups = new Set();
+  window._salesClientFilter = null; // タブ切替時はフィルターリセット
   currentListTab = tab;
   ['trip','expense','purchase','sales','chart'].forEach(t => {
     const el = document.getElementById('list-tab-' + t);
@@ -2070,56 +2071,91 @@ function renderList() {
     const items = window._getSales ? window._getSales() : [];
     countEl.textContent = items.length + '件';
     if (!items.length) { empty.style.display = 'block'; return; }
-    const byMonth = groupByMonth(items);
-    container.innerHTML = byMonth.map(({ month, items: mi }, m_idx) => {
-      const monthTotal = mi.reduce((s,s2) => s+s2.amount, 0);
-      const uid = 'sal_'+month.replace('-','')+'_'+m_idx;
-      const sorted = [...mi].sort((a,b) => a.date.localeCompare(b.date));
-      return `<div style="margin-bottom:20px">
-        <div onclick="toggleDayGroup('${uid}')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:linear-gradient(135deg,#c8c8c8,#b8b8b8);border-radius:10px;margin-bottom:8px;border:1px solid #a8a8a8;cursor:pointer">
-          <span style="font-size:13px;font-weight:700;color:#3a3a3a">${fmtYM(month)}</span>
-          <span style="display:flex;align-items:center;gap:10px">
-            <span style="font-size:14px;font-weight:700;color:#4a4a4a">${yen(monthTotal)}</span>
-            <span id="arr_${uid}" style="font-size:11px;color:var(--text-muted);transition:transform 0.2s">▼</span>
-          </span>
+
+    // 卸先フィルター
+    const allClients = [...new Set(items.map(s=>s.client).filter(Boolean))].sort();
+    const activeFilter = window._salesClientFilter || null;
+
+    const filtered = activeFilter ? items.filter(s=>s.client===activeFilter) : items;
+    const byMonth = groupByMonth(filtered);
+
+    // 明細HTML（日付・区分・金額・編集削除）
+    function salItemHtml(s) {
+      const rid = 'sa_'+s._key;
+      const isOvs = s.salesType==='国外（インボイス）';
+      const clients2 = isOvs ? OVS_CLIENTS : DOM_CLIENTS;
+      return `<div style="border-top:1px solid var(--border)">
+        <div id="view_${rid}" style="padding:10px 14px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--text)">${s.client}</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${fmtDate(s.date)}</div>
+              <span style="display:inline-block;margin-top:4px;font-size:11px;padding:2px 8px;border-radius:20px;background:var(--teal-bg);color:var(--teal)">${s.salesType||''}</span>
+              ${s.note?`<div style="font-size:12px;color:var(--text-sub);margin-top:2px">${s.note}</div>`:''}
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+              <span style="font-size:15px;font-weight:700;color:#4a4a4a">${yen(s.amount)}</span>
+              ${actionBtns(`openEditRow('${rid}')`, `deleteSales('${s._key}')`)}
+            </div>
+          </div>
         </div>
-        <div id="${uid}" style="display:none;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--white)">
-          ${sorted.map((s, si) => {
-            const rid = 'sa_'+s._key;
-            const isOvs = s.salesType==='国外（インボイス）';
-            const clients = isOvs ? OVS_CLIENTS : DOM_CLIENTS;
-            return `<div style="${si>0?'border-top:1px solid var(--border)':''}">
-              <div id="view_${rid}" style="padding:10px 14px">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start">
-                  <div>
-                    <div style="font-size:12px;color:var(--text-muted)">${fmtDate(s.date)}</div>
-                    <div style="font-size:13px;font-weight:600;color:var(--text);margin-top:2px">${s.client}</div>
-                    <span style="display:inline-block;margin-top:4px;font-size:11px;padding:2px 8px;border-radius:20px;background:var(--teal-bg);color:var(--teal)">${s.salesType||''}</span>
-                    ${s.note?`<div style="font-size:12px;color:var(--text-sub);margin-top:2px">${s.note}</div>`:''}
-                  </div>
-                  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
-                    <span style="font-size:16px;font-weight:700;color:#4a4a4a">${yen(s.amount)}</span>
-                    ${actionBtns(`openEditRow('${rid}')`, `deleteSales('${s._key}')`)}
-                  </div>
-                </div>
-              </div>
-              <div id="edit_${rid}" style="display:none;padding:12px 14px;background:#fffde7">
-                <div style="display:grid;gap:8px">
-                  <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">日付</div>${inp(s.date,'es_date_'+rid,'date')}</div>
-                  <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">区分</div>${sel(['国内（請求書）','国外（インボイス）'],s.salesType||'国内（請求書）','es_type_'+rid)}</div>
-                  <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">卸先</div><select id="es_client_${rid}" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;background:var(--white);width:100%">${clients.map(c=>`<option value="${c}"${c===s.client?' selected':''}>${c}</option>`).join('')}</select></div>
-                  <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">金額（円）</div>${inp(s.amount,'es_amount_'+rid,'number')}</div>
-                  <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">入金期日</div>${inp(s.due||'','es_due_'+rid,'date')}</div>
-                  <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">メモ</div>${inp(s.note||'','es_note_'+rid,'text','メモ')}</div>
-                </div>
-                ${editBtnRow(`saveSales('${s._key}','${rid}')`, `closeEditRow('${rid}')`)}
-              </div>
-            </div>`;
-          }).join('')}
+        <div id="edit_${rid}" style="display:none;padding:12px 14px;background:#fffde7">
+          <div style="display:grid;gap:8px">
+            <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">日付</div>${inp(s.date,'es_date_'+rid,'date')}</div>
+            <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">区分</div>${sel(['国内（請求書）','国外（インボイス）'],s.salesType||'国内（請求書）','es_type_'+rid)}</div>
+            <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">卸先</div><select id="es_client_${rid}" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;background:var(--white);width:100%">${clients2.map(c=>`<option value="${c}"${c===s.client?' selected':''}>${c}</option>`).join('')}</select></div>
+            <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">金額（円）</div>${inp(s.amount,'es_amount_'+rid,'number')}</div>
+            <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">入金期日</div>${inp(s.due||'','es_due_'+rid,'date')}</div>
+            <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">メモ</div>${inp(s.note||'','es_note_'+rid,'text','メモ')}</div>
+          </div>
+          ${editBtnRow(`saveSales('${s._key}','${rid}')`, `closeEditRow('${rid}')`)}
         </div>
       </div>`;
+    }
+
+    // フィルターボタン
+    const filterBtns = `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+      <button onclick="setSalesFilter(null)" style="padding:5px 12px;font-size:11px;font-weight:600;border:1.5px solid ${!activeFilter?'#3a3a3a':'#d1d5db'};border-radius:20px;background:${!activeFilter?'#3a3a3a':'none'};color:${!activeFilter?'#fff':'#909090'};cursor:pointer">すべて</button>
+      ${allClients.map(c=>`<button onclick="setSalesFilter('${c.replace(/'/g,"\'")}')" style="padding:5px 12px;font-size:11px;font-weight:600;border:1.5px solid ${activeFilter===c?'#3a3a3a':'#d1d5db'};border-radius:20px;background:${activeFilter===c?'#3a3a3a':'none'};color:${activeFilter===c?'#fff':'#909090'};cursor:pointer">${c}</button>`).join('')}
+    </div>`;
+
+    const monthHtml = byMonth.map(({ month, items: mi }, m_idx) => {
+      const monthTotal = mi.reduce((s,s2) => s+s2.amount, 0);
+      const uid = 'sal_'+month.replace('-','')+'_'+m_idx;
+      const byDay = groupByDay([...mi].sort((a,b)=>b.date.localeCompare(a.date)));
+      const dayHtml = byDay.map(({ date, items: di }, di_idx) => {
+        const dayTotal = di.reduce((s,a)=>s+a.amount,0);
+        const duid = 'sal_d_'+month.replace('-','')+'_'+di_idx;
+        return `<div style="margin-bottom:8px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--white)">
+          <div onclick="toggleDayGroup('${duid}')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;cursor:pointer;background:var(--surface)">
+            <span style="font-size:13px;font-weight:700;color:var(--text)">${fmtDate(date)}</span>
+            <span style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:13px;font-weight:700;color:#4a4a4a">${yen(dayTotal)}</span>
+              <span id="arr_${duid}" style="font-size:11px;color:var(--text-muted);transition:transform 0.2s">▼</span>
+            </span>
+          </div>
+          <div id="${duid}" style="display:none">${di.map(s=>salItemHtml(s)).join('')}</div>
+        </div>`;
+      }).join('');
+      return `<div style="margin-bottom:20px">
+        <div onclick="toggleDayGroup('${uid}')" style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:linear-gradient(135deg,#c8c8c8,#b8b8b8);border-radius:10px;margin-bottom:8px;border:1px solid #a8a8a8;cursor:pointer">
+          <span style="font-size:13px;font-weight:700;color:#3a3a3a">${fmtYM(month)}</span>
+          <span style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:13px;font-weight:700;color:#4a4a4a">${yen(monthTotal)}</span>
+            <span id="arr_${uid}" style="font-size:11px;color:#a0a0a0;transition:transform 0.2s">▼</span>
+          </span>
+        </div>
+        <div id="${uid}" style="display:none">${dayHtml}</div>
+      </div>`;
     }).join('');
+
+    container.innerHTML = filterBtns + (monthHtml || '<div class="empty-state"><p>データがありません</p></div>');
   }
+}
+
+function setSalesFilter(client) {
+  window._salesClientFilter = client;
+  renderList();
 }
 
 function toggleDayGroup(uid) {
