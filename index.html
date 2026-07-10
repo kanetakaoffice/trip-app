@@ -568,6 +568,48 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     </div>
   </div>
 
+<!-- PC用2カラム画面（一般ユーザー） -->
+  <div id="screen-pc" class="screen" style="display:none">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;height:calc(100vh - 120px)">
+      <!-- 左：入力 -->
+      <div style="overflow-y:auto;padding-right:8px">
+        <div class="tab-switch" style="margin-bottom:12px">
+          <button class="tab-switch-btn active" id="pc-tab-expense" onclick="switchPCTab('expense')">💴 経費</button>
+          <button class="tab-switch-btn" id="pc-tab-purchase" onclick="switchPCTab('purchase')">🛒 仕入</button>
+          <button class="tab-switch-btn" id="pc-tab-sales" onclick="switchPCTab('sales')">💹 売上</button>
+        </div>
+        <div id="pc-form-area"></div>
+      </div>
+      <!-- 右：今日の一覧 -->
+      <div style="overflow-y:auto;padding-left:8px;border-left:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:700;color:#3a3a3a;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+          <span>今日の入力履歴</span>
+          <span id="pc-history-summary" style="font-size:12px;color:#909090;font-weight:400"></span>
+        </div>
+        <div id="pc-history-area"></div>
+        <div id="pc-history-empty" style="text-align:center;padding:40px 20px;color:var(--text-muted);font-size:13px;display:none">まだ入力がありません</div>
+      </div>
+    </div>
+  </div>
+
+<!-- 一般ユーザー履歴スクリーン -->
+  <div id="screen-myhistory" class="screen">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:14px;color:var(--text-sub);font-weight:500">今日の入力履歴</div>
+      <div id="myhistory-summary" style="font-size:13px;color:#4a4a4a;font-weight:600"></div>
+    </div>
+    <div class="tab-switch" id="myhistory-tabs">
+      <button class="tab-switch-btn active" id="mh-tab-expense" onclick="switchMyHistoryTab('expense')">💴 経費</button>
+      <button class="tab-switch-btn" id="mh-tab-purchase" onclick="switchMyHistoryTab('purchase')">🛒 仕入</button>
+      <button class="tab-switch-btn" id="mh-tab-sales" onclick="switchMyHistoryTab('sales')">💹 売上</button>
+    </div>
+    <div id="myhistory-container"></div>
+    <div id="myhistory-empty" class="empty-state" style="display:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
+      <p>今日の入力はまだありません</p>
+    </div>
+  </div>
+
 <!-- 設定スクリーン -->
   <div id="screen-settings" class="screen">
     <div class="card">
@@ -816,6 +858,12 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     </button>
   </div>
   <div class="nav-btn-wrap">
+    <button class="nav-btn" id="nav-myhistory" onclick="showScreen('myhistory')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>
+      履歴
+    </button>
+  </div>
+  <div class="nav-btn-wrap">
     <button class="nav-btn" id="nav-settings" onclick="showScreen('settings')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       設定
@@ -892,6 +940,8 @@ async function loadAll() {
     }
     if (document.getElementById('screen-export').classList.contains('active')) renderMonthGrid(true);
     if (document.getElementById('screen-receivable').classList.contains('active')) renderReceivable(true);
+    if (document.getElementById('screen-myhistory').classList.contains('active')) renderMyHistory();
+    if (document.getElementById('screen-pc').classList.contains('active')) renderPCHistory();
     document.getElementById('sync-dot').className = 'sync-dot';
     document.getElementById('sync-status').textContent = '同期済み';
   } catch(e) {
@@ -962,7 +1012,7 @@ function switchMode(mode) {
   const main   = document.querySelector('.main');
 
   if (mode === 'biz') {
-    bizNav.style.display = 'flex';
+    bizNav.style.display = isAdmin() ? 'flex' : 'none';
     invNav.style.display = 'none';
     document.querySelector('.main').style.paddingTop = '';
     ['inv-add','inv-move','inv-list'].forEach(s => {
@@ -972,7 +1022,12 @@ function switchMode(mode) {
     document.querySelectorAll('.screen:not([id^="screen-inv"])').forEach(s => {
       s.style.display = '';
     });
-    showScreen('form');
+    // 一般ユーザーはPC画面またはデフォルト画面へ
+    if (!isAdmin()) {
+      showPCLayout();
+    } else {
+      showScreen('form');
+    }
   } else {
     bizNav.style.display = 'none';
     invNav.style.display = 'flex';
@@ -1301,8 +1356,10 @@ window._initApp = function() {
   applyRoleUI();
   loadAll();
   setInterval(loadAll, 30000);
-  // 一般ユーザーは経費画面をデフォルトに
-  if (!isAdmin()) showScreen('expense');
+  // 一般ユーザーはPC/スマホで振り分け
+  if (!isAdmin()) {
+    showPCLayout();
+  }
 };
 
 function applyRoleUI() {
@@ -1312,6 +1369,9 @@ function applyRoleUI() {
     const el = document.getElementById(id);
     if (el) el.parentElement.style.display = admin ? '' : 'none';
   });
+  // 履歴タブは一般ユーザーのみ表示
+  const mhNav = document.getElementById('nav-myhistory');
+  if (mhNav) mhNav.parentElement.style.display = admin ? 'none' : '';
   // モードスイッチ（在庫）は全ユーザーに表示
   const modeSwitch = document.querySelector('.mode-switch');
   if (modeSwitch) modeSwitch.style.display = '';
@@ -2169,6 +2229,447 @@ function renderList() {
   }
 }
 
+// ── 一般ユーザー履歴画面 ──
+let _myHistoryTab = 'expense';
+
+function switchMyHistoryTab(tab) {
+  _myHistoryTab = tab;
+  ['expense','purchase','sales'].forEach(t => {
+    const btn = document.getElementById('mh-tab-'+t);
+    if (btn) btn.classList.toggle('active', t===tab);
+  });
+  renderMyHistory();
+}
+
+function renderMyHistory() {
+  const today = todayStr();
+  const container = document.getElementById('myhistory-container');
+  const empty = document.getElementById('myhistory-empty');
+  const summary = document.getElementById('myhistory-summary');
+  if (!container) return;
+
+  let items = [];
+  if (_myHistoryTab === 'expense') {
+    items = (window._getExpenses?.()||[]).filter(e => e.date === today);
+  } else if (_myHistoryTab === 'purchase') {
+    items = (window._getPurchases?.()||[]).filter(p => p.date === today);
+  } else {
+    items = (window._getSales?.()||[]).filter(s => s.date === today);
+  }
+
+  const total = items.reduce((s,a)=>s+a.amount,0);
+  summary.textContent = items.length + '件　合計 ¥' + total.toLocaleString('ja-JP');
+
+  if (!items.length) {
+    container.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  if (_myHistoryTab === 'expense') {
+    container.innerHTML = items.map(e => {
+      const rid = 'ex_'+e._key;
+      return `<div style="background:var(--white);border-radius:var(--radius);border:1px solid var(--border);margin-bottom:10px;overflow:hidden">
+        <div id="view_mh_${rid}" style="padding:12px 14px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--text)">${e.payee}</div>
+              <div style="font-size:12px;color:var(--text-sub);margin-top:2px">${e.content}</div>
+              <span style="display:inline-block;margin-top:4px;font-size:11px;padding:2px 8px;border-radius:20px;background:var(--purple-bg);color:var(--purple)">${e.category}</span>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+              <span style="font-size:16px;font-weight:700;color:var(--purple)">¥${e.amount.toLocaleString('ja-JP')}</span>
+              <div style="display:flex;gap:6px">
+                <button onclick="openMhEdit('${rid}','expense')" style="padding:5px 10px;background:#bfdbfe;color:#1e3a5f;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">編集</button>
+                <button class="delete-btn" onclick="mhDelete('${e._key}','expense')">削除</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="edit_mh_${rid}" style="display:none;padding:12px 14px;background:#fffde7">
+          <div style="display:grid;gap:8px">
+            <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">支払先</div><input id="mh_payee_${rid}" type="text" value="${e.payee}" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;width:100%;box-sizing:border-box"></div>
+            <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">用途</div>${sel(EXP_CATS,e.category,'mh_cat_'+rid)}</div>
+            <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">メモ</div><input id="mh_note_${rid}" type="text" value="${e.note||''}" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;width:100%;box-sizing:border-box"></div>
+            <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">金額（円）</div><input id="mh_amount_${rid}" type="number" value="${e.amount}" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;width:100%;box-sizing:border-box"></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button onclick="mhSaveExpense('${e._key}','${rid}')" style="flex:1;padding:8px;background:#bfdbfe;color:#1e3a5f;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">保存</button>
+            <button onclick="closeMhEdit('${rid}')" style="flex:1;padding:8px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:13px;cursor:pointer">キャンセル</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } else if (_myHistoryTab === 'purchase') {
+    container.innerHTML = items.map(p => {
+      const rid = 'pu_'+p._key;
+      return `<div style="background:var(--white);border-radius:var(--radius);border:1px solid var(--border);margin-bottom:10px;overflow:hidden">
+        <div id="view_mh_${rid}" style="padding:12px 14px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--text)">${p.supplier}</div>
+              ${p.note?`<div style="font-size:12px;color:var(--text-sub);margin-top:2px">${p.note}</div>`:''}
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+              <span style="font-size:16px;font-weight:700;color:var(--orange)">¥${p.amount.toLocaleString('ja-JP')}</span>
+              <div style="display:flex;gap:6px">
+                <button onclick="openMhEdit('${rid}','purchase')" style="padding:5px 10px;background:#bfdbfe;color:#1e3a5f;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">編集</button>
+                <button class="delete-btn" onclick="mhDelete('${p._key}','purchase')">削除</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="edit_mh_${rid}" style="display:none;padding:12px 14px;background:#fffde7">
+          <div style="display:grid;gap:8px">
+            <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">仕入先</div>${sel(PUR_SUPS,p.supplier,'mh_sup_'+rid)}</div>
+            <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">金額（円）</div><input id="mh_amount_${rid}" type="number" value="${p.amount}" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;width:100%;box-sizing:border-box"></div>
+            <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">メモ</div><input id="mh_note_${rid}" type="text" value="${p.note||''}" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;width:100%;box-sizing:border-box"></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button onclick="mhSavePurchase('${p._key}','${rid}')" style="flex:1;padding:8px;background:#bfdbfe;color:#1e3a5f;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">保存</button>
+            <button onclick="closeMhEdit('${rid}')" style="flex:1;padding:8px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:13px;cursor:pointer">キャンセル</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } else {
+    container.innerHTML = items.map(s => {
+      const rid = 'sa_'+s._key;
+      const isOvs = s.salesType==='国外（インボイス）';
+      const clients2 = isOvs ? OVS_CLIENTS : DOM_CLIENTS;
+      return `<div style="background:var(--white);border-radius:var(--radius);border:1px solid var(--border);margin-bottom:10px;overflow:hidden">
+        <div id="view_mh_${rid}" style="padding:12px 14px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--text)">${s.client}</div>
+              <span style="display:inline-block;margin-top:4px;font-size:11px;padding:2px 8px;border-radius:20px;background:var(--teal-bg);color:var(--teal)">${s.salesType||''}</span>
+              ${s.note?`<div style="font-size:12px;color:var(--text-sub);margin-top:2px">${s.note}</div>`:''}
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+              <span style="font-size:16px;font-weight:700;color:#4a4a4a">¥${s.amount.toLocaleString('ja-JP')}</span>
+              <div style="display:flex;gap:6px">
+                <button onclick="openMhEdit('${rid}','sales')" style="padding:5px 10px;background:#bfdbfe;color:#1e3a5f;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">編集</button>
+                <button class="delete-btn" onclick="mhDelete('${s._key}','sales')">削除</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="edit_mh_${rid}" style="display:none;padding:12px 14px;background:#fffde7">
+          <div style="display:grid;gap:8px">
+            <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">区分</div>${sel(['国内（請求書）','国外（インボイス）'],s.salesType||'国内（請求書）','mh_type_'+rid)}</div>
+            <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">卸先</div><select id="mh_client_${rid}" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;background:var(--white);width:100%">${clients2.map(c=>`<option value="${c}"${c===s.client?' selected':''}>${c}</option>`).join('')}</select></div>
+            <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">金額（円）</div><input id="mh_amount_${rid}" type="number" value="${s.amount}" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;width:100%;box-sizing:border-box"></div>
+            <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">メモ</div><input id="mh_note_${rid}" type="text" value="${s.note||''}" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;width:100%;box-sizing:border-box"></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button onclick="mhSaveSales('${s._key}','${rid}')" style="flex:1;padding:8px;background:#bfdbfe;color:#1e3a5f;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">保存</button>
+            <button onclick="closeMhEdit('${rid}')" style="flex:1;padding:8px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:13px;cursor:pointer">キャンセル</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+}
+
+function openMhEdit(rid, type) {
+  document.getElementById('view_mh_'+rid).style.display = 'none';
+  document.getElementById('edit_mh_'+rid).style.display = 'block';
+}
+function closeMhEdit(rid) {
+  document.getElementById('view_mh_'+rid).style.display = 'block';
+  document.getElementById('edit_mh_'+rid).style.display = 'none';
+}
+async function mhSaveExpense(key, rid) {
+  const payee = document.getElementById('mh_payee_'+rid).value.trim();
+  const category = document.getElementById('mh_cat_'+rid).value;
+  const note = document.getElementById('mh_note_'+rid).value.trim();
+  const amount = parseInt(document.getElementById('mh_amount_'+rid).value)||0;
+  const content = category==='その他'?(note||'その他'):category+(note?'（'+note+'）':'');
+  if (!payee||!category||!amount) { showToast('必須項目を入力してください'); return; }
+  try {
+    await fetch(authedUrl('/expenses/'+key+'.json'), {method:'PATCH', body:JSON.stringify({payee,category,note,content,amount})});
+    await loadAll(); showToast('更新しました');
+  } catch(e) { showToast('更新に失敗しました'); }
+}
+async function mhSavePurchase(key, rid) {
+  const supplier = document.getElementById('mh_sup_'+rid).value;
+  const amount = parseInt(document.getElementById('mh_amount_'+rid).value)||0;
+  const note = document.getElementById('mh_note_'+rid).value.trim();
+  if (!supplier||!amount) { showToast('必須項目を入力してください'); return; }
+  try {
+    await fetch(authedUrl('/purchases/'+key+'.json'), {method:'PATCH', body:JSON.stringify({supplier,amount,note})});
+    await loadAll(); showToast('更新しました');
+  } catch(e) { showToast('更新に失敗しました'); }
+}
+async function mhSaveSales(key, rid) {
+  const salesType = document.getElementById('mh_type_'+rid).value;
+  const client = document.getElementById('mh_client_'+rid).value;
+  const amount = parseInt(document.getElementById('mh_amount_'+rid).value)||0;
+  const note = document.getElementById('mh_note_'+rid).value.trim();
+  if (!client||!amount) { showToast('必須項目を入力してください'); return; }
+  try {
+    await fetch(authedUrl('/sales/'+key+'.json'), {method:'PATCH', body:JSON.stringify({salesType,client,amount,note})});
+    await loadAll(); showToast('更新しました');
+  } catch(e) { showToast('更新に失敗しました'); }
+}
+async function mhDelete(key, type) {
+  if (!await showConfirm('削除しますか？')) return;
+  try {
+    const pathMap = { expense:'expenses', purchase:'purchases', sales:'sales' };
+    await fetch(authedUrl('/'+pathMap[type]+'/'+key+'.json'), {method:'DELETE'});
+    await loadAll(); showToast('削除しました');
+  } catch(e) { showToast('削除に失敗しました'); }
+}
+
+// ── PC用2カラムレイアウト（一般ユーザー） ──
+let _pcTab = 'expense';
+
+function showPCLayout() {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const pc = document.getElementById('screen-pc');
+  if (pc) pc.classList.add('active');
+  renderPCForm();
+  renderPCHistory();
+}
+
+function switchPCTab(tab) {
+  _pcTab = tab;
+  ['expense','purchase','sales'].forEach(t => {
+    const btn = document.getElementById('pc-tab-'+t);
+    if (btn) btn.classList.toggle('active', t===tab);
+  });
+  renderPCForm();
+  renderPCHistory();
+}
+
+function renderPCForm() {
+  const area = document.getElementById('pc-form-area');
+  if (!area) return;
+  if (_pcTab === 'expense') {
+    area.innerHTML = `
+      <div class="card">
+        <div class="card-title">基本情報</div>
+        <div class="field">
+          <div class="field-label">日付 <span class="req">*</span></div>
+          <input type="date" id="pc-exp-date">
+        </div>
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">支払先 <span class="req">*</span></div>
+          <input type="text" id="pc-exp-payee" placeholder="例：コスモ石油">
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">内容</div>
+        <div class="field">
+          <div class="field-label">用途 <span class="req">*</span></div>
+          <select id="pc-exp-category">${EXP_CATS.map(c=>`<option value="${c}">${c}</option>`).join('')}</select>
+        </div>
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">詳細メモ</div>
+          <input type="text" id="pc-exp-note" placeholder="自由に入力">
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">金額</div>
+        <div class="field">
+          <input type="number" id="pc-exp-amount" placeholder="0" min="0" style="font-size:20px;font-weight:700;text-align:right">
+          <div style="font-size:12px;color:var(--text-muted);margin-top:6px;text-align:right">円（税込）</div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-purple" onclick="pcSubmitExpense()">追加登録する</button>
+      </div>`;
+    document.getElementById('pc-exp-date').value = todayStr();
+  } else if (_pcTab === 'purchase') {
+    area.innerHTML = `
+      <div class="card">
+        <div class="card-title">仕入情報</div>
+        <div class="field">
+          <div class="field-label">日付 <span class="req">*</span></div>
+          <input type="date" id="pc-pur-date">
+        </div>
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">仕入先 <span class="req">*</span></div>
+          <select id="pc-pur-supplier">
+            <option value="">選択してください</option>
+            ${PUR_SUPS.map(s=>`<option>${s}</option>`).join('')}
+            <option value="other">その他</option>
+          </select>
+        </div>
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">金額 <span class="req">*</span></div>
+          <input type="number" id="pc-pur-amount" placeholder="0" min="0" style="font-size:20px;font-weight:700;text-align:right">
+        </div>
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">メモ</div>
+          <input type="text" id="pc-pur-note" placeholder="領収書番号など">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-orange" onclick="pcSubmitPurchase()">追加登録する</button>
+      </div>`;
+    document.getElementById('pc-pur-date').value = todayStr();
+  } else {
+    area.innerHTML = `
+      <div class="card">
+        <div class="card-title">売上情報</div>
+        <div class="field">
+          <div class="field-label">日付 <span class="req">*</span></div>
+          <input type="date" id="pc-sal-date">
+        </div>
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">区分 <span class="req">*</span></div>
+          <select id="pc-sal-type" onchange="pcUpdateClients()">
+            <option value="">選択してください</option>
+            <option value="domestic">国内（請求書）</option>
+            <option value="overseas">国外（インボイス）</option>
+          </select>
+        </div>
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">卸先 <span class="req">*</span></div>
+          <select id="pc-sal-client"><option value="">先に区分を選択</option></select>
+        </div>
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">金額 <span class="req">*</span></div>
+          <input type="number" id="pc-sal-amount" placeholder="0" min="0" style="font-size:20px;font-weight:700;text-align:right">
+        </div>
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">入金期日</div>
+          <input type="date" id="pc-sal-due">
+        </div>
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">メモ</div>
+          <input type="text" id="pc-sal-note" placeholder="請求書番号など">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-teal" onclick="pcSubmitSales()">追加登録する</button>
+      </div>`;
+    document.getElementById('pc-sal-date').value = todayStr();
+  }
+}
+
+function pcUpdateClients() {
+  const type = document.getElementById('pc-sal-type').value;
+  const sel = document.getElementById('pc-sal-client');
+  sel.innerHTML = '<option value="">選択してください</option>';
+  const clients = type==='domestic' ? DOM_CLIENTS : type==='overseas' ? OVS_CLIENTS : [];
+  clients.forEach(c => { const o=document.createElement('option'); o.value=c; o.textContent=c; sel.appendChild(o); });
+  if (clients.length) { const o=document.createElement('option'); o.value='other'; o.textContent='その他'; sel.appendChild(o); }
+}
+
+async function pcSubmitExpense() {
+  const date = document.getElementById('pc-exp-date').value;
+  const payee = document.getElementById('pc-exp-payee').value.trim();
+  const category = document.getElementById('pc-exp-category').value;
+  const note = document.getElementById('pc-exp-note').value.trim();
+  const amount = parseInt(document.getElementById('pc-exp-amount').value)||0;
+  if (!date||!payee||!category||!amount) { showToast('必須項目を入力してください'); return; }
+  const content = category==='その他'?(note||'その他'):category+(note?'（'+note+'）':'');
+  try {
+    await window._fbPushExpense({ type:'expense', date, payee, category, note, content, amount, submittedAt: new Date().toLocaleDateString('ja-JP') });
+    document.getElementById('pc-exp-payee').value = '';
+    document.getElementById('pc-exp-category').selectedIndex = 0;
+    document.getElementById('pc-exp-note').value = '';
+    document.getElementById('pc-exp-amount').value = '';
+    renderPCHistory();
+    showToast('経費を登録しました');
+  } catch(e) { showToast('登録に失敗しました'); }
+}
+
+async function pcSubmitPurchase() {
+  const date = document.getElementById('pc-pur-date').value;
+  const supplier = document.getElementById('pc-pur-supplier').value;
+  const amount = parseInt(document.getElementById('pc-pur-amount').value)||0;
+  const note = document.getElementById('pc-pur-note').value.trim();
+  if (!date||!supplier||!amount) { showToast('必須項目を入力してください'); return; }
+  try {
+    await window._fbPushPurchase({ type:'purchase', date, supplier, amount, note, submittedAt: new Date().toLocaleDateString('ja-JP') });
+    document.getElementById('pc-pur-supplier').selectedIndex = 0;
+    document.getElementById('pc-pur-amount').value = '';
+    document.getElementById('pc-pur-note').value = '';
+    renderPCHistory();
+    showToast('仕入を登録しました');
+  } catch(e) { showToast('登録に失敗しました'); }
+}
+
+async function pcSubmitSales() {
+  const date = document.getElementById('pc-sal-date').value;
+  const typeVal = document.getElementById('pc-sal-type').value;
+  const client = document.getElementById('pc-sal-client').value;
+  const amount = parseInt(document.getElementById('pc-sal-amount').value)||0;
+  const due = document.getElementById('pc-sal-due').value;
+  const note = document.getElementById('pc-sal-note').value.trim();
+  if (!date||!typeVal||!client||!amount) { showToast('必須項目を入力してください'); return; }
+  const typeLabel = typeVal==='domestic'?'国内（請求書）':'国外（インボイス）';
+  try {
+    await window._fbPushSales({ type:'sales', date, salesType:typeLabel, client, amount, due, note, payStatus:'未入金', submittedAt: new Date().toLocaleDateString('ja-JP') });
+    document.getElementById('pc-sal-type').selectedIndex = 0;
+    document.getElementById('pc-sal-client').innerHTML = '<option value="">先に区分を選択</option>';
+    document.getElementById('pc-sal-amount').value = '';
+    document.getElementById('pc-sal-due').value = '';
+    document.getElementById('pc-sal-note').value = '';
+    renderPCHistory();
+    showToast('売上を登録しました');
+  } catch(e) { showToast('登録に失敗しました'); }
+}
+
+function renderPCHistory() {
+  const today = todayStr();
+  const area = document.getElementById('pc-history-area');
+  const empty = document.getElementById('pc-history-empty');
+  const summary = document.getElementById('pc-history-summary');
+  if (!area) return;
+
+  let items = [];
+  let color = '#4a4a4a';
+  if (_pcTab === 'expense') {
+    items = (window._getExpenses?.()||[]).filter(e=>e.date===today);
+    color = 'var(--purple)';
+  } else if (_pcTab === 'purchase') {
+    items = (window._getPurchases?.()||[]).filter(p=>p.date===today);
+    color = 'var(--orange)';
+  } else {
+    items = (window._getSales?.()||[]).filter(s=>s.date===today);
+    color = 'var(--teal)';
+  }
+
+  const total = items.reduce((s,a)=>s+a.amount,0);
+  summary.textContent = items.length+'件　¥'+total.toLocaleString('ja-JP');
+
+  if (!items.length) { area.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display = 'none';
+
+  area.innerHTML = items.map(item => {
+    let title='', sub='', key=item._key, type=_pcTab;
+    if (_pcTab==='expense') { title=item.payee; sub=item.content; }
+    else if (_pcTab==='purchase') { title=item.supplier; sub=item.note||''; }
+    else { title=item.client; sub=item.salesType||''; }
+    return `<div style="background:var(--white);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${title}</div>
+        ${sub?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${sub}</div>`:''}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:14px;font-weight:700;color:${color}">¥${item.amount.toLocaleString('ja-JP')}</span>
+        <button onclick="mhDelete('${key}','${type}')" class="delete-btn">削除</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function setSalesFilter(client) {
   window._salesClientFilter = client;
   renderList();
@@ -2880,6 +3381,7 @@ function showScreen(name) {
   if (name === 'export')      renderMonthGrid();
   if (name === 'receivable')  renderReceivable();
   if (name === 'settings')    initSettingsScreen();
+  if (name === 'myhistory')   renderMyHistory();
 }
 
 function showAlert(boxId, msgId, msg, type) {
