@@ -897,6 +897,92 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 </div>
 
 <!-- 在庫管理ナビ（非表示切替） -->
+<!-- 梱包完了画面 -->
+<div id="screen-inv-pack" class="screen" style="display:none;padding-top:8px">
+  <!-- PC：2カラム -->
+  <div id="pack-layout-wide" style="display:none;grid-template-columns:1fr 1fr;gap:20px;height:calc(100vh - 120px)">
+    <!-- 左：入力 -->
+    <div style="overflow-y:auto;padding-right:8px">
+      <div class="card">
+        <div class="card-title">梱包リストに追加</div>
+        <div class="field">
+          <div class="field-label">商品名 <span class="req">*</span></div>
+          <input type="text" id="pack-product" placeholder="商品名を入力">
+        </div>
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">数量 <span class="req">*</span></div>
+          <input type="number" id="pack-qty" placeholder="1" min="1" style="font-size:20px;font-weight:700;text-align:right">
+        </div>
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">送り先 <span class="req">*</span></div>
+          <input type="text" id="pack-dest" placeholder="送り先を入力">
+        </div>
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">担当者</div>
+          <input type="text" id="pack-staff" placeholder="担当者名（任意）">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-gold" onclick="addPackItem()">リストに追加する</button>
+      </div>
+    </div>
+    <!-- 右：チェックリスト -->
+    <div style="overflow-y:auto;padding-left:8px;border-left:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:#3a3a3a">本日の梱包リスト</div>
+        <div id="pack-summary-wide" style="font-size:12px;color:#909090"></div>
+      </div>
+      <div id="pack-list-wide"></div>
+      <div id="pack-empty-wide" style="text-align:center;padding:40px 20px;color:var(--text-muted);font-size:13px;display:none">まだ追加されていません</div>
+    </div>
+  </div>
+  <!-- スマホ：タブ切替 -->
+  <div id="pack-layout-narrow" style="display:none">
+    <div style="display:flex;gap:0;margin-bottom:12px;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden">
+      <button id="pack-mode-input" onclick="switchPackMode('input')" style="flex:1;padding:8px;font-size:13px;font-weight:600;border:none;background:#3a3a3a;color:#fff;cursor:pointer">📦 追加</button>
+      <button id="pack-mode-list" onclick="switchPackMode('list')" style="flex:1;padding:8px;font-size:13px;font-weight:600;border:none;background:none;color:#909090;cursor:pointer">✅ リスト</button>
+    </div>
+    <div id="pack-sp-input">
+      <div class="card">
+        <div class="card-title">梱包リストに追加</div>
+        <div class="field">
+          <div class="field-label">商品名 <span class="req">*</span></div>
+          <input type="text" id="pack-product-sp" placeholder="商品名を入力">
+        </div>
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">数量 <span class="req">*</span></div>
+          <input type="number" id="pack-qty-sp" placeholder="1" min="1" style="font-size:20px;font-weight:700;text-align:right">
+        </div>
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">送り先 <span class="req">*</span></div>
+          <input type="text" id="pack-dest-sp" placeholder="送り先を入力">
+        </div>
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">担当者</div>
+          <input type="text" id="pack-staff-sp" placeholder="担当者名（任意）">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-gold" onclick="addPackItem()">リストに追加する</button>
+      </div>
+    </div>
+    <div id="pack-sp-list" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:#3a3a3a">本日の梱包リスト</div>
+        <div id="pack-summary-narrow" style="font-size:12px;color:#909090"></div>
+      </div>
+      <div id="pack-list-narrow"></div>
+      <div id="pack-empty-narrow" style="text-align:center;padding:40px 20px;color:var(--text-muted);font-size:13px;display:none">まだ追加されていません</div>
+    </div>
+  </div>
+</div>
+
 <div class="bottom-nav" id="inv-nav" style="display:none">
   <div class="nav-btn-wrap">
     <button class="nav-btn active" id="nav-inv-add" onclick="showInvScreen('inv-add')">
@@ -914,6 +1000,12 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     <button class="nav-btn" id="nav-inv-list" onclick="showInvScreen('inv-list')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
       在庫一覧
+    </button>
+  </div>
+  <div class="nav-btn-wrap">
+    <button class="nav-btn" id="nav-inv-pack" onclick="showInvScreen('inv-pack')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+      梱包
     </button>
   </div>
 </div>
@@ -1040,21 +1132,23 @@ function switchMode(mode) {
     bizNav.style.display = isAdmin() ? 'flex' : 'none';
     invNav.style.display = 'none';
     document.querySelector('.main').style.paddingTop = '';
-    ['inv-add','inv-move','inv-list'].forEach(s => {
+    ['inv-add','inv-move','inv-list','inv-pack'].forEach(s => {
       const el = document.getElementById('screen-' + s);
       if (el) { el.style.display = 'none'; el.classList.remove('active'); }
     });
-    document.querySelectorAll('.screen:not([id^="screen-inv"])').forEach(s => {
-      s.style.display = '';
-    });
-    // 一般ユーザーはPC画面またはデフォルト画面へ
-    if (!isAdmin()) {
-      // screen-pc を表示可能に戻す
+    if (isAdmin()) {
+      document.querySelectorAll('.screen:not([id^="screen-inv"])').forEach(s => {
+        s.style.display = '';
+      });
+      showScreen('form');
+    } else {
+      // 一般ユーザーはscreen-pcのみ表示可能に
+      document.querySelectorAll('.screen:not([id^="screen-inv"])').forEach(s => {
+        s.style.display = 'none'; s.classList.remove('active');
+      });
       const pcEl = document.getElementById('screen-pc');
       if (pcEl) pcEl.style.display = '';
       setTimeout(() => showPCLayout(), 50);
-    } else {
-      showScreen('form');
     }
   } else {
     bizNav.style.display = 'none';
@@ -1071,7 +1165,7 @@ function switchMode(mode) {
 }
 
 function showInvScreen(name) {
-  ['inv-add','inv-move','inv-list'].forEach(s => {
+  ['inv-add','inv-move','inv-list','inv-pack'].forEach(s => {
     const el = document.getElementById('screen-' + s);
     if (el) {
       el.style.cssText = 'display:none !important; padding-top:8px;';
@@ -1083,6 +1177,7 @@ function showInvScreen(name) {
     target.style.cssText = 'display:block !important; padding-top:8px;';
     window.scrollTo(0,0);
   }
+  if (name === 'inv-pack') setTimeout(() => showPackScreen(), 50);
   const navBtn = document.getElementById('nav-' + name);
   if (navBtn) navBtn.classList.add('active');
   if (name === 'inv-list') renderInventoryList();
@@ -1097,6 +1192,7 @@ async function loadInventory() {
     products   = objToArr(p);
     stockMoves = objToArr(m);
     if (document.getElementById('screen-inv-list')?.classList.contains('active')) renderInventoryList();
+    if (document.getElementById('screen-inv-pack')?.classList.contains('active')) showPackScreen();
   } catch(e) { console.error('inventory load error', e); }
 }
 
@@ -1394,7 +1490,10 @@ window._initApp = async function() {
 
 function applyRoleUI() {
   const admin = isAdmin();
-  // 一般ユーザーは出張・一覧・月次出力・売掛金を非表示
+  // 一般ユーザーは業務ナビ全体を非表示
+  const bizNav = document.querySelector('.bottom-nav:not(#inv-nav)');
+  if (bizNav) bizNav.style.display = admin ? 'flex' : 'none';
+  // 一般ユーザーは出張・一覧・月次出力・売掛金・設定を非表示
   ['nav-form','nav-list','nav-export','nav-receivable','nav-settings'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.parentElement.style.display = admin ? '' : 'none';
@@ -2894,6 +2993,119 @@ async function savePCEdit(key, rid, type) {
     await loadAll();
     showToast('更新しました');
   } catch(e) { showToast('更新に失敗しました'); }
+}
+
+// ── 梱包完了管理 ──
+const PACK_KEY = 'kanetaka_pack_' + new Date().toISOString().slice(0,10);
+
+function getPackItems() {
+  try { return JSON.parse(localStorage.getItem(PACK_KEY) || '[]'); } catch(e) { return []; }
+}
+function savePackItems(items) {
+  localStorage.setItem(PACK_KEY, JSON.stringify(items));
+}
+
+function showPackScreen() {
+  const isWide = window.innerWidth >= 768;
+  const wide   = document.getElementById('pack-layout-wide');
+  const narrow = document.getElementById('pack-layout-narrow');
+  if (wide)   wide.style.display   = isWide ? 'grid' : 'none';
+  if (narrow) narrow.style.display = isWide ? 'none' : 'block';
+  renderPackList();
+}
+
+function switchPackMode(mode) {
+  const inputEl = document.getElementById('pack-sp-input');
+  const listEl  = document.getElementById('pack-sp-list');
+  const btnI = document.getElementById('pack-mode-input');
+  const btnL = document.getElementById('pack-mode-list');
+  if (mode === 'input') {
+    inputEl.style.display = 'block'; listEl.style.display = 'none';
+    btnI.style.background = '#3a3a3a'; btnI.style.color = '#fff';
+    btnL.style.background = 'none';   btnL.style.color = '#909090';
+  } else {
+    inputEl.style.display = 'none'; listEl.style.display = 'block';
+    btnI.style.background = 'none';   btnI.style.color = '#909090';
+    btnL.style.background = '#3a3a3a'; btnL.style.color = '#fff';
+    renderPackList();
+  }
+}
+
+function addPackItem() {
+  const isWide = window.innerWidth >= 768;
+  const sfx = isWide ? '' : '-sp';
+  const product = document.getElementById('pack-product'+sfx)?.value.trim();
+  const qty     = parseInt(document.getElementById('pack-qty'+sfx)?.value)||1;
+  const dest    = document.getElementById('pack-dest'+sfx)?.value.trim();
+  const staff   = document.getElementById('pack-staff'+sfx)?.value.trim();
+  if (!product||!dest) { showToast('商品名と送り先を入力してください'); return; }
+  const items = getPackItems();
+  items.push({ id: Date.now(), product, qty, dest, staff, done: false, createdAt: new Date().toISOString() });
+  savePackItems(items);
+  // フォームクリア
+  ['pack-product','pack-qty','pack-dest','pack-staff'].forEach(id => {
+    const el = document.getElementById(id+sfx);
+    if (el) el.value = '';
+  });
+  renderPackList();
+  if (!isWide) switchPackMode('list');
+  showToast('リストに追加しました');
+}
+
+function togglePackDone(id) {
+  const items = getPackItems();
+  const item = items.find(i=>i.id===id);
+  if (item) item.done = !item.done;
+  savePackItems(items);
+  renderPackList();
+}
+
+async function deletePackItem(id) {
+  if (!await showConfirm('削除しますか？')) return;
+  const items = getPackItems().filter(i=>i.id!==id);
+  savePackItems(items);
+  renderPackList();
+}
+
+function renderPackList() {
+  const isWide = window.innerWidth >= 768;
+  const listId    = isWide ? 'pack-list-wide'    : 'pack-list-narrow';
+  const emptyId   = isWide ? 'pack-empty-wide'   : 'pack-empty-narrow';
+  const summaryId = isWide ? 'pack-summary-wide'  : 'pack-summary-narrow';
+  const listEl    = document.getElementById(listId);
+  const emptyEl   = document.getElementById(emptyId);
+  const summaryEl = document.getElementById(summaryId);
+  if (!listEl) return;
+
+  const items = getPackItems();
+  const done = items.filter(i=>i.done).length;
+  if (summaryEl) summaryEl.textContent = `${done}/${items.length}件完了`;
+
+  if (!items.length) {
+    listEl.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'block';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  // 未完了を上、完了を下
+  const sorted = [...items].sort((a,b) => {
+    if (a.done !== b.done) return a.done ? 1 : -1;
+    return a.createdAt > b.createdAt ? 1 : -1;
+  });
+
+  listEl.innerHTML = sorted.map(item => `
+    <div style="background:var(--white);border:1px solid ${item.done?'#a0a0a0':'var(--border)'};border-radius:var(--radius);margin-bottom:8px;padding:12px 14px;display:flex;align-items:center;gap:12px;opacity:${item.done?0.6:1};transition:all 0.2s">
+      <button onclick="togglePackDone(${item.id})" style="flex-shrink:0;width:28px;height:28px;border-radius:50%;border:2px solid ${item.done?'#a0a0a0':'var(--gold)'};background:${item.done?'#a0a0a0':'transparent'};cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px">
+        ${item.done?'✓':''}
+      </button>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;color:var(--text);${item.done?'text-decoration:line-through':''}">${item.product} × ${item.qty}</div>
+        <div style="font-size:12px;color:var(--text-sub);margin-top:2px">📦 ${item.dest}${item.staff?'　👤 '+item.staff:''}</div>
+        ${item.done?'<div style="font-size:11px;color:#a0a0a0;margin-top:2px">✅ 梱包完了</div>':''}
+      </div>
+      <button onclick="deletePackItem(${item.id})" class="delete-btn" style="flex-shrink:0">削除</button>
+    </div>`).join('');
 }
 
 function setSalesFilter(client) {
