@@ -570,7 +570,8 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 
 <!-- PC用2カラム画面（一般ユーザー） -->
   <div id="screen-pc" class="screen" style="display:none">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;height:calc(100vh - 120px)">
+    <!-- PC：2カラム -->
+    <div id="pc-layout-wide" style="display:none;grid-template-columns:1fr 1fr;gap:20px;height:calc(100vh - 120px)">
       <!-- 左：入力 -->
       <div style="overflow-y:auto;padding-right:8px">
         <div class="tab-switch" style="margin-bottom:12px">
@@ -582,6 +583,30 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       </div>
       <!-- 右：今日の一覧 -->
       <div style="overflow-y:auto;padding-left:8px;border-left:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:700;color:#3a3a3a;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+          <span>今日の入力履歴</span>
+          <span id="pc-history-summary" style="font-size:12px;color:#909090;font-weight:400"></span>
+        </div>
+        <div id="pc-history-area"></div>
+        <div id="pc-history-empty" style="text-align:center;padding:40px 20px;color:var(--text-muted);font-size:13px;display:none">まだ入力がありません</div>
+      </div>
+    </div>
+    <!-- スマホ：タブ切替 -->
+    <div id="pc-layout-narrow" style="display:none">
+      <div class="tab-switch" style="margin-bottom:12px">
+        <button class="tab-switch-btn active" id="pc-tab-expense" onclick="switchPCTab('expense')">💴 経費</button>
+        <button class="tab-switch-btn" id="pc-tab-purchase" onclick="switchPCTab('purchase')">🛒 仕入</button>
+        <button class="tab-switch-btn" id="pc-tab-sales" onclick="switchPCTab('sales')">💹 売上</button>
+      </div>
+      <!-- スマホ時の入力/履歴切替タブ -->
+      <div style="display:flex;gap:0;margin-bottom:12px;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden">
+        <button id="sp-mode-input" onclick="switchSPMode('input')" style="flex:1;padding:8px;font-size:13px;font-weight:600;border:none;background:#3a3a3a;color:#fff;cursor:pointer">📝 入力</button>
+        <button id="sp-mode-history" onclick="switchSPMode('history')" style="flex:1;padding:8px;font-size:13px;font-weight:600;border:none;background:none;color:#909090;cursor:pointer">📋 履歴</button>
+      </div>
+      <div id="sp-input-area">
+        <div id="pc-form-area-sp"></div>
+      </div>
+      <div id="sp-history-area" style="display:none">
         <div style="font-size:13px;font-weight:700;color:#3a3a3a;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
           <span>今日の入力履歴</span>
           <span id="pc-history-summary" style="font-size:12px;color:#909090;font-weight:400"></span>
@@ -1024,7 +1049,10 @@ function switchMode(mode) {
     });
     // 一般ユーザーはPC画面またはデフォルト画面へ
     if (!isAdmin()) {
-      showPCLayout();
+      // screen-pc を表示可能に戻す
+      const pcEl = document.getElementById('screen-pc');
+      if (pcEl) pcEl.style.display = '';
+      setTimeout(() => showPCLayout(), 50);
     } else {
       showScreen('form');
     }
@@ -1351,13 +1379,15 @@ function stopScan() {
   document.getElementById('scan-overlay').classList.remove('show');
 }
 
-window._initApp = function() {
+window._initApp = async function() {
   initYearSelect();
   applyRoleUI();
-  loadAll();
+  await loadAll();
   setInterval(loadAll, 30000);
-  // 一般ユーザーはPC/スマホで振り分け
+  // 一般ユーザーはloadAll完了後にPC画面を表示
   if (!isAdmin()) {
+    const pcEl = document.getElementById('screen-pc');
+    if (pcEl) pcEl.style.display = '';
     showPCLayout();
   }
 };
@@ -2425,27 +2455,57 @@ async function mhDelete(key, type) {
 // ── PC用2カラムレイアウト（一般ユーザー） ──
 let _pcTab = 'expense';
 
+let _isWideLayout = false;
+
 function showPCLayout() {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const pc = document.getElementById('screen-pc');
   if (pc) pc.classList.add('active');
+
+  _isWideLayout = window.innerWidth >= 768;
+  const wide = document.getElementById('pc-layout-wide');
+  const narrow = document.getElementById('pc-layout-narrow');
+  if (wide) wide.style.display = _isWideLayout ? 'grid' : 'none';
+  if (narrow) narrow.style.display = _isWideLayout ? 'none' : 'block';
+
   renderPCForm();
   renderPCHistory();
 }
 
+function switchSPMode(mode) {
+  const inputArea = document.getElementById('sp-input-area');
+  const histArea  = document.getElementById('sp-history-area');
+  const btnInput  = document.getElementById('sp-mode-input');
+  const btnHist   = document.getElementById('sp-mode-history');
+  if (mode === 'input') {
+    inputArea.style.display = 'block';
+    histArea.style.display  = 'none';
+    btnInput.style.background = '#3a3a3a'; btnInput.style.color = '#fff';
+    btnHist.style.background  = 'none';    btnHist.style.color  = '#909090';
+  } else {
+    inputArea.style.display = 'none';
+    histArea.style.display  = 'block';
+    btnInput.style.background = 'none';    btnInput.style.color = '#909090';
+    btnHist.style.background  = '#3a3a3a'; btnHist.style.color  = '#fff';
+    renderPCHistory();
+  }
+}
+
 function switchPCTab(tab) {
   _pcTab = tab;
-  ['expense','purchase','sales'].forEach(t => {
-    const btn = document.getElementById('pc-tab-'+t);
-    if (btn) btn.classList.toggle('active', t===tab);
+  document.querySelectorAll('[id^="pc-tab-"]').forEach(btn => {
+    const t = btn.id.replace('pc-tab-','');
+    btn.classList.toggle('active', t===tab);
   });
   renderPCForm();
   renderPCHistory();
 }
 
 function renderPCForm() {
-  const area = document.getElementById('pc-form-area');
+  const area = _isWideLayout
+    ? document.getElementById('pc-form-area')
+    : document.getElementById('pc-form-area-sp');
   if (!area) return;
   if (_pcTab === 'expense') {
     area.innerHTML = `
@@ -2495,11 +2555,39 @@ function renderPCForm() {
         <div class="field-divider"></div>
         <div class="field" style="padding-top:16px">
           <div class="field-label">仕入先 <span class="req">*</span></div>
-          <select id="pc-pur-supplier">
+          <select id="pc-pur-supplier" onchange="pcHandlePurSupplier()">
             <option value="">選択してください</option>
             ${PUR_SUPS.map(s=>`<option>${s}</option>`).join('')}
             <option value="other">その他</option>
           </select>
+        </div>
+        <div id="pc-pur-store-wrap" style="display:none">
+          <div class="field-divider"></div>
+          <div class="field" style="padding-top:16px">
+            <div class="field-label">店舗名 <span class="req">*</span></div>
+            <select id="pc-pur-store" onchange="pcHandlePurStore()">
+              <option value="">選択してください</option>
+              <option>ヤマダデンキ</option>
+              <option>エディオン</option>
+              <option>ケーズデンキ</option>
+              <option>ジョーシン</option>
+              <option value="other">その他</option>
+            </select>
+          </div>
+          <div id="pc-pur-store-other-wrap" style="display:none">
+            <div class="field-divider"></div>
+            <div class="field" style="padding-top:16px">
+              <div class="field-label">店舗名を入力 <span class="req">*</span></div>
+              <input type="text" id="pc-pur-store-other" placeholder="店舗名を入力してください">
+            </div>
+          </div>
+        </div>
+        <div id="pc-pur-sup-other-wrap" style="display:none">
+          <div class="field-divider"></div>
+          <div class="field" style="padding-top:16px">
+            <div class="field-label">仕入先名を入力 <span class="req">*</span></div>
+            <input type="text" id="pc-pur-sup-other" placeholder="仕入先名を入力してください">
+          </div>
         </div>
         <div class="field-divider"></div>
         <div class="field" style="padding-top:16px">
@@ -2536,7 +2624,14 @@ function renderPCForm() {
         <div class="field-divider"></div>
         <div class="field" style="padding-top:16px">
           <div class="field-label">卸先 <span class="req">*</span></div>
-          <select id="pc-sal-client"><option value="">先に区分を選択</option></select>
+          <select id="pc-sal-client" onchange="pcHandleSalClient()"><option value="">先に区分を選択</option></select>
+        </div>
+        <div id="pc-sal-client-other-wrap" style="display:none">
+          <div class="field-divider"></div>
+          <div class="field" style="padding-top:16px">
+            <div class="field-label">卸先名を入力 <span class="req">*</span></div>
+            <input type="text" id="pc-sal-client-other" placeholder="卸先名を入力してください">
+          </div>
         </div>
         <div class="field-divider"></div>
         <div class="field" style="padding-top:16px">
@@ -2568,6 +2663,40 @@ function pcUpdateClients() {
   const clients = type==='domestic' ? DOM_CLIENTS : type==='overseas' ? OVS_CLIENTS : [];
   clients.forEach(c => { const o=document.createElement('option'); o.value=c; o.textContent=c; sel.appendChild(o); });
   if (clients.length) { const o=document.createElement('option'); o.value='other'; o.textContent='その他'; sel.appendChild(o); }
+  const ow = document.getElementById('pc-sal-client-other-wrap');
+  if (ow) ow.style.display = 'none';
+  const oi = document.getElementById('pc-sal-client-other');
+  if (oi) oi.value = '';
+}
+
+function pcHandleSalClient() {
+  const v = document.getElementById('pc-sal-client').value;
+  const ow = document.getElementById('pc-sal-client-other-wrap');
+  if (ow) ow.style.display = v==='other' ? 'block' : 'none';
+  const oi = document.getElementById('pc-sal-client-other');
+  if (oi && v!=='other') oi.value = '';
+}
+
+function pcHandlePurSupplier() {
+  const v = document.getElementById('pc-pur-supplier').value;
+  const sw = document.getElementById('pc-pur-store-wrap');
+  const ow = document.getElementById('pc-pur-sup-other-wrap');
+  if (sw) sw.style.display = v==='店舗' ? 'block' : 'none';
+  if (ow) ow.style.display = v==='other' ? 'block' : 'none';
+  const storeEl = document.getElementById('pc-pur-store');
+  if (storeEl && v!=='店舗') { storeEl.selectedIndex=0; }
+  const storeOw = document.getElementById('pc-pur-store-other-wrap');
+  if (storeOw) storeOw.style.display = 'none';
+  const supOi = document.getElementById('pc-pur-sup-other');
+  if (supOi && v!=='other') supOi.value = '';
+}
+
+function pcHandlePurStore() {
+  const v = document.getElementById('pc-pur-store').value;
+  const ow = document.getElementById('pc-pur-store-other-wrap');
+  if (ow) ow.style.display = v==='other' ? 'block' : 'none';
+  const oi = document.getElementById('pc-pur-store-other');
+  if (oi && v!=='other') oi.value = '';
 }
 
 async function pcSubmitExpense() {
@@ -2585,22 +2714,40 @@ async function pcSubmitExpense() {
     document.getElementById('pc-exp-note').value = '';
     document.getElementById('pc-exp-amount').value = '';
     renderPCHistory();
+    if (!_isWideLayout) switchSPMode('history');
     showToast('経費を登録しました');
   } catch(e) { showToast('登録に失敗しました'); }
 }
 
 async function pcSubmitPurchase() {
   const date = document.getElementById('pc-pur-date').value;
-  const supplier = document.getElementById('pc-pur-supplier').value;
+  const supplierBase = document.getElementById('pc-pur-supplier').value;
   const amount = parseInt(document.getElementById('pc-pur-amount').value)||0;
   const note = document.getElementById('pc-pur-note').value.trim();
-  if (!date||!supplier||!amount) { showToast('必須項目を入力してください'); return; }
+  if (!date||!supplierBase||!amount) { showToast('必須項目を入力してください'); return; }
+  let supplier = supplierBase;
+  if (supplierBase==='店舗') {
+    const store = document.getElementById('pc-pur-store').value;
+    if (!store) { showToast('店舗名を選択してください'); return; }
+    if (store==='other') {
+      const other = document.getElementById('pc-pur-store-other').value.trim();
+      if (!other) { showToast('店舗名を入力してください'); return; }
+      supplier = '店舗（'+other+'）';
+    } else { supplier = '店舗（'+store+'）'; }
+  } else if (supplierBase==='other') {
+    const other = document.getElementById('pc-pur-sup-other').value.trim();
+    if (!other) { showToast('仕入先名を入力してください'); return; }
+    supplier = other;
+  }
   try {
     await window._fbPushPurchase({ type:'purchase', date, supplier, amount, note, submittedAt: new Date().toLocaleDateString('ja-JP') });
     document.getElementById('pc-pur-supplier').selectedIndex = 0;
+    document.getElementById('pc-pur-store-wrap').style.display = 'none';
+    document.getElementById('pc-pur-sup-other-wrap').style.display = 'none';
     document.getElementById('pc-pur-amount').value = '';
     document.getElementById('pc-pur-note').value = '';
     renderPCHistory();
+    if (!_isWideLayout) switchSPMode('history');
     showToast('仕入を登録しました');
   } catch(e) { showToast('登録に失敗しました'); }
 }
@@ -2612,16 +2759,24 @@ async function pcSubmitSales() {
   const amount = parseInt(document.getElementById('pc-sal-amount').value)||0;
   const due = document.getElementById('pc-sal-due').value;
   const note = document.getElementById('pc-sal-note').value.trim();
-  if (!date||!typeVal||!client||!amount) { showToast('必須項目を入力してください'); return; }
+  let clientFinal = client;
+  if (client==='other') {
+    clientFinal = document.getElementById('pc-sal-client-other')?.value.trim()||'';
+    if (!clientFinal) { showToast('卸先名を入力してください'); return; }
+  }
+  if (!date||!typeVal||!clientFinal||!amount) { showToast('必須項目を入力してください'); return; }
   const typeLabel = typeVal==='domestic'?'国内（請求書）':'国外（インボイス）';
   try {
-    await window._fbPushSales({ type:'sales', date, salesType:typeLabel, client, amount, due, note, payStatus:'未入金', submittedAt: new Date().toLocaleDateString('ja-JP') });
+    await window._fbPushSales({ type:'sales', date, salesType:typeLabel, client:clientFinal, amount, due, note, payStatus:'未入金', submittedAt: new Date().toLocaleDateString('ja-JP') });
     document.getElementById('pc-sal-type').selectedIndex = 0;
     document.getElementById('pc-sal-client').innerHTML = '<option value="">先に区分を選択</option>';
+    const ow = document.getElementById('pc-sal-client-other-wrap');
+    if (ow) ow.style.display = 'none';
     document.getElementById('pc-sal-amount').value = '';
     document.getElementById('pc-sal-due').value = '';
     document.getElementById('pc-sal-note').value = '';
     renderPCHistory();
+    if (!_isWideLayout) switchSPMode('history');
     showToast('売上を登録しました');
   } catch(e) { showToast('登録に失敗しました'); }
 }
@@ -2634,16 +2789,12 @@ function renderPCHistory() {
   if (!area) return;
 
   let items = [];
-  let color = '#4a4a4a';
   if (_pcTab === 'expense') {
     items = (window._getExpenses?.()||[]).filter(e=>e.date===today);
-    color = 'var(--purple)';
   } else if (_pcTab === 'purchase') {
     items = (window._getPurchases?.()||[]).filter(p=>p.date===today);
-    color = 'var(--orange)';
   } else {
     items = (window._getSales?.()||[]).filter(s=>s.date===today);
-    color = 'var(--teal)';
   }
 
   const total = items.reduce((s,a)=>s+a.amount,0);
@@ -2653,21 +2804,96 @@ function renderPCHistory() {
   empty.style.display = 'none';
 
   area.innerHTML = items.map(item => {
-    let title='', sub='', key=item._key, type=_pcTab;
-    if (_pcTab==='expense') { title=item.payee; sub=item.content; }
-    else if (_pcTab==='purchase') { title=item.supplier; sub=item.note||''; }
-    else { title=item.client; sub=item.salesType||''; }
-    return `<div style="background:var(--white);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
-      <div>
-        <div style="font-size:13px;font-weight:600;color:var(--text)">${title}</div>
-        ${sub?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${sub}</div>`:''}
+    const key = item._key;
+    const type = _pcTab;
+    const rid = 'pc_'+key;
+    let viewHtml='', editHtml='';
+
+    if (type==='expense') {
+      viewHtml = `<div style="font-size:13px;font-weight:600;color:var(--text)">${item.payee}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${item.content}</div>`;
+      editHtml = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+        <input id="pce_payee_${rid}" type="text" value="${item.payee}" placeholder="支払先" style="font-size:12px;padding:5px 8px;border:1.5px solid var(--gold);border-radius:6px">
+        <select id="pce_cat_${rid}" style="font-size:12px;padding:5px 8px;border:1.5px solid var(--gold);border-radius:6px">${EXP_CATS.map(c=>`<option${c===item.category?' selected':''}>${c}</option>`).join('')}</select>
+        <input id="pce_note_${rid}" type="text" value="${item.note||''}" placeholder="メモ" style="font-size:12px;padding:5px 8px;border:1.5px solid var(--gold);border-radius:6px">
+        <input id="pce_amount_${rid}" type="number" value="${item.amount}" style="font-size:12px;padding:5px 8px;border:1.5px solid var(--gold);border-radius:6px;font-weight:700">
+      </div>`;
+    } else if (type==='purchase') {
+      viewHtml = `<div style="font-size:13px;font-weight:600;color:var(--text)">${item.supplier}</div>
+        ${item.note?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${item.note}</div>`:''}`;
+      editHtml = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+        <select id="pce_sup_${rid}" style="font-size:12px;padding:5px 8px;border:1.5px solid var(--gold);border-radius:6px">${PUR_SUPS.map(s=>`<option${s===item.supplier?' selected':''}>${s}</option>`).join('')}</select>
+        <input id="pce_amount_${rid}" type="number" value="${item.amount}" style="font-size:12px;padding:5px 8px;border:1.5px solid var(--gold);border-radius:6px;font-weight:700">
+        <input id="pce_note_${rid}" type="text" value="${item.note||''}" placeholder="メモ" style="font-size:12px;padding:5px 8px;border:1.5px solid var(--gold);border-radius:6px" colspan="2">
+      </div>`;
+    } else {
+      const isOvs = item.salesType==='国外（インボイス）';
+      const clients2 = isOvs ? OVS_CLIENTS : DOM_CLIENTS;
+      viewHtml = `<div style="font-size:13px;font-weight:600;color:var(--text)">${item.client}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${item.salesType||''}</div>`;
+      editHtml = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+        <select id="pce_type_${rid}" style="font-size:12px;padding:5px 8px;border:1.5px solid var(--gold);border-radius:6px"><option${!isOvs?' selected':''}>国内（請求書）</option><option${isOvs?' selected':''}>国外（インボイス）</option></select>
+        <input id="pce_amount_${rid}" type="number" value="${item.amount}" style="font-size:12px;padding:5px 8px;border:1.5px solid var(--gold);border-radius:6px;font-weight:700">
+        <select id="pce_client_${rid}" style="font-size:12px;padding:5px 8px;border:1.5px solid var(--gold);border-radius:6px;grid-column:span 2">${clients2.map(c=>`<option${c===item.client?' selected':''}>${c}</option>`).join('')}</select>
+      </div>`;
+    }
+
+    const amtColor = type==='expense'?'var(--purple)':type==='purchase'?'var(--orange)':'var(--teal)';
+    return `<div style="background:var(--white);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;overflow:hidden">
+      <div id="pcv_${rid}" style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
+        <div>${viewHtml}</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          <span style="font-size:14px;font-weight:700;color:${amtColor}">¥${item.amount.toLocaleString('ja-JP')}</span>
+          <button onclick="openPCEdit('${rid}')" style="padding:4px 10px;background:#bfdbfe;color:#1e3a5f;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">編集</button>
+          <button onclick="mhDelete('${key}','${type}')" class="delete-btn">削除</button>
+        </div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:14px;font-weight:700;color:${color}">¥${item.amount.toLocaleString('ja-JP')}</span>
-        <button onclick="mhDelete('${key}','${type}')" class="delete-btn">削除</button>
+      <div id="pce_${rid}" style="display:none;padding:10px 14px;background:#fffde7">
+        ${editHtml}
+        <div style="display:flex;gap:6px">
+          <button onclick="savePCEdit('${key}','${rid}','${type}')" style="flex:1;padding:6px;background:#bfdbfe;color:#1e3a5f;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">保存</button>
+          <button onclick="closePCEdit('${rid}')" style="flex:1;padding:6px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:12px;cursor:pointer">キャンセル</button>
+        </div>
       </div>
     </div>`;
   }).join('');
+}
+
+function openPCEdit(rid) {
+  document.getElementById('pcv_'+rid).style.display = 'none';
+  document.getElementById('pce_'+rid).style.display = 'block';
+}
+function closePCEdit(rid) {
+  document.getElementById('pcv_'+rid).style.display = 'flex';
+  document.getElementById('pce_'+rid).style.display = 'none';
+}
+async function savePCEdit(key, rid, type) {
+  try {
+    let patch = {};
+    if (type==='expense') {
+      const payee = document.getElementById('pce_payee_'+rid).value.trim();
+      const category = document.getElementById('pce_cat_'+rid).value;
+      const note = document.getElementById('pce_note_'+rid).value.trim();
+      const amount = parseInt(document.getElementById('pce_amount_'+rid).value)||0;
+      const content = category==='その他'?(note||'その他'):category+(note?'（'+note+'）':'');
+      patch = {payee, category, note, content, amount};
+      await fetch(authedUrl('/expenses/'+key+'.json'), {method:'PATCH', body:JSON.stringify(patch)});
+    } else if (type==='purchase') {
+      const supplier = document.getElementById('pce_sup_'+rid).value;
+      const amount = parseInt(document.getElementById('pce_amount_'+rid).value)||0;
+      const note = document.getElementById('pce_note_'+rid).value.trim();
+      patch = {supplier, amount, note};
+      await fetch(authedUrl('/purchases/'+key+'.json'), {method:'PATCH', body:JSON.stringify(patch)});
+    } else {
+      const salesType = document.getElementById('pce_type_'+rid).value;
+      const client = document.getElementById('pce_client_'+rid).value;
+      const amount = parseInt(document.getElementById('pce_amount_'+rid).value)||0;
+      patch = {salesType, client, amount};
+      await fetch(authedUrl('/sales/'+key+'.json'), {method:'PATCH', body:JSON.stringify(patch)});
+    }
+    await loadAll();
+    showToast('更新しました');
+  } catch(e) { showToast('更新に失敗しました'); }
 }
 
 function setSalesFilter(client) {
