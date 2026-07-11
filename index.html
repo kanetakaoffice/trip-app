@@ -1139,17 +1139,13 @@ function showInvScreen(name) {
     if (el) el.style.cssText = 'display:none !important; padding-top:8px;';
   });
   const packEl = document.getElementById('screen-inv-pack');
-  if (packEl) packEl.style.cssText = 'display:none !important; padding-top:0;';
+  if (packEl) packEl.style.cssText = 'display:none !important; padding-top:8px;';
   document.querySelectorAll('#inv-nav .nav-btn').forEach(b => b.classList.remove('active'));
 
   // 指定画面を表示
   const target = document.getElementById('screen-' + name);
   if (target) {
-    if (name === 'inv-pack') {
-      target.style.cssText = 'display:block !important; padding-top:0;';
-    } else {
-      target.style.cssText = 'display:block !important; padding-top:8px;';
-    }
+    target.style.cssText = 'display:block !important; padding-top:8px;';
     window.scrollTo(0,0);
   }
 
@@ -2988,12 +2984,12 @@ async function loadPackItems() {
   try {
     const today = todayStr();
     const r = await fetch(authedUrl('/packList.json'));
+    if (!r.ok) { _packItems = []; return; }
     const d = await r.json();
     const all = d ? Object.entries(d).map(([k,v]) => ({...v, _key:k})) : [];
-    // 今日分のみ（一般ユーザー）または全件（管理者）
     _packItems = isAdmin() ? all : all.filter(i => i.date === today);
-    _packItems.sort((a,b) => a.createdAt > b.createdAt ? 1 : -1);
-  } catch(e) { _packItems = []; }
+    _packItems.sort((a,b) => (a.createdAt||'') > (b.createdAt||'') ? 1 : -1);
+  } catch(e) { console.error('loadPackItems error:', e); _packItems = []; }
 }
 
 function getPackItems() { return _packItems; }
