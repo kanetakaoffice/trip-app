@@ -767,50 +767,64 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 
 <!-- 入出庫 -->
 <div id="screen-inv-move" class="screen" style="display:none;padding-top:8px">
-  <div id="move-alert-box" class="alert">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-    <span id="move-alert-msg"></span>
-  </div>
-  <div class="card">
-    <div class="card-title">商品スキャン</div>
-    <div class="field">
-      <button class="scan-btn" onclick="startScan('move-jan')">📷 JANコードをスキャン</button>
-      <input type="text" id="move-jan" placeholder="または手入力" oninput="lookupProduct()">
-      <div id="move-product-info" style="margin-top:12px;padding:12px;background:var(--gold-bg);border-radius:8px;display:none">
-        <div style="font-weight:700;font-size:15px" id="move-product-name"></div>
-        <div style="font-size:13px;color:var(--text-sub);margin-top:4px">現在庫: <span id="move-current-stock" style="font-weight:700;color:var(--gold-dark)"></span>個</div>
+  <div id="move-inner" style="display:flex;gap:20px;align-items:flex-start">
+    <!-- 左：入出庫フォーム -->
+    <div id="move-form-col" style="flex:1;min-width:0">
+      <div id="move-alert-box" class="alert">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span id="move-alert-msg"></span>
+      </div>
+      <div class="card">
+        <div class="card-title">商品スキャン</div>
+        <div class="field">
+          <button class="scan-btn" onclick="startScan('move-jan')">📷 JANコードをスキャン</button>
+          <input type="text" id="move-jan" placeholder="または手入力" oninput="lookupProduct()">
+          <div id="move-product-info" style="margin-top:12px;padding:12px;background:var(--gold-bg);border-radius:8px;display:none">
+            <div style="font-weight:700;font-size:15px" id="move-product-name"></div>
+            <div style="font-size:13px;color:var(--text-sub);margin-top:4px">現在庫: <span id="move-current-stock" style="font-weight:700;color:var(--gold-dark)"></span>個</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">入出庫情報</div>
+        <div class="field">
+          <div class="field-label">日付 <span class="req">*</span></div>
+          <input type="date" id="move-date">
+        </div>
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">種別 <span class="req">*</span></div>
+          <select id="move-type">
+            <option value="">選択してください</option>
+            <option value="in">入庫</option>
+            <option value="out">出庫</option>
+            <option value="adjust">在庫調整</option>
+          </select>
+        </div>
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">数量 <span class="req">*</span></div>
+          <input type="number" id="move-qty" placeholder="0" min="1">
+        </div>
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">メモ</div>
+          <input type="text" id="move-memo" placeholder="理由・備考など">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-gold" onclick="submitMove()">入出庫を記録する</button>
       </div>
     </div>
-  </div>
-  <div class="card">
-    <div class="card-title">入出庫情報</div>
-    <div class="field">
-      <div class="field-label">日付 <span class="req">*</span></div>
-      <input type="date" id="move-date">
+    <!-- 右：本日の梱包リスト（PC幅のみ） -->
+    <div id="move-pack-col" style="display:none;flex:1;min-width:0;border-left:1px solid var(--border);padding-left:20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:13px;font-weight:700;color:#3a3a3a">本日の梱包リスト</div>
+        <div id="move-pack-summary" style="font-size:12px;color:#909090"></div>
+      </div>
+      <div id="move-pack-list"></div>
+      <div id="move-pack-empty" style="text-align:center;padding:40px 20px;color:var(--text-muted);font-size:13px">まだ追加されていません</div>
     </div>
-    <div class="field-divider"></div>
-    <div class="field" style="padding-top:16px">
-      <div class="field-label">種別 <span class="req">*</span></div>
-      <select id="move-type">
-        <option value="">選択してください</option>
-        <option value="in">入庫</option>
-        <option value="out">出庫</option>
-        <option value="adjust">在庫調整</option>
-      </select>
-    </div>
-    <div class="field-divider"></div>
-    <div class="field" style="padding-top:16px">
-      <div class="field-label">数量 <span class="req">*</span></div>
-      <input type="number" id="move-qty" placeholder="0" min="1">
-    </div>
-    <div class="field-divider"></div>
-    <div class="field" style="padding-top:16px">
-      <div class="field-label">メモ</div>
-      <input type="text" id="move-memo" placeholder="理由・備考など">
-    </div>
-  </div>
-  <div class="btn-row">
-    <button class="btn btn-gold" onclick="submitMove()">入出庫を記録する</button>
   </div>
 </div>
 
@@ -899,88 +913,42 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 
 <!-- 在庫管理ナビ（非表示切替） -->
 <!-- 梱包完了画面 -->
-<div id="screen-inv-pack" class="screen" style="display:none;padding-top:0">
-  <!-- PC：2カラム -->
-  <div id="pack-layout-wide" style="display:none;grid-template-columns:1fr 1fr;gap:20px;height:calc(100vh - 120px)">
-    <!-- 左：入力 -->
-    <div style="overflow-y:auto;padding-right:8px">
-      <div class="card">
+<div id="screen-inv-pack" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:var(--surface);z-index:50;overflow-y:auto;padding:16px;padding-top:calc(env(safe-area-inset-top,0px) + 74px);padding-bottom:calc(env(safe-area-inset-bottom,0px) + 74px)">
+  <div id="pack-inner" style="max-width:1200px;margin:0 auto">
+    <!-- 入力フォーム（管理者のみ） -->
+    <div id="pack-form-area">
+      <div class="card" style="margin-bottom:12px">
         <div class="card-title">梱包リストに追加</div>
-        <div class="field">
-          <div class="field-label">商品名 <span class="req">*</span></div>
-          <input type="text" id="pack-product" placeholder="商品名を入力">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div class="field">
+            <div class="field-label">商品名 <span class="req">*</span></div>
+            <input type="text" id="pack-product" placeholder="商品名を入力">
+          </div>
+          <div class="field">
+            <div class="field-label">数量 <span class="req">*</span></div>
+            <input type="number" id="pack-qty" placeholder="1" min="1">
+          </div>
+          <div class="field">
+            <div class="field-label">送り先 <span class="req">*</span></div>
+            <input type="text" id="pack-dest" placeholder="送り先を入力">
+          </div>
+          <div class="field">
+            <div class="field-label">担当者</div>
+            <input type="text" id="pack-staff" placeholder="担当者名（任意）">
+          </div>
         </div>
-        <div class="field-divider"></div>
-        <div class="field" style="padding-top:16px">
-          <div class="field-label">数量 <span class="req">*</span></div>
-          <input type="number" id="pack-qty" placeholder="1" min="1" style="font-size:20px;font-weight:700;text-align:right">
+        <div class="btn-row" style="margin-top:8px">
+          <button class="btn btn-gold" onclick="addPackItem()">リストに追加する</button>
         </div>
-        <div class="field-divider"></div>
-        <div class="field" style="padding-top:16px">
-          <div class="field-label">送り先 <span class="req">*</span></div>
-          <input type="text" id="pack-dest" placeholder="送り先を入力">
-        </div>
-        <div class="field-divider"></div>
-        <div class="field" style="padding-top:16px">
-          <div class="field-label">担当者</div>
-          <input type="text" id="pack-staff" placeholder="担当者名（任意）">
-        </div>
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-gold" onclick="addPackItem()">リストに追加する</button>
       </div>
     </div>
-    <!-- 右：チェックリスト -->
-    <div style="overflow-y:auto;padding-left:8px;border-left:1px solid var(--border)">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div style="font-size:13px;font-weight:700;color:#3a3a3a">本日の梱包リスト</div>
-        <div id="pack-summary-wide" style="font-size:12px;color:#909090"></div>
-      </div>
-      <div id="pack-list-wide"></div>
-      <div id="pack-empty-wide" style="text-align:center;padding:40px 20px;color:var(--text-muted);font-size:13px;display:none">まだ追加されていません</div>
+    <!-- チェックリスト -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font-size:13px;font-weight:700;color:#3a3a3a">本日の梱包リスト</div>
+      <div id="pack-summary" style="font-size:12px;color:#909090"></div>
     </div>
-  </div>
-  <!-- スマホ：タブ切替 -->
-  <div id="pack-layout-narrow" style="display:none">
-    <div style="display:flex;gap:0;margin-bottom:12px;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden">
-      <button id="pack-mode-input" onclick="switchPackMode('input')" style="flex:1;padding:8px;font-size:13px;font-weight:600;border:none;background:#3a3a3a;color:#fff;cursor:pointer">📦 追加</button>
-      <button id="pack-mode-list" onclick="switchPackMode('list')" style="flex:1;padding:8px;font-size:13px;font-weight:600;border:none;background:none;color:#909090;cursor:pointer">✅ リスト</button>
-    </div>
-    <div id="pack-sp-input">
-      <div class="card">
-        <div class="card-title">梱包リストに追加</div>
-        <div class="field">
-          <div class="field-label">商品名 <span class="req">*</span></div>
-          <input type="text" id="pack-product-sp" placeholder="商品名を入力">
-        </div>
-        <div class="field-divider"></div>
-        <div class="field" style="padding-top:16px">
-          <div class="field-label">数量 <span class="req">*</span></div>
-          <input type="number" id="pack-qty-sp" placeholder="1" min="1" style="font-size:20px;font-weight:700;text-align:right">
-        </div>
-        <div class="field-divider"></div>
-        <div class="field" style="padding-top:16px">
-          <div class="field-label">送り先 <span class="req">*</span></div>
-          <input type="text" id="pack-dest-sp" placeholder="送り先を入力">
-        </div>
-        <div class="field-divider"></div>
-        <div class="field" style="padding-top:16px">
-          <div class="field-label">担当者</div>
-          <input type="text" id="pack-staff-sp" placeholder="担当者名（任意）">
-        </div>
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-gold" onclick="addPackItem()">リストに追加する</button>
-      </div>
-    </div>
-    <div id="pack-sp-list" style="display:none">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div style="font-size:13px;font-weight:700;color:#3a3a3a">本日の梱包リスト</div>
-        <div id="pack-summary-narrow" style="font-size:12px;color:#909090"></div>
-      </div>
-      <div id="pack-list-narrow"></div>
-      <div id="pack-empty-narrow" style="text-align:center;padding:40px 20px;color:var(--text-muted);font-size:13px;display:none">まだ追加されていません</div>
-    </div>
+    <div id="pack-list"></div>
+    <div id="pack-empty" style="text-align:center;padding:40px 20px;color:var(--text-muted);font-size:13px">まだ追加されていません</div>
   </div>
 </div>
 
@@ -1166,19 +1134,30 @@ function switchMode(mode) {
 }
 
 function showInvScreen(name) {
-  ['inv-add','inv-move','inv-list','inv-pack'].forEach(s => {
+  ['inv-add','inv-move','inv-list'].forEach(s => {
     const el = document.getElementById('screen-' + s);
-    if (el) {
-      el.style.cssText = 'display:none !important; padding-top:8px;';
-    }
+    if (el) { el.style.cssText = 'display:none !important; padding-top:8px;'; }
   });
+  const packEl = document.getElementById('screen-inv-pack');
+  if (packEl) packEl.style.display = 'none';
   document.querySelectorAll('#inv-nav .nav-btn').forEach(b => b.classList.remove('active'));
-  const target = document.getElementById('screen-' + name);
-  if (target) {
-    target.style.cssText = 'display:block !important; padding-top:8px;';
-    window.scrollTo(0,0);
+  if (name !== 'inv-pack') {
+    const target = document.getElementById('screen-' + name);
+    if (target) {
+      target.style.cssText = 'display:block !important; padding-top:8px;';
+      window.scrollTo(0,0);
+    }
+    if (name === 'inv-move') {
+      // PC幅の場合は右側に梱包リストを表示
+      const packCol = document.getElementById('move-pack-col');
+      if (packCol) {
+        packCol.style.display = window.innerWidth >= 768 ? 'block' : 'none';
+        renderMovePackList();
+      }
+    }
+  } else {
+    setTimeout(() => showPackScreen(), 50);
   }
-  if (name === 'inv-pack') { setTimeout(() => { showPackScreen(); }, 100); }
   const navBtn = document.getElementById('nav-' + name);
   if (navBtn) navBtn.classList.add('active');
   if (name === 'inv-list') renderInventoryList();
@@ -3007,50 +2986,49 @@ function savePackItems(items) {
 }
 
 function showPackScreen() {
-  const isWide = window.innerWidth >= 768;
-  const wide   = document.getElementById('pack-layout-wide');
-  const narrow = document.getElementById('pack-layout-narrow');
-  if (!wide || !narrow) { console.warn('pack elements not found'); return; }
-  wide.style.display   = isWide ? 'grid' : 'none';
-  narrow.style.display = isWide ? 'none' : 'block';
+  const el = document.getElementById('screen-inv-pack');
+  if (el) el.style.display = 'block';
+  // 管理者のみ入力フォームを表示
+  const formArea = document.getElementById('pack-form-area');
+  if (formArea) formArea.style.display = isAdmin() ? 'block' : 'none';
   renderPackList();
 }
 
-function switchPackMode(mode) {
-  const inputEl = document.getElementById('pack-sp-input');
-  const listEl  = document.getElementById('pack-sp-list');
-  const btnI = document.getElementById('pack-mode-input');
-  const btnL = document.getElementById('pack-mode-list');
-  if (mode === 'input') {
-    inputEl.style.display = 'block'; listEl.style.display = 'none';
-    btnI.style.background = '#3a3a3a'; btnI.style.color = '#fff';
-    btnL.style.background = 'none';   btnL.style.color = '#909090';
-  } else {
-    inputEl.style.display = 'none'; listEl.style.display = 'block';
-    btnI.style.background = 'none';   btnI.style.color = '#909090';
-    btnL.style.background = '#3a3a3a'; btnL.style.color = '#fff';
-    renderPackList();
-  }
+function renderMovePackList() {
+  const listEl    = document.getElementById('move-pack-list');
+  const emptyEl   = document.getElementById('move-pack-empty');
+  const summaryEl = document.getElementById('move-pack-summary');
+  if (!listEl) return;
+  const items = getPackItems();
+  const done = items.filter(i=>i.done).length;
+  if (summaryEl) summaryEl.textContent = items.length ? `${done}/${items.length}件完了` : '';
+  if (!items.length) { listEl.innerHTML=''; if(emptyEl) emptyEl.style.display='block'; return; }
+  if (emptyEl) emptyEl.style.display='none';
+  const sorted = [...items].sort((a,b)=>{ if(a.done!==b.done) return a.done?1:-1; return a.createdAt>b.createdAt?1:-1; });
+  listEl.innerHTML = sorted.map(item=>`
+    <div style="background:var(--white);border:1px solid ${item.done?'#a0a0a0':'var(--border)'};border-radius:var(--radius);margin-bottom:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;opacity:${item.done?0.6:1}">
+      <button onclick="togglePackDone(${item.id});renderMovePackList()" style="flex-shrink:0;width:26px;height:26px;border-radius:50%;border:2px solid ${item.done?'#a0a0a0':'#b0b0b0'};background:${item.done?'#a0a0a0':'transparent'};cursor:pointer;color:#fff;font-size:13px">${item.done?'✓':''}</button>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;color:var(--text);${item.done?'text-decoration:line-through':''}">${item.product} × ${item.qty}</div>
+        <div style="font-size:11px;color:var(--text-sub);margin-top:2px">📦 ${item.dest}${item.staff?'　👤 '+item.staff:''}</div>
+      </div>
+    </div>`).join('');
 }
 
 function addPackItem() {
-  const isWide = window.innerWidth >= 768;
-  const sfx = isWide ? '' : '-sp';
-  const product = document.getElementById('pack-product'+sfx)?.value.trim();
-  const qty     = parseInt(document.getElementById('pack-qty'+sfx)?.value)||1;
-  const dest    = document.getElementById('pack-dest'+sfx)?.value.trim();
-  const staff   = document.getElementById('pack-staff'+sfx)?.value.trim();
+  const product = document.getElementById('pack-product')?.value.trim();
+  const qty     = parseInt(document.getElementById('pack-qty')?.value)||1;
+  const dest    = document.getElementById('pack-dest')?.value.trim();
+  const staff   = document.getElementById('pack-staff')?.value.trim();
   if (!product||!dest) { showToast('商品名と送り先を入力してください'); return; }
   const items = getPackItems();
   items.push({ id: Date.now(), product, qty, dest, staff, done: false, createdAt: new Date().toISOString() });
   savePackItems(items);
-  // フォームクリア
-  ['pack-product','pack-qty','pack-dest','pack-staff'].forEach(id => {
-    const el = document.getElementById(id+sfx);
-    if (el) el.value = '';
-  });
+  document.getElementById('pack-product').value = '';
+  document.getElementById('pack-qty').value = '';
+  document.getElementById('pack-dest').value = '';
+  document.getElementById('pack-staff').value = '';
   renderPackList();
-  if (!isWide) switchPackMode('list');
   showToast('リストに追加しました');
 }
 
@@ -3070,18 +3048,14 @@ async function deletePackItem(id) {
 }
 
 function renderPackList() {
-  const isWide = window.innerWidth >= 768;
-  const listId    = isWide ? 'pack-list-wide'    : 'pack-list-narrow';
-  const emptyId   = isWide ? 'pack-empty-wide'   : 'pack-empty-narrow';
-  const summaryId = isWide ? 'pack-summary-wide'  : 'pack-summary-narrow';
-  const listEl    = document.getElementById(listId);
-  const emptyEl   = document.getElementById(emptyId);
-  const summaryEl = document.getElementById(summaryId);
+  const listEl    = document.getElementById('pack-list');
+  const emptyEl   = document.getElementById('pack-empty');
+  const summaryEl = document.getElementById('pack-summary');
   if (!listEl) return;
 
   const items = getPackItems();
   const done = items.filter(i=>i.done).length;
-  if (summaryEl) summaryEl.textContent = `${done}/${items.length}件完了`;
+  if (summaryEl) summaryEl.textContent = items.length ? `${done}/${items.length}件完了` : '';
 
   if (!items.length) {
     listEl.innerHTML = '';
@@ -3090,15 +3064,14 @@ function renderPackList() {
   }
   if (emptyEl) emptyEl.style.display = 'none';
 
-  // 未完了を上、完了を下
   const sorted = [...items].sort((a,b) => {
     if (a.done !== b.done) return a.done ? 1 : -1;
     return a.createdAt > b.createdAt ? 1 : -1;
   });
 
   listEl.innerHTML = sorted.map(item => `
-    <div style="background:var(--white);border:1px solid ${item.done?'#a0a0a0':'var(--border)'};border-radius:var(--radius);margin-bottom:8px;padding:12px 14px;display:flex;align-items:center;gap:12px;opacity:${item.done?0.6:1};transition:all 0.2s">
-      <button onclick="togglePackDone(${item.id})" style="flex-shrink:0;width:28px;height:28px;border-radius:50%;border:2px solid ${item.done?'#a0a0a0':'var(--gold)'};background:${item.done?'#a0a0a0':'transparent'};cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px">
+    <div style="background:var(--white);border:1px solid ${item.done?'#a0a0a0':'var(--border)'};border-radius:var(--radius);margin-bottom:8px;padding:12px 14px;display:flex;align-items:center;gap:12px;opacity:${item.done?0.6:1}">
+      <button onclick="togglePackDone(${item.id})" style="flex-shrink:0;width:28px;height:28px;border-radius:50%;border:2px solid ${item.done?'#a0a0a0':'#b0b0b0'};background:${item.done?'#a0a0a0':'transparent'};cursor:pointer;color:#fff;font-size:14px">
         ${item.done?'✓':''}
       </button>
       <div style="flex:1;min-width:0">
@@ -3106,8 +3079,10 @@ function renderPackList() {
         <div style="font-size:12px;color:var(--text-sub);margin-top:2px">📦 ${item.dest}${item.staff?'　👤 '+item.staff:''}</div>
         ${item.done?'<div style="font-size:11px;color:#a0a0a0;margin-top:2px">✅ 梱包完了</div>':''}
       </div>
-      <button onclick="deletePackItem(${item.id})" class="delete-btn" style="flex-shrink:0">削除</button>
+      ${isAdmin()?`<button onclick="deletePackItem(${item.id})" class="delete-btn">削除</button>`:''}
     </div>`).join('');
+  // 入出庫画面の右側も更新
+  renderMovePackList();
 }
 
 function setSalesFilter(client) {
