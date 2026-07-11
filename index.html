@@ -63,6 +63,7 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Hira
 .nav-btn-wrap { position: relative; flex: 1; display: flex; justify-content: center; }
 .main { padding-top: calc(env(safe-area-inset-top, 0px) + 58px); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 68px); min-height: 100vh; }
 .screen { display: none; padding: 16px; }
+#screen-inv-pack { padding: 0; overflow: hidden; }
 .screen.active { display: block; }
 .card { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
 .card-title { font-size: 11px; font-weight: 700; color: var(--gold-dark); letter-spacing: 0.1em; text-transform: uppercase; padding: 14px 16px 0; margin-bottom: 12px; }
@@ -898,7 +899,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 
 <!-- 在庫管理ナビ（非表示切替） -->
 <!-- 梱包完了画面 -->
-<div id="screen-inv-pack" class="screen" style="display:none;padding-top:8px">
+<div id="screen-inv-pack" class="screen" style="display:none;padding-top:0">
   <!-- PC：2カラム -->
   <div id="pack-layout-wide" style="display:none;grid-template-columns:1fr 1fr;gap:20px;height:calc(100vh - 120px)">
     <!-- 左：入力 -->
@@ -1177,7 +1178,7 @@ function showInvScreen(name) {
     target.style.cssText = 'display:block !important; padding-top:8px;';
     window.scrollTo(0,0);
   }
-  if (name === 'inv-pack') setTimeout(() => showPackScreen(), 50);
+  if (name === 'inv-pack') { setTimeout(() => { showPackScreen(); }, 100); }
   const navBtn = document.getElementById('nav-' + name);
   if (navBtn) navBtn.classList.add('active');
   if (name === 'inv-list') renderInventoryList();
@@ -3009,8 +3010,9 @@ function showPackScreen() {
   const isWide = window.innerWidth >= 768;
   const wide   = document.getElementById('pack-layout-wide');
   const narrow = document.getElementById('pack-layout-narrow');
-  if (wide)   wide.style.display   = isWide ? 'grid' : 'none';
-  if (narrow) narrow.style.display = isWide ? 'none' : 'block';
+  if (!wide || !narrow) { console.warn('pack elements not found'); return; }
+  wide.style.display   = isWide ? 'grid' : 'none';
+  narrow.style.display = isWide ? 'none' : 'block';
   renderPackList();
 }
 
