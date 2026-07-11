@@ -1134,16 +1134,22 @@ function switchMode(mode) {
 
 function showInvScreen(name) {
   // 全在庫画面を非表示
-  ['inv-add','inv-move','inv-list','inv-pack'].forEach(s => {
+  ['inv-add','inv-move','inv-list'].forEach(s => {
     const el = document.getElementById('screen-' + s);
     if (el) el.style.cssText = 'display:none !important; padding-top:8px;';
   });
+  const packEl = document.getElementById('screen-inv-pack');
+  if (packEl) packEl.style.cssText = 'display:none !important; padding-top:0;';
   document.querySelectorAll('#inv-nav .nav-btn').forEach(b => b.classList.remove('active'));
 
   // 指定画面を表示
   const target = document.getElementById('screen-' + name);
   if (target) {
-    target.style.cssText = 'display:block !important; padding-top:8px;';
+    if (name === 'inv-pack') {
+      target.style.cssText = 'display:block !important; padding-top:0;';
+    } else {
+      target.style.cssText = 'display:block !important; padding-top:8px;';
+    }
     window.scrollTo(0,0);
   }
 
@@ -2975,21 +2981,27 @@ async function savePCEdit(key, rid, type) {
   } catch(e) { showToast('更新に失敗しました'); }
 }
 
-// ── 梱包完了管理 ──
-const PACK_KEY = 'kanetaka_pack_' + new Date().toISOString().slice(0,10);
+// ── 梱包完了管理（Firebase） ──
+let _packItems = [];
 
-function getPackItems() {
-  try { return JSON.parse(localStorage.getItem(PACK_KEY) || '[]'); } catch(e) { return []; }
+async function loadPackItems() {
+  try {
+    const today = todayStr();
+    const r = await fetch(authedUrl('/packList.json'));
+    const d = await r.json();
+    const all = d ? Object.entries(d).map(([k,v]) => ({...v, _key:k})) : [];
+    // 今日分のみ（一般ユーザー）または全件（管理者）
+    _packItems = isAdmin() ? all : all.filter(i => i.date === today);
+    _packItems.sort((a,b) => a.createdAt > b.createdAt ? 1 : -1);
+  } catch(e) { _packItems = []; }
 }
-function savePackItems(items) {
-  localStorage.setItem(PACK_KEY, JSON.stringify(items));
-}
+
+function getPackItems() { return _packItems; }
 
 function showPackScreen() {
-  // 管理者のみ入力フォームを表示
   const formArea = document.getElementById('pack-form-area');
   if (formArea) formArea.style.display = isAdmin() ? 'block' : 'none';
-  renderPackList();
+  loadPackItems().then(() => renderPackList());
 }
 
 function renderMovePackList() {
@@ -3005,7 +3017,7 @@ function renderMovePackList() {
   const sorted = [...items].sort((a,b)=>{ if(a.done!==b.done) return a.done?1:-1; return a.createdAt>b.createdAt?1:-1; });
   listEl.innerHTML = sorted.map(item=>`
     <div style="background:var(--white);border:1px solid ${item.done?'#a0a0a0':'var(--border)'};border-radius:var(--radius);margin-bottom:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;opacity:${item.done?0.6:1}">
-      <button onclick="togglePackDone(${item.id});renderMovePackList()" style="flex-shrink:0;width:26px;height:26px;border-radius:50%;border:2px solid ${item.done?'#a0a0a0':'#b0b0b0'};background:${item.done?'#a0a0a0':'transparent'};cursor:pointer;color:#fff;font-size:13px">${item.done?'✓':''}</button>
+      <button onclick="togglePackDone('${item._key}').then(()=>renderMovePackList())" style="flex-shrink:0;width:26px;height:26px;border-radius:50%;border:2px solid ${item.done?'#a0a0a0':'#b0b0b0'};background:${item.done?'#a0a0a0':'transparent'};cursor:pointer;color:#fff;font-size:13px">${item.done?'✓':''}</button>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:700;color:var(--text);${item.done?'text-decoration:line-through':''}">${item.product} × ${item.qty}</div>
         <div style="font-size:11px;color:var(--text-sub);margin-top:2px">📦 ${item.dest}${item.staff?'　👤 '+item.staff:''}</div>
@@ -3013,36 +3025,46 @@ function renderMovePackList() {
     </div>`).join('');
 }
 
-function addPackItem() {
+async function addPackItem() {
   const product = document.getElementById('pack-product')?.value.trim();
   const qty     = parseInt(document.getElementById('pack-qty')?.value)||1;
   const dest    = document.getElementById('pack-dest')?.value.trim();
   const staff   = document.getElementById('pack-staff')?.value.trim();
   if (!product||!dest) { showToast('商品名と送り先を入力してください'); return; }
-  const items = getPackItems();
-  items.push({ id: Date.now(), product, qty, dest, staff, done: false, createdAt: new Date().toISOString() });
-  savePackItems(items);
-  document.getElementById('pack-product').value = '';
-  document.getElementById('pack-qty').value = '';
-  document.getElementById('pack-dest').value = '';
-  document.getElementById('pack-staff').value = '';
-  renderPackList();
-  showToast('リストに追加しました');
+  try {
+    await fetch(authedUrl('/packList.json'), {
+      method: 'POST',
+      body: JSON.stringify({ product, qty, dest, staff: staff||'', done: false, date: todayStr(), createdAt: new Date().toISOString() })
+    });
+    document.getElementById('pack-product').value = '';
+    document.getElementById('pack-qty').value = '';
+    document.getElementById('pack-dest').value = '';
+    document.getElementById('pack-staff').value = '';
+    await loadPackItems();
+    renderPackList();
+    showToast('リストに追加しました');
+  } catch(e) { showToast('追加に失敗しました'); }
 }
 
-function togglePackDone(id) {
-  const items = getPackItems();
-  const item = items.find(i=>i.id===id);
-  if (item) item.done = !item.done;
-  savePackItems(items);
-  renderPackList();
+async function togglePackDone(key) {
+  const item = _packItems.find(i=>i._key===key);
+  if (!item) return;
+  try {
+    await fetch(authedUrl('/packList/'+key+'/done.json'), {
+      method: 'PUT', body: JSON.stringify(!item.done)
+    });
+    await loadPackItems();
+    renderPackList();
+  } catch(e) { showToast('更新に失敗しました'); }
 }
 
-async function deletePackItem(id) {
+async function deletePackItem(key) {
   if (!await showConfirm('削除しますか？')) return;
-  const items = getPackItems().filter(i=>i.id!==id);
-  savePackItems(items);
-  renderPackList();
+  try {
+    await fetch(authedUrl('/packList/'+key+'.json'), { method: 'DELETE' });
+    await loadPackItems();
+    renderPackList();
+  } catch(e) { showToast('削除に失敗しました'); }
 }
 
 function renderPackList() {
@@ -3069,7 +3091,7 @@ function renderPackList() {
 
   listEl.innerHTML = sorted.map(item => `
     <div style="background:var(--white);border:1px solid ${item.done?'#a0a0a0':'var(--border)'};border-radius:var(--radius);margin-bottom:8px;padding:12px 14px;display:flex;align-items:center;gap:12px;opacity:${item.done?0.6:1}">
-      <button onclick="togglePackDone(${item.id})" style="flex-shrink:0;width:28px;height:28px;border-radius:50%;border:2px solid ${item.done?'#a0a0a0':'#b0b0b0'};background:${item.done?'#a0a0a0':'transparent'};cursor:pointer;color:#fff;font-size:14px">
+      <button onclick="togglePackDone('${item._key}')" style="flex-shrink:0;width:28px;height:28px;border-radius:50%;border:2px solid ${item.done?'#a0a0a0':'#b0b0b0'};background:${item.done?'#a0a0a0':'transparent'};cursor:pointer;color:#fff;font-size:14px">
         ${item.done?'✓':''}
       </button>
       <div style="flex:1;min-width:0">
@@ -3077,9 +3099,8 @@ function renderPackList() {
         <div style="font-size:12px;color:var(--text-sub);margin-top:2px">📦 ${item.dest}${item.staff?'　👤 '+item.staff:''}</div>
         ${item.done?'<div style="font-size:11px;color:#a0a0a0;margin-top:2px">✅ 梱包完了</div>':''}
       </div>
-      ${isAdmin()?`<button onclick="deletePackItem(${item.id})" class="delete-btn">削除</button>`:''}
+      ${isAdmin()?`<button onclick="deletePackItem('${item._key}')" class="delete-btn">削除</button>`:''}
     </div>`).join('');
-  // 入出庫画面の右側も更新
   renderMovePackList();
 }
 
