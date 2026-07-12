@@ -1034,7 +1034,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       </div>
     </div>
   </div>
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;margin-top:0">
     <div style="font-size:13px;font-weight:700;color:#3a3a3a">本日の梱包リスト</div>
     <div id="pack-summary-sp" style="font-size:12px;color:#909090"></div>
   </div>
@@ -1270,6 +1270,8 @@ function showInvScreen(name) {
     window.scrollTo(0, 0);
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
+    const mainEl = document.querySelector('.main');
+    if (mainEl) mainEl.scrollTop = 0;
   }
 
   // ナビボタンをアクティブに
