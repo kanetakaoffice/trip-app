@@ -1006,7 +1006,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 
 
 
-<div id="screen-inv-packec" class="screen" style="display:none;padding-top:8px">
+<div id="screen-inv-packec" class="screen" style="display:none">
   <div id="packec-form-area" style="display:none">
     <div class="card" style="margin-bottom:12px">
       <div class="card-title">梱包リストに追加</div>
@@ -1256,7 +1256,7 @@ function switchMode(mode) {
 
 function showInvScreen(name) {
   // 全在庫画面を非表示
-  ['inv-add','inv-move','inv-list'].forEach(s => {
+  ['inv-add','inv-move','inv-list','inv-packec'].forEach(s => {
     const el = document.getElementById('screen-' + s);
     if (el) { el.style.display = 'none'; el.classList.remove('active'); }
   });
