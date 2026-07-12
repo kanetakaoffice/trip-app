@@ -1246,6 +1246,11 @@ function switchMode(mode) {
     window.scrollTo(0, 0);
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
+    // 全在庫画面を一旦非表示
+    ['inv-add','inv-move','inv-list','inv-packec'].forEach(s => {
+      const el = document.getElementById('screen-' + s);
+      if (el) el.style.display = 'none';
+    });
     setTimeout(() => { showInvScreen('inv-add'); }, 50);
     loadInventory();
   }
