@@ -1006,9 +1006,9 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 
 
 
-<div id="screen-inv-packec" class="screen" style="display:none">
+<div id="screen-inv-packec" class="screen" style="display:none;padding-top:8px">
   <div id="packec-form-area" style="display:none">
-    <div class="card" style="margin-bottom:12px">
+    <div class="card">
       <div class="card-title">梱包リストに追加</div>
       <div class="field">
         <div class="field-label">商品名 <span class="req">*</span></div>
@@ -1034,7 +1034,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       </div>
     </div>
   </div>
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;margin-top:8px">
     <div style="font-size:13px;font-weight:700;color:#3a3a3a">本日の梱包リスト</div>
     <div id="pack-summary-sp" style="font-size:12px;color:#909090"></div>
   </div>
@@ -1071,7 +1071,6 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     <div id="ec-empty-sp" style="text-align:center;padding:20px;color:var(--text-muted);font-size:12px">本日の売上はまだありません</div>
   </div>
 </div>
-
 <div class="bottom-nav" id="inv-nav" style="display:none">
   <div class="nav-btn-wrap">
     <button class="nav-btn active" id="nav-inv-add" onclick="showInvScreen('inv-add')">
@@ -1255,18 +1254,17 @@ function switchMode(mode) {
 }
 
 function showInvScreen(name) {
-  // 全在庫画面を非表示
+  // 全在庫画面を非表示（商品登録と同じ方法）
   ['inv-add','inv-move','inv-list','inv-packec'].forEach(s => {
     const el = document.getElementById('screen-' + s);
-    if (el) { el.style.display = 'none'; el.classList.remove('active'); }
+    if (el) el.style.cssText = 'display:none !important; padding-top:8px;';
   });
   document.querySelectorAll('#inv-nav .nav-btn').forEach(b => b.classList.remove('active'));
 
-  // 指定画面を表示
+  // 指定画面を表示（商品登録と同じ方法）
   const target = document.getElementById('screen-' + name);
   if (target) {
-    target.style.display = 'block';
-    target.classList.add('active');
+    target.style.cssText = 'display:block !important; padding-top:8px;';
     window.scrollTo(0, 0);
   }
 
