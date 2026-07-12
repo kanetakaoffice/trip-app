@@ -1157,7 +1157,7 @@ function showInvScreen(name) {
     const packCol = document.getElementById('move-pack-col');
     if (packCol) {
       packCol.style.display = window.innerWidth >= 768 ? 'block' : 'none';
-      if (window.innerWidth >= 768) renderMovePackList();
+      if (window.innerWidth >= 768) loadPackItems().then(renderMovePackList);
     }
   }
 }
