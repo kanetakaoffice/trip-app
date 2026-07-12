@@ -1094,7 +1094,12 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       在庫一覧
     </button>
   </div>
-
+  <div class="nav-btn-wrap" id="nav-inv-packec-wrap">
+    <button class="nav-btn" id="nav-inv-packec" onclick="showInvScreen('inv-packec')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+      梱包・EC
+    </button>
+  </div>
 
 </div>
 
@@ -1220,7 +1225,7 @@ function switchMode(mode) {
     bizNav.style.display = isAdmin() ? 'flex' : 'none';
     invNav.style.display = 'none';
     document.querySelector('.main').style.paddingTop = '';
-    ['inv-add','inv-move','inv-list'].forEach(s => {
+    ['inv-add','inv-move','inv-list','inv-packec'].forEach(s => {
       const el = document.getElementById('screen-' + s);
       if (el) { el.style.display = 'none'; el.classList.remove('active'); }
     });
@@ -1274,6 +1279,14 @@ function showInvScreen(name) {
 
   // 画面ごとの追加処理
   if (name === 'inv-list') renderInventoryList();
+  if (name === 'inv-packec') {
+    const formArea = document.getElementById('packec-form-area');
+    const ecArea   = document.getElementById('packec-ec-area');
+    if (formArea) formArea.style.display = isAdmin() ? 'block' : 'none';
+    if (ecArea)   ecArea.style.display   = isAdmin() ? 'block' : 'none';
+    loadPackItems().then(() => renderPackListSP());
+    loadECSales().then(() => renderECListSP());
+  }
   if (name === 'inv-move') {
     const packCol = document.getElementById('move-pack-col');
     if (packCol) {
@@ -1460,6 +1473,9 @@ async function submitMove() {
 
 function renderInventoryList() {
   const isWide = window.innerWidth >= 768;
+  // 梱包・ECタブはスマホのみ表示
+  const packecWrap = document.getElementById('nav-inv-packec-wrap');
+  if (packecWrap) packecWrap.style.display = isWide ? 'none' : '';
   // PC：右側カラム表示
   const packCol = document.getElementById('inv-pack-col');
   const packFormArea = document.getElementById('inv-pack-form-area');
