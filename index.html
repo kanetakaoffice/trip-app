@@ -743,6 +743,18 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     </div>
     <div class="field-divider"></div>
     <div class="field" style="padding-top:16px">
+      <div class="field-label">カテゴリ</div>
+      <select id="inv-category">
+        <option value="家電">家電</option>
+        <option value="家具">家具</option>
+        <option value="車用品">車用品</option>
+        <option value="ゴルフウェア">ゴルフウェア</option>
+        <option value="ピラティスウェア">ピラティスウェア</option>
+        <option value="その他">その他</option>
+      </select>
+    </div>
+    <div class="field-divider"></div>
+    <div class="field" style="padding-top:16px">
       <div class="field-label">保管場所</div>
       <input type="text" id="inv-location" placeholder="例：倉庫A・棚3段目">
     </div>
@@ -837,11 +849,89 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <div style="font-size:14px;color:var(--text-sub);font-weight:500" id="inv-list-count">0件</div>
         <button class="btn btn-secondary" style="flex:none;padding:8px 14px;font-size:13px" onclick="doExportInventory()">📊 Excel出力</button>
       </div>
-      <input type="text" id="inv-search" placeholder="🔍 商品名・JANコードで検索" oninput="renderInventoryList()" style="margin-bottom:14px">
+      <input type="text" id="inv-search" placeholder="🔍 商品名・JANコードで検索" oninput="renderInventoryList()" style="margin-bottom:10px">
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+        <button onclick="setInvCatFilter(null)" id="inv-cat-all" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #3a3a3a;border-radius:20px;background:#3a3a3a;color:#fff;cursor:pointer">すべて</button>
+        <button onclick="setInvCatFilter('家電')" id="inv-cat-家電" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">家電</button>
+        <button onclick="setInvCatFilter('家具')" id="inv-cat-家具" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">家具</button>
+        <button onclick="setInvCatFilter('車用品')" id="inv-cat-車用品" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">車用品</button>
+        <button onclick="setInvCatFilter('ゴルフウェア')" id="inv-cat-ゴルフウェア" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">ゴルフウェア</button>
+        <button onclick="setInvCatFilter('ピラティスウェア')" id="inv-cat-ピラティスウェア" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">ピラティスウェア</button>
+        <button onclick="setInvCatFilter('その他')" id="inv-cat-その他" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">その他</button>
+      </div>
       <div id="inv-list-container"></div>
       <div id="inv-list-empty" class="empty-state" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/><line x1="12" y1="12" x2="12" y2="16"/></svg>
         <p>商品がまだ登録されていません</p>
+      </div>
+      <!-- スマホ用：梱包リスト＋EC売上 -->
+      <div id="inv-sp-pack-ec" style="display:none;margin-top:20px">
+        <div style="height:1px;background:var(--border);margin-bottom:16px"></div>
+        <!-- 梱包リスト -->
+        <div id="inv-sp-pack-form" style="display:none">
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">梱包リストに追加</div>
+            <div class="field">
+              <div class="field-label">商品名 <span class="req">*</span></div>
+              <input type="text" id="pack-product-sp" placeholder="商品名を入力">
+            </div>
+            <div class="field-divider"></div>
+            <div class="field" style="padding-top:16px">
+              <div class="field-label">数量</div>
+              <input type="number" id="pack-qty-sp" placeholder="1" min="1">
+            </div>
+            <div class="field-divider"></div>
+            <div class="field" style="padding-top:16px">
+              <div class="field-label">送り先</div>
+              <input type="text" id="pack-dest-sp" placeholder="送り先を入力">
+            </div>
+            <div class="field-divider"></div>
+            <div class="field" style="padding-top:16px">
+              <div class="field-label">担当者</div>
+              <input type="text" id="pack-staff-sp" placeholder="担当者名（任意）">
+            </div>
+            <div style="margin-top:12px">
+              <button class="btn btn-gold" onclick="addPackItemSP()" style="width:100%">リストに追加する</button>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-size:13px;font-weight:700;color:#3a3a3a">本日の梱包リスト</div>
+          <div id="pack-summary-sp" style="font-size:12px;color:#909090"></div>
+        </div>
+        <div id="pack-list-sp"></div>
+        <div id="pack-empty-sp" style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">まだ追加されていません</div>
+        <!-- EC売上 -->
+        <div id="inv-sp-ec-area" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div style="font-size:13px;font-weight:700;color:#3a3a3a">本日のEC売上</div>
+            <div id="ec-today-total-sp" style="font-size:13px;font-weight:700;color:#4a4a4a"></div>
+          </div>
+          <div class="card" style="margin-bottom:10px">
+            <div class="field">
+              <div class="field-label">販路</div>
+              <select id="ec-channel-sp" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;width:100%">
+                <option value="Amazon">Amazon</option>
+                <option value="自社EC">自社EC</option>
+              </select>
+            </div>
+            <div class="field-divider"></div>
+            <div class="field" style="padding-top:12px">
+              <div class="field-label">売上金額（円）</div>
+              <input type="number" id="ec-amount-sp" placeholder="0" style="font-size:18px;font-weight:700;text-align:right">
+            </div>
+            <div class="field-divider"></div>
+            <div class="field" style="padding-top:12px">
+              <div class="field-label">メモ</div>
+              <input type="text" id="ec-note-sp" placeholder="商品名など（任意）">
+            </div>
+            <div style="margin-top:10px">
+              <button class="btn btn-gold" onclick="addECSalesSP()" style="width:100%">売上を追加する</button>
+            </div>
+          </div>
+          <div id="ec-list-sp"></div>
+          <div id="ec-empty-sp" style="text-align:center;padding:20px;color:var(--text-muted);font-size:12px">本日の売上はまだありません</div>
+        </div>
       </div>
     </div>
     <!-- 右：梱包リスト（PC幅のみ） -->
@@ -879,6 +969,38 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       </div>
       <div id="pack-list"></div>
       <div id="pack-empty" style="text-align:center;padding:30px 10px;color:var(--text-muted);font-size:13px">まだ追加されていません</div>
+
+      <!-- EC売上 -->
+      <div id="inv-ec-area" style="display:none;margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-size:13px;font-weight:700;color:#3a3a3a">本日のEC売上</div>
+          <div id="ec-today-total" style="font-size:13px;font-weight:700;color:#4a4a4a"></div>
+        </div>
+        <div class="card" style="margin-bottom:10px">
+          <div class="field">
+            <div class="field-label">販路</div>
+            <select id="ec-channel" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;width:100%">
+              <option value="Amazon">Amazon</option>
+              <option value="自社EC">自社EC</option>
+            </select>
+          </div>
+          <div class="field-divider"></div>
+          <div class="field" style="padding-top:12px">
+            <div class="field-label">売上金額（円）</div>
+            <input type="number" id="ec-amount" placeholder="0" style="font-size:18px;font-weight:700;text-align:right">
+          </div>
+          <div class="field-divider"></div>
+          <div class="field" style="padding-top:12px">
+            <div class="field-label">メモ</div>
+            <input type="text" id="ec-note" placeholder="商品名など（任意）">
+          </div>
+          <div style="margin-top:10px">
+            <button class="btn btn-gold" onclick="addECSales()" style="width:100%">売上を追加する</button>
+          </div>
+        </div>
+        <div id="ec-list"></div>
+        <div id="ec-empty" style="text-align:center;padding:20px 10px;color:var(--text-muted);font-size:12px">本日の売上はまだありません</div>
+      </div>
     </div>
   </div>
 </div>
@@ -1256,6 +1378,7 @@ async function submitProduct() {
     jan: document.getElementById('inv-jan').value.trim(),
     stock: parseInt(stock),
     cost: parseInt(document.getElementById('inv-cost').value) || 0,
+    category: document.getElementById('inv-category')?.value || '家電',
     location: document.getElementById('inv-location').value.trim(),
     memo: document.getElementById('inv-memo').value.trim(),
     image: imageData,
@@ -1265,6 +1388,7 @@ async function submitProduct() {
   try {
     await fetch(authedUrl('/products.json'), { method: 'POST', body: JSON.stringify(data) });
     ['inv-maker','inv-name','inv-model','inv-jan','inv-stock','inv-cost','inv-location','inv-memo'].forEach(id => document.getElementById(id).value = '');
+    const catEl = document.getElementById('inv-category'); if(catEl) catEl.selectedIndex = 0;
     document.getElementById('inv-image').value = '';
     document.getElementById('inv-img-preview').style.display = 'none';
     await loadInventory();
@@ -1336,16 +1460,35 @@ async function submitMove() {
 }
 
 function renderInventoryList() {
-  // PC幅の場合は右側に梱包リストを表示
+  const isWide = window.innerWidth >= 768;
+  // PC：右側カラム表示
   const packCol = document.getElementById('inv-pack-col');
   const packFormArea = document.getElementById('inv-pack-form-area');
+  const ecArea = document.getElementById('inv-ec-area');
   if (packCol) {
-    packCol.style.display = window.innerWidth >= 768 ? 'block' : 'none';
+    packCol.style.display = isWide ? 'block' : 'none';
     if (packFormArea) packFormArea.style.display = isAdmin() ? 'block' : 'none';
-    if (window.innerWidth >= 768) loadPackItems().then(renderPackList);
+    if (ecArea) ecArea.style.display = isAdmin() ? 'block' : 'none';
   }
+  // スマホ：下部に表示
+  const spPackEc = document.getElementById('inv-sp-pack-ec');
+  const spPackForm = document.getElementById('inv-sp-pack-form');
+  const spEcArea = document.getElementById('inv-sp-ec-area');
+  if (spPackEc) {
+    spPackEc.style.display = isWide ? 'none' : 'block';
+    if (spPackForm) spPackForm.style.display = isAdmin() ? 'block' : 'none';
+    if (spEcArea) spEcArea.style.display = isAdmin() ? 'block' : 'none';
+  }
+  // 両方のリストを更新
+  loadPackItems().then(() => { renderPackList(); renderPackListSP(); });
+  loadECSales().then(() => { renderECList(); renderECListSP(); });
   const q = (document.getElementById('inv-search')?.value || '').toLowerCase();
-  const filtered = products.filter(p => !q || p.name?.toLowerCase().includes(q) || (p.jan||'').includes(q) || (p.maker||'').toLowerCase().includes(q));
+  const catF = window._invCatFilter || null;
+  const filtered = products.filter(p => {
+    const matchQ = !q || p.name?.toLowerCase().includes(q) || (p.jan||'').includes(q) || (p.maker||'').toLowerCase().includes(q);
+    const matchC = !catF || (p.category||'家電') === catF;
+    return matchQ && matchC;
+  });
   const container = document.getElementById('inv-list-container');
   const empty = document.getElementById('inv-list-empty');
   document.getElementById('inv-list-count').textContent = filtered.length + '件';
@@ -1364,6 +1507,7 @@ function renderInventoryList() {
         ${p.image ? `<img class="inv-card-img" src="${p.image}">` : `<div class="inv-card-img" style="display:flex;align-items:center;justify-content:center;font-size:24px">📦</div>`}
         <div class="inv-card-info">
           <div class="inv-name">${p.name}</div>
+          ${(p.category && p.category!=='家電') ? `<span style="font-size:10px;padding:1px 7px;border-radius:20px;background:var(--surface);color:var(--text-muted);border:1px solid var(--border);margin-bottom:3px;display:inline-block">${p.category}</span>` : ''}
           <div class="inv-sub">${p.maker||''} ${p.model ? '/ ' + p.model : ''}</div>
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
             <span class="inv-stock ${p.stock<=3?'low':''}">${p.stock}個</span>
@@ -1378,6 +1522,28 @@ function renderInventoryList() {
       ${p.jan ? `<div style="padding:0 14px 10px;font-size:11px;color:var(--text-muted)">JAN: ${p.jan}</div>` : ''}
     </div>`;
   }).join('');
+}
+
+function setInvCatFilter(cat) {
+  window._invCatFilter = cat;
+  const defs = [
+    {id:'inv-cat-all', val:null},
+    {id:'inv-cat-家電', val:'家電'},
+    {id:'inv-cat-家具', val:'家具'},
+    {id:'inv-cat-車用品', val:'車用品'},
+    {id:'inv-cat-ゴルフウェア', val:'ゴルフウェア'},
+    {id:'inv-cat-ピラティスウェア', val:'ピラティスウェア'},
+    {id:'inv-cat-その他', val:'その他'},
+  ];
+  defs.forEach(({id, val}) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    const active = val === cat;
+    btn.style.background = active ? '#3a3a3a' : 'none';
+    btn.style.color = active ? '#fff' : '#909090';
+    btn.style.borderColor = active ? '#3a3a3a' : '#d1d5db';
+  });
+  renderInventoryList();
 }
 
 function doExportInventory() {
@@ -3054,7 +3220,7 @@ async function togglePackDone(key) {
   if (!item) return;
   try {
     await fetch(authedUrl('/packList/'+key+'/done.json'),{method:'PUT',body:JSON.stringify(!item.done)});
-    await loadPackItems(); renderPackList();
+    await loadPackItems(); renderPackList(); renderPackListSP();
   } catch(e) { showToast('更新に失敗しました'); }
 }
 
@@ -3062,7 +3228,7 @@ async function deletePackItem(key) {
   if (!await showConfirm('削除しますか？')) return;
   try {
     await fetch(authedUrl('/packList/'+key+'.json'),{method:'DELETE'});
-    await loadPackItems(); renderPackList();
+    await loadPackItems(); renderPackList(); renderPackListSP();
   } catch(e) { showToast('削除に失敗しました'); }
 }
 
@@ -3091,6 +3257,156 @@ function renderMovePackList() {
         </div>
       </div>
     </div>`).join('');
+}
+
+// ── EC売上管理 ──
+let _ecItems = [];
+
+async function loadECSales() {
+  try {
+    const r = await fetch(authedUrl('/ecSales.json'));
+    if (!r.ok) { _ecItems = []; return; }
+    const d = await r.json();
+    const today = todayStr();
+    const all = d ? Object.entries(d).map(([k,v])=>({...v,_key:k})) : [];
+    _ecItems = all.filter(i => i.date === today);
+    _ecItems.sort((a,b)=>(a.createdAt||'')>(b.createdAt||'')?1:-1);
+  } catch(e) { _ecItems = []; }
+}
+
+async function addECSales() {
+  const channel = document.getElementById('ec-channel')?.value;
+  const amount  = parseInt(document.getElementById('ec-amount')?.value)||0;
+  const note    = (document.getElementById('ec-note')?.value||'').trim();
+  if (!amount) { showToast('金額を入力してください'); return; }
+  try {
+    await fetch(authedUrl('/ecSales.json'), { method:'POST',
+      body: JSON.stringify({channel, amount, note, date: todayStr(), createdAt: new Date().toISOString()})
+    });
+    document.getElementById('ec-amount').value = '';
+    document.getElementById('ec-note').value = '';
+    await loadECSales();
+    renderECList();
+    showToast('売上を追加しました');
+  } catch(e) { showToast('追加に失敗しました'); }
+}
+
+async function deleteECSales(key) {
+  if (!await showConfirm('削除しますか？')) return;
+  try {
+    await fetch(authedUrl('/ecSales/'+key+'.json'), {method:'DELETE'});
+    await loadECSales();
+    renderECList(); renderECListSP();
+  } catch(e) { showToast('削除に失敗しました'); }
+}
+
+function renderECList() {
+  const listEl    = document.getElementById('ec-list');
+  const emptyEl   = document.getElementById('ec-empty');
+  const totalEl   = document.getElementById('ec-today-total');
+  if (!listEl) return;
+  const total = _ecItems.reduce((s,i)=>s+i.amount, 0);
+  if (totalEl) totalEl.textContent = total ? '¥'+total.toLocaleString('ja-JP') : '';
+  if (!_ecItems.length) { listEl.innerHTML=''; if(emptyEl) emptyEl.style.display='block'; return; }
+  if (emptyEl) emptyEl.style.display='none';
+  listEl.innerHTML = _ecItems.map(item=>`
+    <div style="background:var(--white);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:6px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--gold-bg);color:var(--gold-dark);font-weight:600">${item.channel}</span>
+        ${item.note?`<div style="font-size:12px;color:var(--text-sub);margin-top:3px">${item.note}</div>`:''}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:14px;font-weight:700;color:#4a4a4a">¥${item.amount.toLocaleString('ja-JP')}</span>
+        <button onclick="deleteECSales('${item._key}')" class="delete-btn">削除</button>
+      </div>
+    </div>`).join('');
+}
+
+// ── スマホ用梱包・EC売上 ──
+function renderPackListSP() {
+  const listEl    = document.getElementById('pack-list-sp');
+  const emptyEl   = document.getElementById('pack-empty-sp');
+  const summaryEl = document.getElementById('pack-summary-sp');
+  if (!listEl) return;
+  const done = _packItems.filter(i=>i.done).length;
+  if (summaryEl) summaryEl.textContent = _packItems.length ? done+'/'+_packItems.length+'件完了' : '';
+  if (!_packItems.length) { listEl.innerHTML=''; if(emptyEl) emptyEl.style.display='block'; return; }
+  if (emptyEl) emptyEl.style.display='none';
+  const sorted = [..._packItems].sort((a,b)=>{ if(a.done!==b.done) return a.done?1:-1; return (a.createdAt||'')>(b.createdAt||'')?1:-1; });
+  listEl.innerHTML = sorted.map(item=>`
+    <div class="trip-card" style="${item.done?'opacity:0.55;border-color:#b0b0b0':''}">
+      <div class="trip-card-body">
+        <div style="display:flex;align-items:center;gap:12px">
+          <button onclick="togglePackDone('${item._key}')"
+            style="flex-shrink:0;width:32px;height:32px;border-radius:50%;border:2px solid ${item.done?'#a0a0a0':'var(--gold)'};background:${item.done?'#a0a0a0':'transparent'};cursor:pointer;color:#fff;font-size:18px;font-weight:700;line-height:1">
+            ${item.done?'✓':''}
+          </button>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:700;color:var(--text);${item.done?'text-decoration:line-through':''}">${item.product} × ${item.qty}</div>
+            <div style="font-size:12px;color:var(--text-sub);margin-top:3px">📦 ${item.dest}${item.staff?'　👤 '+item.staff:''}</div>
+          </div>
+          ${isAdmin()?`<button onclick="deletePackItem('${item._key}')" class="delete-btn">削除</button>`:''}
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+async function addPackItemSP() {
+  const product = (document.getElementById('pack-product-sp')?.value||'').trim();
+  const qty     = parseInt(document.getElementById('pack-qty-sp')?.value)||1;
+  const dest    = (document.getElementById('pack-dest-sp')?.value||'').trim();
+  const staff   = (document.getElementById('pack-staff-sp')?.value||'').trim();
+  if (!product) { showToast('商品名を入力してください'); return; }
+  try {
+    await fetch(authedUrl('/packList.json'), { method:'POST',
+      body: JSON.stringify({product,qty,dest,staff,done:false,date:todayStr(),createdAt:new Date().toISOString()})
+    });
+    ['pack-product-sp','pack-qty-sp','pack-dest-sp','pack-staff-sp'].forEach(id=>{
+      const el=document.getElementById(id); if(el) el.value='';
+    });
+    await loadPackItems();
+    renderPackList(); renderPackListSP();
+    showToast('追加しました');
+  } catch(e) { showToast('追加に失敗しました'); }
+}
+
+function renderECListSP() {
+  const listEl  = document.getElementById('ec-list-sp');
+  const emptyEl = document.getElementById('ec-empty-sp');
+  const totalEl = document.getElementById('ec-today-total-sp');
+  if (!listEl) return;
+  const total = _ecItems.reduce((s,i)=>s+i.amount, 0);
+  if (totalEl) totalEl.textContent = total ? '¥'+total.toLocaleString('ja-JP') : '';
+  if (!_ecItems.length) { listEl.innerHTML=''; if(emptyEl) emptyEl.style.display='block'; return; }
+  if (emptyEl) emptyEl.style.display='none';
+  listEl.innerHTML = _ecItems.map(item=>`
+    <div style="background:var(--white);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:6px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--gold-bg);color:var(--gold-dark);font-weight:600">${item.channel}</span>
+        ${item.note?`<div style="font-size:12px;color:var(--text-sub);margin-top:3px">${item.note}</div>`:''}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:14px;font-weight:700;color:#4a4a4a">¥${item.amount.toLocaleString('ja-JP')}</span>
+        <button onclick="deleteECSales('${item._key}')" class="delete-btn">削除</button>
+      </div>
+    </div>`).join('');
+}
+
+async function addECSalesSP() {
+  const channel = document.getElementById('ec-channel-sp')?.value;
+  const amount  = parseInt(document.getElementById('ec-amount-sp')?.value)||0;
+  const note    = (document.getElementById('ec-note-sp')?.value||'').trim();
+  if (!amount) { showToast('金額を入力してください'); return; }
+  try {
+    await fetch(authedUrl('/ecSales.json'), { method:'POST',
+      body: JSON.stringify({channel,amount,note,date:todayStr(),createdAt:new Date().toISOString()})
+    });
+    document.getElementById('ec-amount-sp').value='';
+    document.getElementById('ec-note-sp').value='';
+    await loadECSales();
+    renderECList(); renderECListSP();
+    showToast('売上を追加しました');
+  } catch(e) { showToast('追加に失敗しました'); }
 }
 
 function setSalesFilter(client) {
