@@ -912,43 +912,42 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 
 <!-- 在庫管理ナビ（非表示切替） -->
 <!-- 梱包完了画面 -->
+
+
 <div id="screen-inv-pack" class="screen" style="display:none;padding-top:8px">
-  <div id="pack-inner" style="max-width:1200px;margin:0 auto">
-    <!-- 入力フォーム（管理者のみ） -->
-    <div id="pack-form-area">
-      <div class="card" style="margin-bottom:12px">
-        <div class="card-title">梱包リストに追加</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <div class="field">
-            <div class="field-label">商品名 <span class="req">*</span></div>
-            <input type="text" id="pack-product" placeholder="商品名を入力">
-          </div>
-          <div class="field">
-            <div class="field-label">数量 <span class="req">*</span></div>
-            <input type="number" id="pack-qty" placeholder="1" min="1">
-          </div>
-          <div class="field">
-            <div class="field-label">送り先 <span class="req">*</span></div>
-            <input type="text" id="pack-dest" placeholder="送り先を入力">
-          </div>
-          <div class="field">
-            <div class="field-label">担当者</div>
-            <input type="text" id="pack-staff" placeholder="担当者名（任意）">
-          </div>
-        </div>
-        <div class="btn-row" style="margin-top:8px">
-          <button class="btn btn-gold" onclick="addPackItem()">リストに追加する</button>
-        </div>
+  <div id="pack-form-area" style="display:none">
+    <div class="card">
+      <div class="card-title">梱包リストに追加</div>
+      <div class="field">
+        <div class="field-label">商品名 <span class="req">*</span></div>
+        <input type="text" id="pack-product" placeholder="商品名を入力">
+      </div>
+      <div class="field-divider"></div>
+      <div class="field" style="padding-top:16px">
+        <div class="field-label">数量 <span class="req">*</span></div>
+        <input type="number" id="pack-qty" placeholder="1" min="1">
+      </div>
+      <div class="field-divider"></div>
+      <div class="field" style="padding-top:16px">
+        <div class="field-label">送り先</div>
+        <input type="text" id="pack-dest" placeholder="送り先を入力">
+      </div>
+      <div class="field-divider"></div>
+      <div class="field" style="padding-top:16px">
+        <div class="field-label">担当者</div>
+        <input type="text" id="pack-staff" placeholder="担当者名（任意）">
       </div>
     </div>
-    <!-- チェックリスト -->
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <div style="font-size:13px;font-weight:700;color:#3a3a3a">本日の梱包リスト</div>
-      <div id="pack-summary" style="font-size:12px;color:#909090"></div>
+    <div class="btn-row">
+      <button class="btn btn-gold" onclick="addPackItem()">リストに追加する</button>
     </div>
-    <div id="pack-list"></div>
-    <div id="pack-empty" style="text-align:center;padding:40px 20px;color:var(--text-muted);font-size:13px">まだ追加されていません</div>
   </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <div style="font-size:13px;font-weight:700;color:#3a3a3a">本日の梱包リスト</div>
+    <div id="pack-summary" style="font-size:12px;color:#909090"></div>
+  </div>
+  <div id="pack-list"></div>
+  <div id="pack-empty" style="text-align:center;padding:40px 20px;color:var(--text-muted);font-size:13px">まだ追加されていません</div>
 </div>
 
 <div class="bottom-nav" id="inv-nav" style="display:none">
@@ -976,6 +975,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       梱包
     </button>
   </div>
+
 </div>
 
 <div id="confirm-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:24px">
@@ -1100,7 +1100,7 @@ function switchMode(mode) {
     bizNav.style.display = isAdmin() ? 'flex' : 'none';
     invNav.style.display = 'none';
     document.querySelector('.main').style.paddingTop = '';
-    ['inv-add','inv-move','inv-list','inv-pack'].forEach(s => {
+    ['inv-add','inv-move','inv-list'].forEach(s => {
       const el = document.getElementById('screen-' + s);
       if (el) { el.style.display = 'none'; el.classList.remove('active'); }
     });
@@ -1121,7 +1121,7 @@ function switchMode(mode) {
   } else {
     bizNav.style.display = 'none';
     invNav.style.display = 'flex';
-    document.querySelector('.main').style.paddingTop = 'calc(env(safe-area-inset-top, 0px) + 58px)';
+    // padding-topはCSSのまま変更しない
     document.querySelectorAll('.screen:not([id^="screen-inv"])').forEach(s => {
       s.classList.remove('active');
       s.style.display = 'none';
@@ -1133,20 +1133,19 @@ function switchMode(mode) {
 }
 
 function showInvScreen(name) {
-  // 全在庫画面を非表示
-  ['inv-add','inv-move','inv-list'].forEach(s => {
+  // 全在庫画面を非表示（inv-packも含む）
+  ['inv-add','inv-move','inv-list','inv-pack'].forEach(s => {
     const el = document.getElementById('screen-' + s);
     if (el) el.style.cssText = 'display:none !important; padding-top:8px;';
   });
-  const packEl = document.getElementById('screen-inv-pack');
-  if (packEl) packEl.style.cssText = 'display:none !important; padding-top:8px;';
   document.querySelectorAll('#inv-nav .nav-btn').forEach(b => b.classList.remove('active'));
 
-  // 指定画面を表示
+  // 指定画面を表示（他のタブと全く同じ方法）
   const target = document.getElementById('screen-' + name);
   if (target) {
     target.style.cssText = 'display:block !important; padding-top:8px;';
-    window.scrollTo(0,0);
+    window.scrollTo(0, 0);
+    document.querySelector('.main').scrollTop = 0;
   }
 
   // ナビボタンをアクティブに
@@ -1155,7 +1154,12 @@ function showInvScreen(name) {
 
   // 画面ごとの追加処理
   if (name === 'inv-list') renderInventoryList();
-  if (name === 'inv-pack') setTimeout(() => showPackScreen(), 50);
+  if (name === 'inv-pack') {
+    const fa = document.getElementById('pack-form-area');
+    if (fa) fa.style.display = isAdmin() ? 'block' : 'none';
+    renderPackList();
+    loadPackItems().then(renderPackList);
+  }
   if (name === 'inv-move') {
     const packCol = document.getElementById('move-pack-col');
     if (packCol) {
@@ -1174,7 +1178,7 @@ async function loadInventory() {
     products   = objToArr(p);
     stockMoves = objToArr(m);
     if (document.getElementById('screen-inv-list')?.classList.contains('active')) renderInventoryList();
-    if (document.getElementById('screen-inv-pack')?.classList.contains('active')) showPackScreen();
+
   } catch(e) { console.error('inventory load error', e); }
 }
 
@@ -2977,68 +2981,68 @@ async function savePCEdit(key, rid, type) {
   } catch(e) { showToast('更新に失敗しました'); }
 }
 
-// ── 梱包完了管理（Firebase） ──
+
+// ── 梱包リスト ──
 let _packItems = [];
 
 async function loadPackItems() {
   try {
-    const today = todayStr();
     const r = await fetch(authedUrl('/packList.json'));
     if (!r.ok) { _packItems = []; return; }
     const d = await r.json();
-    const all = d ? Object.entries(d).map(([k,v]) => ({...v, _key:k})) : [];
-    _packItems = isAdmin() ? all : all.filter(i => i.date === today);
-    _packItems.sort((a,b) => (a.createdAt||'') > (b.createdAt||'') ? 1 : -1);
-  } catch(e) { console.error('loadPackItems error:', e); _packItems = []; }
+    const today = todayStr();
+    const all = d ? Object.entries(d).map(([k,v])=>({...v,_key:k})) : [];
+    _packItems = isAdmin() ? all : all.filter(i=>i.date===today);
+    _packItems.sort((a,b)=>(a.createdAt||'')>(b.createdAt||'')?1:-1);
+  } catch(e) { _packItems = []; }
 }
 
-function getPackItems() { return _packItems; }
-
-function showPackScreen() {
-  const formArea = document.getElementById('pack-form-area');
-  if (formArea) formArea.style.display = isAdmin() ? 'block' : 'none';
-  loadPackItems().then(() => renderPackList());
-}
-
-function renderMovePackList() {
-  const listEl    = document.getElementById('move-pack-list');
-  const emptyEl   = document.getElementById('move-pack-empty');
-  const summaryEl = document.getElementById('move-pack-summary');
+function renderPackList() {
+  const listEl = document.getElementById('pack-list');
+  const emptyEl = document.getElementById('pack-empty');
+  const summaryEl = document.getElementById('pack-summary');
   if (!listEl) return;
-  const items = getPackItems();
-  const done = items.filter(i=>i.done).length;
-  if (summaryEl) summaryEl.textContent = items.length ? `${done}/${items.length}件完了` : '';
-  if (!items.length) { listEl.innerHTML=''; if(emptyEl) emptyEl.style.display='block'; return; }
+  const done = _packItems.filter(i=>i.done).length;
+  if (summaryEl) summaryEl.textContent = _packItems.length ? done+'/'+_packItems.length+'件完了' : '';
+  if (!_packItems.length) { listEl.innerHTML=''; if(emptyEl) emptyEl.style.display='block'; return; }
   if (emptyEl) emptyEl.style.display='none';
-  const sorted = [...items].sort((a,b)=>{ if(a.done!==b.done) return a.done?1:-1; return a.createdAt>b.createdAt?1:-1; });
+  const sorted = [..._packItems].sort((a,b)=>{
+    if(a.done!==b.done) return a.done?1:-1;
+    return (a.createdAt||'')>(b.createdAt||'')?1:-1;
+  });
   listEl.innerHTML = sorted.map(item=>`
-    <div style="background:var(--white);border:1px solid ${item.done?'#a0a0a0':'var(--border)'};border-radius:var(--radius);margin-bottom:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;opacity:${item.done?0.6:1}">
-      <button onclick="togglePackDone('${item._key}').then(()=>renderMovePackList())" style="flex-shrink:0;width:26px;height:26px;border-radius:50%;border:2px solid ${item.done?'#a0a0a0':'#b0b0b0'};background:${item.done?'#a0a0a0':'transparent'};cursor:pointer;color:#fff;font-size:13px">${item.done?'✓':''}</button>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:700;color:var(--text);${item.done?'text-decoration:line-through':''}">${item.product} × ${item.qty}</div>
-        <div style="font-size:11px;color:var(--text-sub);margin-top:2px">📦 ${item.dest}${item.staff?'　👤 '+item.staff:''}</div>
+    <div class="trip-card" style="${item.done?'opacity:0.55;border-color:#b0b0b0':''}">
+      <div class="trip-card-body">
+        <div style="display:flex;align-items:center;gap:12px">
+          <button onclick="togglePackDone('${item._key}')"
+            style="flex-shrink:0;width:32px;height:32px;border-radius:50%;border:2px solid ${item.done?'#a0a0a0':'var(--gold)'};background:${item.done?'#a0a0a0':'transparent'};cursor:pointer;color:#fff;font-size:18px;font-weight:700;line-height:1">
+            ${item.done?'✓':''}
+          </button>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:700;color:var(--text);${item.done?'text-decoration:line-through':''}">${item.product} × ${item.qty}</div>
+            <div style="font-size:12px;color:var(--text-sub);margin-top:3px">📦 ${item.dest}${item.staff?'　👤 '+item.staff:''}</div>
+            ${item.done?'<div style="font-size:11px;color:#a0a0a0;margin-top:3px">✅ 梱包完了</div>':''}
+          </div>
+          ${isAdmin()?`<button onclick="deletePackItem('${item._key}')" class="delete-btn">削除</button>`:''}
+        </div>
       </div>
     </div>`).join('');
 }
 
 async function addPackItem() {
-  const product = document.getElementById('pack-product')?.value.trim();
-  const qty     = parseInt(document.getElementById('pack-qty')?.value)||1;
-  const dest    = document.getElementById('pack-dest')?.value.trim();
-  const staff   = document.getElementById('pack-staff')?.value.trim();
-  if (!product||!dest) { showToast('商品名と送り先を入力してください'); return; }
+  const product = (document.getElementById('pack-product')?.value||'').trim();
+  const qty = parseInt(document.getElementById('pack-qty')?.value)||1;
+  const dest = (document.getElementById('pack-dest')?.value||'').trim();
+  const staff = (document.getElementById('pack-staff')?.value||'').trim();
+  if (!product) { showToast('商品名を入力してください'); return; }
   try {
-    await fetch(authedUrl('/packList.json'), {
-      method: 'POST',
-      body: JSON.stringify({ product, qty, dest, staff: staff||'', done: false, date: todayStr(), createdAt: new Date().toISOString() })
+    await fetch(authedUrl('/packList.json'), {method:'POST',
+      body:JSON.stringify({product,qty,dest,staff,done:false,date:todayStr(),createdAt:new Date().toISOString()})});
+    ['pack-product','pack-qty','pack-dest','pack-staff'].forEach(id=>{
+      const el=document.getElementById(id); if(el) el.value='';
     });
-    document.getElementById('pack-product').value = '';
-    document.getElementById('pack-qty').value = '';
-    document.getElementById('pack-dest').value = '';
-    document.getElementById('pack-staff').value = '';
-    await loadPackItems();
-    renderPackList();
-    showToast('リストに追加しました');
+    await loadPackItems(); renderPackList();
+    showToast('追加しました');
   } catch(e) { showToast('追加に失敗しました'); }
 }
 
@@ -3046,58 +3050,17 @@ async function togglePackDone(key) {
   const item = _packItems.find(i=>i._key===key);
   if (!item) return;
   try {
-    await fetch(authedUrl('/packList/'+key+'/done.json'), {
-      method: 'PUT', body: JSON.stringify(!item.done)
-    });
-    await loadPackItems();
-    renderPackList();
+    await fetch(authedUrl('/packList/'+key+'/done.json'),{method:'PUT',body:JSON.stringify(!item.done)});
+    await loadPackItems(); renderPackList();
   } catch(e) { showToast('更新に失敗しました'); }
 }
 
 async function deletePackItem(key) {
   if (!await showConfirm('削除しますか？')) return;
   try {
-    await fetch(authedUrl('/packList/'+key+'.json'), { method: 'DELETE' });
-    await loadPackItems();
-    renderPackList();
+    await fetch(authedUrl('/packList/'+key+'.json'),{method:'DELETE'});
+    await loadPackItems(); renderPackList();
   } catch(e) { showToast('削除に失敗しました'); }
-}
-
-function renderPackList() {
-  const listEl    = document.getElementById('pack-list');
-  const emptyEl   = document.getElementById('pack-empty');
-  const summaryEl = document.getElementById('pack-summary');
-  if (!listEl) return;
-
-  const items = getPackItems();
-  const done = items.filter(i=>i.done).length;
-  if (summaryEl) summaryEl.textContent = items.length ? `${done}/${items.length}件完了` : '';
-
-  if (!items.length) {
-    listEl.innerHTML = '';
-    if (emptyEl) emptyEl.style.display = 'block';
-    return;
-  }
-  if (emptyEl) emptyEl.style.display = 'none';
-
-  const sorted = [...items].sort((a,b) => {
-    if (a.done !== b.done) return a.done ? 1 : -1;
-    return a.createdAt > b.createdAt ? 1 : -1;
-  });
-
-  listEl.innerHTML = sorted.map(item => `
-    <div style="background:var(--white);border:1px solid ${item.done?'#a0a0a0':'var(--border)'};border-radius:var(--radius);margin-bottom:8px;padding:12px 14px;display:flex;align-items:center;gap:12px;opacity:${item.done?0.6:1}">
-      <button onclick="togglePackDone('${item._key}')" style="flex-shrink:0;width:28px;height:28px;border-radius:50%;border:2px solid ${item.done?'#a0a0a0':'#b0b0b0'};background:${item.done?'#a0a0a0':'transparent'};cursor:pointer;color:#fff;font-size:14px">
-        ${item.done?'✓':''}
-      </button>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:700;color:var(--text);${item.done?'text-decoration:line-through':''}">${item.product} × ${item.qty}</div>
-        <div style="font-size:12px;color:var(--text-sub);margin-top:2px">📦 ${item.dest}${item.staff?'　👤 '+item.staff:''}</div>
-        ${item.done?'<div style="font-size:11px;color:#a0a0a0;margin-top:2px">✅ 梱包完了</div>':''}
-      </div>
-      ${isAdmin()?`<button onclick="deletePackItem('${item._key}')" class="delete-btn">削除</button>`:''}
-    </div>`).join('');
-  renderMovePackList();
 }
 
 function setSalesFilter(client) {
@@ -3618,6 +3581,7 @@ function doExportPurchase() {
   showToast('仕入Excelを出力しました');
 }
 
+let _recvOpenBefore = new Set();
 function renderReceivable(restoreState) {
   const allSales = window._getSales ? window._getSales() : [];
   const container = document.getElementById('recv-container');
