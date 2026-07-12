@@ -64,7 +64,6 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Hira
 .main { padding-top: calc(env(safe-area-inset-top, 0px) + 58px); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 68px); min-height: 100vh; }
 .screen { display: none; padding: 16px; }
 .screen.active { display: block; }
-.screen.active { display: block; }
 .card { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
 .card-title { font-size: 11px; font-weight: 700; color: var(--gold-dark); letter-spacing: 0.1em; text-transform: uppercase; padding: 14px 16px 0; margin-bottom: 12px; }
 .field { padding: 0 16px 16px; }
@@ -1006,7 +1005,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 
 
 
-<div id="screen-inv-packec" class="screen" style="display:none;padding-top:8px">
+<div id="screen-inv-packec" class="screen" style="display:none">
   <div id="packec-form-area" style="display:none">
     <div class="card">
       <div class="card-title">梱包リストに追加</div>
@@ -1254,17 +1253,18 @@ function switchMode(mode) {
 }
 
 function showInvScreen(name) {
-  // 全在庫画面を非表示（商品登録と同じ方法）
+  // 全在庫画面を非表示
   ['inv-add','inv-move','inv-list','inv-packec'].forEach(s => {
     const el = document.getElementById('screen-' + s);
-    if (el) el.style.cssText = 'display:none !important; padding-top:8px;';
+    if (el) { el.style.cssText = 'display:none !important;'; el.classList.remove('active'); }
   });
   document.querySelectorAll('#inv-nav .nav-btn').forEach(b => b.classList.remove('active'));
 
-  // 指定画面を表示（商品登録と同じ方法）
+  // 指定画面を表示
   const target = document.getElementById('screen-' + name);
   if (target) {
     target.style.cssText = 'display:block !important; padding-top:8px;';
+    target.classList.add('active');
     window.scrollTo(0, 0);
   }
 
@@ -1279,8 +1279,10 @@ function showInvScreen(name) {
     const ecArea   = document.getElementById('packec-ec-area');
     if (formArea) formArea.style.display = isAdmin() ? 'block' : 'none';
     if (ecArea)   ecArea.style.display   = isAdmin() ? 'block' : 'none';
-    loadPackItems().then(() => renderPackListSP());
-    loadECSales().then(() => renderECListSP());
+    renderPackListSP();
+    renderECListSP();
+    loadPackItems().then(() => { renderPackListSP(); });
+    loadECSales().then(() => { renderECListSP(); });
   }
   if (name === 'inv-move') {
     const packCol = document.getElementById('move-pack-col');
