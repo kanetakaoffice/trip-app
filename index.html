@@ -863,75 +863,6 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/><line x1="12" y1="12" x2="12" y2="16"/></svg>
         <p>商品がまだ登録されていません</p>
       </div>
-      <!-- スマホ用：梱包リスト＋EC売上 -->
-      <div id="inv-sp-pack-ec" style="display:none;margin-top:20px">
-        <div style="height:1px;background:var(--border);margin-bottom:16px"></div>
-        <!-- 梱包リスト -->
-        <div id="inv-sp-pack-form" style="display:none">
-          <div class="card" style="margin-bottom:12px">
-            <div class="card-title">梱包リストに追加</div>
-            <div class="field">
-              <div class="field-label">商品名 <span class="req">*</span></div>
-              <input type="text" id="pack-product-sp" placeholder="商品名を入力">
-            </div>
-            <div class="field-divider"></div>
-            <div class="field" style="padding-top:16px">
-              <div class="field-label">数量</div>
-              <input type="number" id="pack-qty-sp" placeholder="1" min="1">
-            </div>
-            <div class="field-divider"></div>
-            <div class="field" style="padding-top:16px">
-              <div class="field-label">送り先</div>
-              <input type="text" id="pack-dest-sp" placeholder="送り先を入力">
-            </div>
-            <div class="field-divider"></div>
-            <div class="field" style="padding-top:16px">
-              <div class="field-label">担当者</div>
-              <input type="text" id="pack-staff-sp" placeholder="担当者名（任意）">
-            </div>
-            <div style="margin-top:12px">
-              <button class="btn btn-gold" onclick="addPackItemSP()" style="width:100%">リストに追加する</button>
-            </div>
-          </div>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <div style="font-size:13px;font-weight:700;color:#3a3a3a">本日の梱包リスト</div>
-          <div id="pack-summary-sp" style="font-size:12px;color:#909090"></div>
-        </div>
-        <div id="pack-list-sp"></div>
-        <div id="pack-empty-sp" style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">まだ追加されていません</div>
-        <!-- EC売上 -->
-        <div id="inv-sp-ec-area" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:16px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-            <div style="font-size:13px;font-weight:700;color:#3a3a3a">本日のEC売上</div>
-            <div id="ec-today-total-sp" style="font-size:13px;font-weight:700;color:#4a4a4a"></div>
-          </div>
-          <div class="card" style="margin-bottom:10px">
-            <div class="field">
-              <div class="field-label">販路</div>
-              <select id="ec-channel-sp" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;width:100%">
-                <option value="Amazon">Amazon</option>
-                <option value="自社EC">自社EC</option>
-              </select>
-            </div>
-            <div class="field-divider"></div>
-            <div class="field" style="padding-top:12px">
-              <div class="field-label">売上金額（円）</div>
-              <input type="number" id="ec-amount-sp" placeholder="0" style="font-size:18px;font-weight:700;text-align:right">
-            </div>
-            <div class="field-divider"></div>
-            <div class="field" style="padding-top:12px">
-              <div class="field-label">メモ</div>
-              <input type="text" id="ec-note-sp" placeholder="商品名など（任意）">
-            </div>
-            <div style="margin-top:10px">
-              <button class="btn btn-gold" onclick="addECSalesSP()" style="width:100%">売上を追加する</button>
-            </div>
-          </div>
-          <div id="ec-list-sp"></div>
-          <div id="ec-empty-sp" style="text-align:center;padding:20px;color:var(--text-muted);font-size:12px">本日の売上はまだありません</div>
-        </div>
-      </div>
     </div>
     <!-- 右：梱包リスト（PC幅のみ） -->
     <div id="inv-pack-col" style="display:none;width:340px;flex-shrink:0;border-left:1px solid var(--border);padding-left:20px">
@@ -1074,6 +1005,72 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 </div>
 
 
+
+<div id="screen-inv-packec" class="screen" style="display:none;padding-top:8px">
+  <div id="packec-form-area" style="display:none">
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">梱包リストに追加</div>
+      <div class="field">
+        <div class="field-label">商品名 <span class="req">*</span></div>
+        <input type="text" id="pack-product-sp" placeholder="商品名を入力">
+      </div>
+      <div class="field-divider"></div>
+      <div class="field" style="padding-top:16px">
+        <div class="field-label">数量</div>
+        <input type="number" id="pack-qty-sp" placeholder="1" min="1">
+      </div>
+      <div class="field-divider"></div>
+      <div class="field" style="padding-top:16px">
+        <div class="field-label">送り先</div>
+        <input type="text" id="pack-dest-sp" placeholder="送り先を入力">
+      </div>
+      <div class="field-divider"></div>
+      <div class="field" style="padding-top:16px">
+        <div class="field-label">担当者</div>
+        <input type="text" id="pack-staff-sp" placeholder="担当者名（任意）">
+      </div>
+      <div style="margin-top:12px">
+        <button class="btn btn-gold" onclick="addPackItemSP()" style="width:100%">リストに追加する</button>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <div style="font-size:13px;font-weight:700;color:#3a3a3a">本日の梱包リスト</div>
+    <div id="pack-summary-sp" style="font-size:12px;color:#909090"></div>
+  </div>
+  <div id="pack-list-sp"></div>
+  <div id="pack-empty-sp" style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">まだ追加されていません</div>
+  <div id="packec-ec-area" style="display:none;margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:700;color:#3a3a3a">本日のEC売上</div>
+      <div id="ec-today-total-sp" style="font-size:13px;font-weight:700;color:#4a4a4a"></div>
+    </div>
+    <div class="card" style="margin-bottom:10px">
+      <div class="field">
+        <div class="field-label">販路</div>
+        <select id="ec-channel-sp" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;width:100%">
+          <option value="Amazon">Amazon</option>
+          <option value="自社EC">自社EC</option>
+        </select>
+      </div>
+      <div class="field-divider"></div>
+      <div class="field" style="padding-top:12px">
+        <div class="field-label">売上金額（円）</div>
+        <input type="number" id="ec-amount-sp" placeholder="0" style="font-size:18px;font-weight:700;text-align:right">
+      </div>
+      <div class="field-divider"></div>
+      <div class="field" style="padding-top:12px">
+        <div class="field-label">メモ</div>
+        <input type="text" id="ec-note-sp" placeholder="商品名など（任意）">
+      </div>
+      <div style="margin-top:10px">
+        <button class="btn btn-gold" onclick="addECSalesSP()" style="width:100%">売上を追加する</button>
+      </div>
+    </div>
+    <div id="ec-list-sp"></div>
+    <div id="ec-empty-sp" style="text-align:center;padding:20px;color:var(--text-muted);font-size:12px">本日の売上はまだありません</div>
+  </div>
+</div>
 
 <div class="bottom-nav" id="inv-nav" style="display:none">
   <div class="nav-btn-wrap">
