@@ -750,7 +750,6 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <option value="車用品">車用品</option>
         <option value="ゴルフウェア">ゴルフウェア</option>
         <option value="ピラティスウェア">ピラティスウェア</option>
-        <option value="その他">その他</option>
       </select>
     </div>
     <div class="field-divider"></div>
@@ -857,7 +856,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <button onclick="setInvCatFilter('車用品')" id="inv-cat-車用品" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">車用品</button>
         <button onclick="setInvCatFilter('ゴルフウェア')" id="inv-cat-ゴルフウェア" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">ゴルフウェア</button>
         <button onclick="setInvCatFilter('ピラティスウェア')" id="inv-cat-ピラティスウェア" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">ピラティスウェア</button>
-        <button onclick="setInvCatFilter('その他')" id="inv-cat-その他" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">その他</button>
+
       </div>
       <div id="inv-list-container"></div>
       <div id="inv-list-empty" class="empty-state" style="display:none">
@@ -1533,7 +1532,6 @@ function setInvCatFilter(cat) {
     {id:'inv-cat-車用品', val:'車用品'},
     {id:'inv-cat-ゴルフウェア', val:'ゴルフウェア'},
     {id:'inv-cat-ピラティスウェア', val:'ピラティスウェア'},
-    {id:'inv-cat-その他', val:'その他'},
   ];
   defs.forEach(({id, val}) => {
     const btn = document.getElementById(id);
