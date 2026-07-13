@@ -727,7 +727,11 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <div class="field-divider"></div>
         <div class="field" style="padding-top:16px">
           <div class="field-label">JANコード</div>
-          <button class="scan-btn" onclick="startScan('inv-jan')" style="margin-bottom:8px">📷 JANコードをスキャン</button>
+          <div style="display:flex;gap:8px;margin-bottom:6px">
+            <button class="scan-btn" onclick="scanFromPhoto('inv-jan')" style="flex:1">📸 写真で読み取る</button>
+            <button class="scan-btn" onclick="startScan('inv-jan')" style="flex:1;background:var(--surface);color:var(--text);border:1.5px solid var(--border)">📷 連続スキャン</button>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">連続スキャンで読み取れない場合は「写真で読み取る」をお試しください（ピントが合った状態で撮影されるため読み取りやすくなります）</div>
           <input type="text" id="inv-jan" placeholder="または手入力" oninput="lookupJan()">
           <input type="hidden" id="inv-existing-key">
           <div id="jan-lookup-status" style="font-size:12px;margin-top:6px;color:var(--text-muted)"></div>
@@ -809,7 +813,11 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       <div class="card">
         <div class="card-title">商品スキャン</div>
         <div class="field">
-          <button class="scan-btn" onclick="startScan('move-jan')">📷 JANコードをスキャン</button>
+          <div style="display:flex;gap:8px;margin-bottom:6px">
+            <button class="scan-btn" onclick="scanFromPhoto('move-jan')" style="flex:1">📸 写真で読み取る</button>
+            <button class="scan-btn" onclick="startScan('move-jan')" style="flex:1;background:var(--surface);color:var(--text);border:1.5px solid var(--border)">📷 連続スキャン</button>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">連続スキャンで読み取れない場合は「写真で読み取る」をお試しください（ピントが合った状態で撮影されるため読み取りやすくなります）</div>
           <input type="text" id="move-jan" placeholder="または手入力" oninput="lookupProduct()">
           <div id="move-product-info" style="margin-top:12px;padding:12px;background:var(--gold-bg);border-radius:8px;display:none">
             <div style="font-weight:700;font-size:15px" id="move-product-name"></div>
@@ -1042,11 +1050,12 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 
 <!-- カメラスキャンオーバーレイ -->
 <div id="scan-overlay">
-  <video id="scan-video" autoplay playsinline></video>
+  <video id="scan-video" autoplay playsinline muted></video>
   <div class="scan-guide"></div>
   <div class="scan-hint">バーコードを枠内に合わせてください</div>
   <button class="scan-close" onclick="stopScan()">キャンセル</button>
 </div>
+<input type="file" id="jan-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handleScanPhotoFile(event)">
 
 </div>
 
@@ -1537,6 +1546,24 @@ function guessModelNumber(text) {
   return candidates[0];
 }
 
+// 商品名の先頭の単語をメーカー名として推定する（日本語のブランド名は区切りなしで1語になることが多いため）。あくまで推定。
+function guessMaker(name) {
+  if (!name) return '';
+  const text = name.trim();
+  // 【メーカー名】のような先頭の囲み表記があれば、その中身を優先的にメーカー名として扱う
+  const bracketMatch = text.match(/^[\[【(（]\s*([^\]】)）]+)\s*[\]】)）]/);
+  if (bracketMatch) {
+    const inner = bracketMatch[1].trim();
+    if (inner.length >= 2 && inner.length <= 20 && !(/[0-9]/.test(inner) && /[A-Za-z]/.test(inner))) return inner;
+  }
+  const first = text.split(/[\s　]+/)[0] || '';
+  const clean = first.replace(/^[\[【(（]+|[\]】)）]+$/g, '');
+  if (clean.length < 2 || clean.length > 20) return '';
+  // 型番らしき英数字混在トークンはメーカー名としては扱わない
+  if (/[0-9]/.test(clean) && /[A-Za-z]/.test(clean)) return '';
+  return clean;
+}
+
 async function lookupJan() {
   const jan = document.getElementById('inv-jan').value.trim();
   const status = document.getElementById('jan-lookup-status');
@@ -1575,16 +1602,23 @@ async function lookupJan() {
       if (productName) {
         document.getElementById('inv-name').value = productName;
 
-        // 型番も推定してみる（タイトル・スニペットから抽出。あくまで推定のため要確認）
+        // 型番・メーカーも推定してみる（タイトル・スニペットから抽出。あくまで推定のため要確認）
         const guessedModel = guessModelNumber(title) || guessModelNumber(snippet);
         const modelField = document.getElementById('inv-model');
-        let modelNote = '';
+        const guessedMaker = guessMaker(productName);
+        const makerField = document.getElementById('inv-maker');
+        const notes = [];
         if (guessedModel && modelField && !modelField.value) {
           modelField.value = guessedModel;
-          modelNote = '（型番は自動推定です。必ずご確認ください）';
+          notes.push('型番');
         }
+        if (guessedMaker && makerField && !makerField.value) {
+          makerField.value = guessedMaker;
+          notes.push('メーカー');
+        }
+        const guessNote = notes.length ? `（${notes.join('・')}は自動推定です。必ずご確認ください）` : '';
 
-        status.innerHTML = `✅ 商品名を取得しました！確認・修正してから登録してください。${modelNote}<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-size:12px">📦 価格.comで詳細を確認</a>`;
+        status.innerHTML = `✅ 商品名を取得しました！確認・修正してから登録してください。${guessNote}<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-size:12px">📦 価格.comで詳細を確認</a>`;
         status.style.color = 'var(--success)';
       } else {
         status.innerHTML = `商品が見つかりませんでした。<a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-weight:600;text-decoration:underline">📦 価格.comで検索する</a>`;
@@ -2404,6 +2438,99 @@ function handleScanResult(text) {
   if (scanTarget === 'inv-jan') lookupJan();
 }
 
+// ── 写真から読み取る（iPhoneでの連続スキャンがうまく動かない場合の代替手段）──
+// getUserMediaでのライブプレビューはiOS Safariでピントが合わないまま動き続けることが多く、
+// 連続スキャンが反応しないという報告が多いため、その場合はネイティブのカメラアプリで
+// 静止画を撮影してもらい、その1枚をピンポイントで解析する方式を用意する。
+// ネイティブカメラアプリはタップでピント合わせができるため、こちらの方が読み取り成功率が高い。
+function scanFromPhoto(targetId) {
+  scanTarget = targetId;
+  const input = document.getElementById('jan-photo-input');
+  if (!input) return;
+  input.value = '';
+  input.click();
+}
+
+async function handleScanPhotoFile(event) {
+  const file = event.target.files && event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+
+  showToast('画像を解析しています…');
+
+  try {
+    const text = await decodeBarcodeFromImageFile(file);
+    if (text) {
+      handleScanResult(text);
+      showToast('読み取りました');
+    } else {
+      showToast('バーコードを読み取れませんでした。ピントを合わせて、明るい場所で近づいて撮影し直してください');
+    }
+  } catch (e) {
+    console.error('写真からの読み取りエラー:', e);
+    showToast('バーコードを読み取れませんでした。ピントを合わせて、明るい場所で近づいて撮影し直してください');
+  }
+}
+
+// 1枚の画像ファイルからバーコードの文字列を検出する。
+// まずネイティブのBarcodeDetectorを試し、使えない・失敗した場合はZXingで再挑戦する。
+async function decodeBarcodeFromImageFile(file) {
+  const formats = ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'itf'];
+
+  // 1. ネイティブのBarcodeDetector（対応端末のみ。静止画に対しては比較的安定して動く）
+  if ('BarcodeDetector' in window) {
+    try {
+      const bitmap = await createImageBitmap(file);
+      let detector;
+      try { detector = new BarcodeDetector({ formats }); } catch (e) { detector = new BarcodeDetector(); }
+      const codes = await detector.detect(bitmap);
+      if (codes && codes.length > 0) return codes[0].rawValue;
+    } catch (e) {
+      console.error('BarcodeDetector（静止画）での読み取りに失敗:', e);
+    }
+  }
+
+  // 2. ZXingで再挑戦
+  const loaded = await ensureZXingLoaded();
+  if (!loaded) return null;
+
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const hints = new Map();
+  const zxingFormats = [
+    window.ZXing.BarcodeFormat.EAN_13, window.ZXing.BarcodeFormat.EAN_8,
+    window.ZXing.BarcodeFormat.CODE_128, window.ZXing.BarcodeFormat.CODE_39,
+    window.ZXing.BarcodeFormat.UPC_A, window.ZXing.BarcodeFormat.ITF,
+  ];
+  hints.set(window.ZXing.DecodeHintType.POSSIBLE_FORMATS, zxingFormats);
+  hints.set(window.ZXing.DecodeHintType.TRY_HARDER, true);
+  const reader = new window.ZXing.BrowserMultiFormatReader(hints);
+
+  try {
+    if (typeof reader.decodeFromImageUrl === 'function') {
+      const result = await reader.decodeFromImageUrl(dataUrl);
+      return result ? result.getText() : null;
+    }
+    if (typeof reader.decodeFromImage === 'function') {
+      const img = new Image();
+      await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = dataUrl; });
+      const result = await reader.decodeFromImage(img);
+      return result ? result.getText() : null;
+    }
+  } catch (e) {
+    // NotFoundExceptionなど、その画像からは検出できなかった場合はnullを返す（呼び出し元でエラー表示）
+    return null;
+  }
+  return null;
+}
+
+let scanNativeTimeout = null;
+
 async function startScan(targetId) {
   scanTarget = targetId;
   scanActive = true;
@@ -2411,6 +2538,9 @@ async function startScan(targetId) {
   const video = document.getElementById('scan-video');
 
   // 1. ネイティブのBarcodeDetectorが使える端末はまずこちらを試す
+  //    注意：iOS Safariは既定では非対応（実験的機能フラグを有効にした場合のみ存在することがある）で、
+  //    しかもその場合に「APIは存在するが detect() が何も検出しないまま動き続ける」という既知の不具合があるため、
+  //    一定時間検出できなければ自動的にZXingへ切り替える（＝カメラは映るのに反応しない、を防ぐ）。
   if ('BarcodeDetector' in window) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -2425,11 +2555,25 @@ async function startScan(targetId) {
       } catch(e) {
         detector = new BarcodeDetector();
       }
+
+      // 5秒間まったく検出できなければ、ネイティブ実装が機能していない端末とみなしZXingへフォールバックする
+      scanNativeTimeout = setTimeout(() => {
+        if (!scanActive) return;
+        console.warn('ネイティブBarcodeDetectorで一定時間検出できなかったためZXingへ切り替えます');
+        if (video.srcObject) { video.srcObject.getTracks().forEach(t => t.stop()); video.srcObject = null; }
+        if (scanRAF) { cancelAnimationFrame(scanRAF); scanRAF = null; }
+        startZxingLiveScan(video);
+      }, 5000);
+
       const tick = async () => {
         if (!scanActive) return;
         try {
           const codes = await detector.detect(video);
-          if (codes && codes.length > 0) { handleScanResult(codes[0].rawValue); return; }
+          if (codes && codes.length > 0) {
+            if (scanNativeTimeout) { clearTimeout(scanNativeTimeout); scanNativeTimeout = null; }
+            handleScanResult(codes[0].rawValue);
+            return;
+          }
         } catch(e) { /* このフレームでは検出できなかっただけなので無視 */ }
         scanRAF = requestAnimationFrame(tick);
       };
@@ -2448,9 +2592,14 @@ async function startScan(targetId) {
   }
 
   // 2. BarcodeDetector非対応、または初期化に失敗した場合はZXingライブラリで試す
+  await startZxingLiveScan(video);
+}
+
+async function startZxingLiveScan(video) {
+  if (!scanActive) return;
   const loaded = await ensureZXingLoaded();
   if (!loaded) {
-    showToast('スキャンライブラリの読み込みに失敗しました。JANコードは手入力もできます');
+    showToast('スキャンライブラリの読み込みに失敗しました。「写真で読み取る」または手入力をお試しください');
     stopScan();
     return;
   }
@@ -2494,9 +2643,9 @@ async function startScan(targetId) {
     if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
       showToast('カメラへのアクセスが許可されていません。ブラウザの設定をご確認ください');
     } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
-      showToast('カメラが見つかりませんでした。JANコードは手入力もできます');
+      showToast('カメラが見つかりませんでした。「写真で読み取る」または手入力をお試しください');
     } else {
-      showToast('カメラの起動に失敗しました。JANコードは手入力もできます');
+      showToast('カメラの起動に失敗しました。「写真で読み取る」または手入力をお試しください');
     }
     stopScan();
   }
@@ -2505,6 +2654,7 @@ async function startScan(targetId) {
 function stopScan() {
   scanActive = false;
   if (scanRAF) { cancelAnimationFrame(scanRAF); scanRAF = null; }
+  if (scanNativeTimeout) { clearTimeout(scanNativeTimeout); scanNativeTimeout = null; }
   if (zxingReader) {
     try { zxingReader.reset(); } catch(e) {}
     zxingReader = null;
