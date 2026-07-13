@@ -741,6 +741,12 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         </div>
         <div class="field-divider"></div>
         <div class="field" style="padding-top:16px">
+          <div class="field-label">在庫アラートのしきい値</div>
+          <input type="number" id="inv-threshold" placeholder="未設定の場合は3個" min="0">
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">この個数以下になったら「残りわずか」と表示します（空欄なら共通の初期値3個）</div>
+        </div>
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
           <div class="field-label">仕入値（円）</div>
           <input type="number" id="inv-cost" placeholder="0" min="0">
         </div>
@@ -873,9 +879,25 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
   <div style="display:flex;gap:20px;align-items:flex-start">
     <!-- 左：在庫一覧 -->
     <div id="inv-list-col" style="flex:1;min-width:0">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <div style="font-size:14px;color:var(--text-sub);font-weight:500" id="inv-list-count">0件</div>
-        <button class="btn btn-secondary" style="flex:none;padding:8px 14px;font-size:13px" onclick="doExportInventory()">📊 Excel出力</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div id="inv-list-admin-actions" style="display:none;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-secondary" style="flex:none;padding:8px 14px;font-size:13px" onclick="openStocktakeModal()">📋 棚卸</button>
+            <button class="btn btn-secondary" style="flex:none;padding:8px 14px;font-size:13px" onclick="document.getElementById('inv-bulk-import-file').click()">📥 CSV/Excelから一括登録</button>
+            <input type="file" id="inv-bulk-import-file" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleBulkImportFile(event)">
+          </div>
+          <button class="btn btn-secondary" style="flex:none;padding:8px 14px;font-size:13px" onclick="doExportInventory()">📊 Excel出力</button>
+        </div>
+      </div>
+      <div id="inv-reorder-panel" style="display:none;margin-bottom:12px;background:var(--warning-bg);border:1px solid #fde68a;border-radius:10px;padding:10px 12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAccordion('inv-reorder')">
+          <span style="font-size:13px;font-weight:700;color:var(--warning)">🔔 発注目安（14日以内に在庫切れの見込み） <span id="inv-reorder-count"></span></span>
+          <span class="accordion-arrow" id="acc-arrow-inv-reorder" style="font-size:10px;color:var(--warning)">▼</span>
+        </div>
+        <div class="accordion-body" id="acc-body-inv-reorder" style="margin-top:8px">
+          <div id="inv-reorder-list"></div>
+        </div>
       </div>
       <input type="text" id="inv-search" placeholder="🔍 商品名・JANコードで検索" oninput="renderInventoryList()" style="margin-bottom:10px">
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
@@ -906,6 +928,10 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#dc2626;margin-right:3px"></span>出庫</span>
       </div>
       <div id="inv-cal-detail" style="margin-top:16px"></div>
+      <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">月次入出庫推移（直近6ヶ月）</div>
+        <div id="inv-trend-chart"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -1179,6 +1205,10 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     <div class="field" style="padding-top:12px"><div class="field-label">在庫数 <span class="req">*</span></div>
       <input type="number" id="prod-edit-stock" min="0"></div>
     <div class="field-divider"></div>
+    <div class="field" style="padding-top:12px"><div class="field-label">在庫アラートのしきい値</div>
+      <input type="number" id="prod-edit-threshold" min="0" placeholder="未設定の場合は3個">
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">この個数以下で「残りわずか」表示（空欄なら共通の初期値3個）</div></div>
+    <div class="field-divider"></div>
     <div class="field" style="padding-top:12px"><div class="field-label">仕入値（円）</div>
       <input type="number" id="prod-edit-cost" min="0"></div>
     <div class="field-divider"></div>
@@ -1195,6 +1225,18 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     <div style="display:flex;gap:10px;margin-top:16px">
       <button onclick="saveProductEdit()" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8d8d8,#a8a8a8);color:#1a1a1a;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">保存</button>
       <button onclick="closeProductEdit()" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">キャンセル</button>
+    </div>
+  </div>
+</div>
+<div id="stocktake-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">棚卸（実地在庫の確認）</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">実際に数えた在庫数を入力してください。システム上の在庫数と異なる商品だけが対象になります。</div>
+    <input type="text" id="stocktake-search" placeholder="🔍 商品名・JANコードで検索" oninput="renderStocktakeList()" style="margin-bottom:12px">
+    <div id="stocktake-list"></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button onclick="submitStocktake()" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8d8d8,#a8a8a8);color:#1a1a1a;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">差異のある商品を確定する</button>
+      <button onclick="closeStocktakeModal()" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">キャンセル</button>
     </div>
   </div>
 </div>
@@ -1293,6 +1335,7 @@ window._setSelectedMonth = v => { selectedMonth = v; };
 
 // ── 在庫管理 ──
 let products = [], stockMoves = [];
+const DEFAULT_LOW_STOCK_THRESHOLD = 3; // 商品ごとにlowStockが未設定の場合に使う共通のしきい値
 let currentMode = 'biz';
 let scanStream = null;
 let scanTarget = null;
@@ -1422,7 +1465,7 @@ async function loadInventory() {
     stockMoves = objToArr(m);
     if (document.getElementById('screen-inv-list')?.classList.contains('active')) {
       renderInventoryList();
-      if (document.getElementById('inv-cal-col')?.style.display !== 'none') renderInvCalendar();
+      if (document.getElementById('inv-cal-col')?.style.display !== 'none') { renderInvCalendar(); renderInvTrendChart(); }
     }
     if (document.getElementById('screen-inv-add')?.classList.contains('active')) renderInvAddList();
 
@@ -1580,7 +1623,7 @@ async function submitProduct() {
           stockBefore: prod.stock, stockAfter: newStock, createdAt: Date.now()
         })})
       ]);
-      ['inv-maker','inv-name','inv-model','inv-jan','inv-stock','inv-cost','inv-location','inv-memo'].forEach(id => document.getElementById(id).value = '');
+      ['inv-maker','inv-name','inv-model','inv-jan','inv-stock','inv-threshold','inv-cost','inv-location','inv-memo'].forEach(id => document.getElementById(id).value = '');
       const catEl = document.getElementById('inv-category'); if(catEl) catEl.selectedIndex = 0;
       document.getElementById('inv-image').value = '';
       document.getElementById('inv-img-preview').style.display = 'none';
@@ -1608,6 +1651,7 @@ async function submitProduct() {
     model: document.getElementById('inv-model').value.trim(),
     jan: document.getElementById('inv-jan').value.trim(),
     stock: parseInt(stock),
+    lowStock: document.getElementById('inv-threshold').value !== '' ? (parseInt(document.getElementById('inv-threshold').value) || 0) : null,
     cost: parseInt(document.getElementById('inv-cost').value) || 0,
     category: document.getElementById('inv-category')?.value || '家電',
     location: document.getElementById('inv-location').value.trim(),
@@ -1628,7 +1672,7 @@ async function submitProduct() {
         stockBefore: 0, stockAfter: data.stock, createdAt: Date.now()
       })});
     }
-    ['inv-maker','inv-name','inv-model','inv-jan','inv-stock','inv-cost','inv-location','inv-memo'].forEach(id => document.getElementById(id).value = '');
+    ['inv-maker','inv-name','inv-model','inv-jan','inv-stock','inv-threshold','inv-cost','inv-location','inv-memo'].forEach(id => document.getElementById(id).value = '');
     const catEl = document.getElementById('inv-category'); if(catEl) catEl.selectedIndex = 0;
     document.getElementById('inv-image').value = '';
     document.getElementById('inv-img-preview').style.display = 'none';
@@ -1649,6 +1693,7 @@ function openProductEdit(key) {
   document.getElementById('prod-edit-model').value = p.model || '';
   document.getElementById('prod-edit-jan').value = p.jan || '';
   document.getElementById('prod-edit-stock').value = p.stock ?? 0;
+  document.getElementById('prod-edit-threshold').value = (typeof p.lowStock === 'number') ? p.lowStock : '';
   document.getElementById('prod-edit-cost').value = p.cost || 0;
   document.getElementById('prod-edit-category').value = p.category || '家電';
   document.getElementById('prod-edit-location').value = p.location || '';
@@ -1672,6 +1717,7 @@ async function saveProductEdit() {
     model:    document.getElementById('prod-edit-model').value.trim(),
     jan:      document.getElementById('prod-edit-jan').value.trim(),
     stock:    parseInt(stock) || 0,
+    lowStock: document.getElementById('prod-edit-threshold').value !== '' ? (parseInt(document.getElementById('prod-edit-threshold').value) || 0) : null,
     cost:     parseInt(document.getElementById('prod-edit-cost').value) || 0,
     category: document.getElementById('prod-edit-category').value,
     location: document.getElementById('prod-edit-location').value.trim(),
@@ -1795,15 +1841,39 @@ function getProductReceipts(key) {
 
 // 商品カードのHTMLを生成する共通関数（在庫一覧／商品登録の右側リストで共通利用）
 // opts.editable が true かつ管理者の場合のみ編集・削除ボタンを表示する
+// 商品ごとの在庫アラートしきい値（未設定なら共通のデフォルト値を使う）
+function getLowStockThreshold(p) {
+  return (typeof p.lowStock === 'number') ? p.lowStock : DEFAULT_LOW_STOCK_THRESHOLD;
+}
+
+// 直近30日間の出庫実績から、1日あたりの平均出庫数と在庫切れまでの予測日数を計算する
+function estimateStockoutForecast(p) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 30);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  const recentOut = (stockMoves || []).filter(m => m.productKey === p._key && m.type === 'out' && m.date && m.date >= cutoffStr);
+  if (!recentOut.length) return null;
+  const totalOut = recentOut.reduce((s, m) => s + (m.qty || 0), 0);
+  if (totalOut <= 0) return null;
+  const avgDaily = totalOut / 30;
+  if (avgDaily <= 0) return null;
+  const daysLeft = p.stock / avgDaily;
+  return { avgDaily, daysLeft };
+}
+
 function buildInvCard(p, opts) {
   const editable = !!(opts && opts.editable);
-  const stockClass = p.stock === 0 ? 'stock-zero' : p.stock <= 3 ? 'stock-low' : 'stock-ok';
-  const stockLabel = p.stock === 0 ? '在庫切れ' : p.stock <= 3 ? '残りわずか' : '在庫あり';
+  const threshold = getLowStockThreshold(p);
+  const stockClass = p.stock === 0 ? 'stock-zero' : p.stock <= threshold ? 'stock-low' : 'stock-ok';
+  const stockLabel = p.stock === 0 ? '在庫切れ' : p.stock <= threshold ? '残りわずか' : '在庫あり';
   const totalVal = (p.cost || 0) * p.stock;
   // 入荷履歴（同じ商品でも入荷日が複数ある場合はここに積み重なる）
   const receipts = getProductReceipts(p._key);
   const latestDate = receipts.length ? receipts[0].date : (p.createdAt ? new Date(p.createdAt).toISOString().slice(0,10) : '');
   const latestDateDisp = fmtDateJP(latestDate);
+  const forecast = estimateStockoutForecast(p);
+  const forecastDays = forecast ? Math.max(0, Math.round(forecast.daysLeft)) : null;
+  const forecastHtml = forecast ? `<div style="font-size:11px;margin-top:2px;color:${forecastDays<=7?'var(--danger)':forecastDays<=14?'var(--warning)':'var(--text-muted)'}">📉 このペースだと約${forecastDays}日で在庫切れの見込み（直近30日の平均出庫 ${forecast.avgDaily.toFixed(1)}個/日）</div>` : '';
   const accId = 'prod-' + p._key;
   const receiptHistory = receipts.length > 1 ? `
         <div class="accordion-header" style="padding:6px 0;border-bottom:none" onclick="toggleAccordion('${accId}')">
@@ -1825,7 +1895,7 @@ function buildInvCard(p, opts) {
           ${(p.category && p.category!=='家電') ? `<span style="font-size:10px;padding:1px 7px;border-radius:20px;background:var(--surface);color:var(--text-muted);border:1px solid var(--border);margin-bottom:3px;display:inline-block">${p.category}</span>` : ''}
           <div class="inv-sub">${p.maker||''} ${p.model ? '/ ' + p.model : ''}</div>
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-            <span class="inv-stock ${p.stock<=3?'low':''}">${p.stock}個</span>
+            <span class="inv-stock ${p.stock<=threshold?'low':''}">${p.stock}個</span>
             <span class="stock-badge ${stockClass}">${stockLabel}</span>
           </div>
           <div style="font-size:12px;color:var(--text-muted)">
@@ -1833,6 +1903,7 @@ function buildInvCard(p, opts) {
             ${totalVal > 0 ? ' ／ 在庫金額 ¥' + totalVal.toLocaleString('ja-JP') : ''}
           </div>
           ${latestDateDisp ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">📅 最新入荷日: ${latestDateDisp}${receipts.length>1?`（累計${receipts.length}回入荷）`:''}</div>` : ''}
+          ${forecastHtml}
         </div>
         ${editBtns}
       </div>
@@ -1872,11 +1943,135 @@ function renderInventoryList() {
   const empty = document.getElementById('inv-list-empty');
   document.getElementById('inv-list-count').textContent = filtered.length + '件';
 
+  const adminActions = document.getElementById('inv-list-admin-actions');
+  if (adminActions) adminActions.style.display = isAdmin() ? 'flex' : 'none';
+
+  renderInvReorderPanel();
+
   if (!filtered.length) { container.innerHTML = ''; empty.style.display = 'block'; return; }
   empty.style.display = 'none';
 
   const sorted = [...filtered].sort((a,b) => a.stock - b.stock);
   container.innerHTML = sorted.map(buildInvCard).join('');
+}
+
+// 「発注目安」パネル：14日以内に在庫切れが見込まれる商品を予測日数の短い順に表示
+function renderInvReorderPanel() {
+  const panel = document.getElementById('inv-reorder-panel');
+  const listEl = document.getElementById('inv-reorder-list');
+  const countEl = document.getElementById('inv-reorder-count');
+  if (!panel || !listEl) return;
+
+  const candidates = products
+    .map(p => ({ p, forecast: estimateStockoutForecast(p) }))
+    .filter(x => x.forecast && x.forecast.daysLeft <= 14)
+    .sort((a, b) => a.forecast.daysLeft - b.forecast.daysLeft);
+
+  if (!candidates.length) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  if (countEl) countEl.textContent = candidates.length + '件';
+  listEl.innerHTML = candidates.map(({p, forecast}) => {
+    const days = Math.max(0, Math.round(forecast.daysLeft));
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #fde68a;font-size:12px">
+      <div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}<span style="color:var(--text-muted)">（在庫${p.stock}個）</span></div>
+      <div style="flex-shrink:0;margin-left:8px;font-weight:700;color:${days<=7?'var(--danger)':'var(--warning)'}">約${days}日</div>
+    </div>`;
+  }).join('');
+}
+
+// ── 棚卸（実地在庫との差異調整） ──
+function openStocktakeModal() {
+  if (!isAdmin()) { showToast('この機能は管理者のみ利用できます'); return; }
+  const modal = document.getElementById('stocktake-modal');
+  if (!modal) return;
+  const search = document.getElementById('stocktake-search');
+  if (search) search.value = '';
+  renderStocktakeList();
+  modal.style.display = 'flex';
+}
+
+function closeStocktakeModal() {
+  const modal = document.getElementById('stocktake-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function renderStocktakeList() {
+  const listEl = document.getElementById('stocktake-list');
+  if (!listEl) return;
+  const q = (document.getElementById('stocktake-search')?.value || '').toLowerCase();
+  const filtered = products.filter(p => !q || p.name?.toLowerCase().includes(q) || (p.jan||'').includes(q) || (p.maker||'').toLowerCase().includes(q));
+  const sorted = [...filtered].sort((a,b) => (a.name||'').localeCompare(b.name||'', 'ja'));
+
+  if (!sorted.length) { listEl.innerHTML = `<div style="font-size:13px;color:var(--text-muted);padding:12px 0">該当する商品がありません</div>`; return; }
+
+  listEl.innerHTML = sorted.map(p => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}</div>
+        <div style="font-size:11px;color:var(--text-muted)">システム上の在庫: ${p.stock}個</div>
+      </div>
+      <input type="number" id="stocktake-count-${p._key}" data-key="${p._key}" data-system-stock="${p.stock}" value="${p.stock}" min="0" oninput="updateStocktakeDiff('${p._key}')" style="width:70px;text-align:center;padding:6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
+      <div id="stocktake-diff-${p._key}" style="width:56px;flex-shrink:0;font-size:11px;font-weight:700;text-align:center;color:var(--text-muted)"></div>
+    </div>
+    <div id="stocktake-memo-wrap-${p._key}" style="display:none;padding:0 0 8px;border-bottom:1px solid var(--border)">
+      <input type="text" id="stocktake-memo-${p._key}" placeholder="差異の理由（任意）" style="font-size:12px;padding:6px 8px">
+    </div>
+  `).join('');
+}
+
+function updateStocktakeDiff(key) {
+  const input = document.getElementById('stocktake-count-' + key);
+  const diffEl = document.getElementById('stocktake-diff-' + key);
+  const memoWrap = document.getElementById('stocktake-memo-wrap-' + key);
+  if (!input || !diffEl) return;
+  const systemStock = parseInt(input.dataset.systemStock) || 0;
+  const counted = input.value === '' ? systemStock : (parseInt(input.value) || 0);
+  const diff = counted - systemStock;
+  if (diff === 0) {
+    diffEl.textContent = '';
+    if (memoWrap) memoWrap.style.display = 'none';
+  } else {
+    diffEl.textContent = (diff > 0 ? '+' : '') + diff;
+    diffEl.style.color = diff > 0 ? 'var(--success)' : 'var(--danger)';
+    if (memoWrap) memoWrap.style.display = 'block';
+  }
+}
+
+async function submitStocktake() {
+  const rows = Array.from(document.querySelectorAll('[id^="stocktake-count-"]'));
+  const changes = [];
+  rows.forEach(input => {
+    const key = input.dataset.key;
+    const systemStock = parseInt(input.dataset.systemStock) || 0;
+    const counted = input.value === '' ? systemStock : (parseInt(input.value) || 0);
+    if (counted !== systemStock) {
+      const memo = document.getElementById('stocktake-memo-' + key)?.value.trim() || '';
+      changes.push({ key, systemStock, counted, memo });
+    }
+  });
+
+  if (!changes.length) { showToast('差異のある商品はありませんでした'); return; }
+  if (!await showConfirm(`${changes.length}件の在庫を棚卸の結果に合わせて更新します。よろしいですか？`)) return;
+
+  try {
+    await Promise.all(changes.map(c => {
+      const prod = products.find(p => p._key === c.key);
+      return Promise.all([
+        fetch(authedUrl('/products/' + c.key + '/stock.json'), { method: 'PUT', body: JSON.stringify(c.counted) }),
+        fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
+          productKey: c.key, productName: prod?.name || '', jan: prod?.jan || '',
+          type: 'adjust', qty: c.counted, date: todayStr(), memo: c.memo || '棚卸による調整',
+          stockBefore: c.systemStock, stockAfter: c.counted, createdAt: Date.now()
+        })})
+      ]);
+    }));
+    closeStocktakeModal();
+    await loadInventory();
+    renderInventoryList();
+    showToast(`${changes.length}件の在庫を棚卸で調整しました`);
+  } catch(e) {
+    showToast('棚卸の登録に失敗しました');
+  }
 }
 
 // ── 在庫一覧：入出庫カレンダー ──
@@ -1889,6 +2084,49 @@ function initInvCalendar() {
     _invCalMonth = { year: now.getFullYear(), month: now.getMonth() };
   }
   renderInvCalendar();
+  renderInvTrendChart();
+}
+
+// 直近6ヶ月の月別入庫・出庫の合計数量を手描きバーチャートで表示
+function renderInvTrendChart() {
+  const container = document.getElementById('inv-trend-chart');
+  if (!container) return;
+  const now = new Date();
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ year: d.getFullYear(), month: d.getMonth(), key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` });
+  }
+  const totals = months.map(m => {
+    const inSum  = (stockMoves || []).filter(mv => mv.type === 'in'  && mv.date && mv.date.startsWith(m.key)).reduce((s, mv) => s + (mv.qty || 0), 0);
+    const outSum = (stockMoves || []).filter(mv => mv.type === 'out' && mv.date && mv.date.startsWith(m.key)).reduce((s, mv) => s + (mv.qty || 0), 0);
+    return { ...m, inSum, outSum };
+  });
+  const maxV = Math.max(...totals.map(t => Math.max(t.inSum, t.outSum)), 1);
+  const barMaxWidth = 140;
+
+  if (!totals.some(t => t.inSum > 0 || t.outSum > 0)) {
+    container.innerHTML = `<div style="font-size:12px;color:var(--text-muted)">まだ入出庫の記録がありません</div>`;
+    return;
+  }
+
+  container.innerHTML = totals.map(t => {
+    const inW  = Math.round((t.inSum  / maxV) * barMaxWidth);
+    const outW = Math.round((t.outSum / maxV) * barMaxWidth);
+    return `<div style="margin-bottom:10px">
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">${t.year}年${t.month + 1}月</div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+        <div style="width:28px;font-size:10px;color:var(--success);flex-shrink:0">入庫</div>
+        <div style="height:10px;border-radius:3px;background:var(--success);width:${inW}px;min-width:${t.inSum > 0 ? 2 : 0}px"></div>
+        <div style="font-size:11px;color:var(--text)">${t.inSum}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <div style="width:28px;font-size:10px;color:var(--danger);flex-shrink:0">出庫</div>
+        <div style="height:10px;border-radius:3px;background:var(--danger);width:${outW}px;min-width:${t.outSum > 0 ? 2 : 0}px"></div>
+        <div style="font-size:11px;color:var(--text)">${t.outSum}</div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function changeInvCalMonth(delta) {
@@ -2028,6 +2266,101 @@ function doExportInventory() {
   XLSX.utils.book_append_sheet(wb, ws, '在庫一覧');
   XLSX.writeFile(wb, `在庫一覧_${new Date().toISOString().slice(0,10).replace(/-/g,'')}.xlsx`);
   showToast('在庫ExcelをExcelで出力しました');
+}
+
+// ── CSV/Excelからの商品一括登録 ──
+// 「Excel出力」と同じ列構成（商品名・メーカー・型番・JANコード・在庫数・仕入値（円）・保管場所・備考）を想定。
+// JANコードが既存商品と一致する行は新規登録ではなく入荷（入出庫の入庫）として扱う。
+async function handleBulkImportFile(event) {
+  if (!isAdmin()) { showToast('この機能は管理者のみ利用できます'); event.target.value = ''; return; }
+  const file = event.target.files[0];
+  if (!file) return;
+
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(new Uint8Array(buf), { type: 'array' });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+    // ヘッダー行を探す（Excel出力機能で作ったファイルには先頭にタイトル・出力日の行が入っているため）
+    const headerIdx = rows.findIndex(r => Array.isArray(r) && r.some(c => String(c).trim() === '商品名'));
+    if (headerIdx === -1) {
+      showToast('「商品名」列が見つかりませんでした。Excel出力したファイルと同じ形式でご用意ください');
+      event.target.value = '';
+      return;
+    }
+
+    const headers = rows[headerIdx].map(h => String(h).trim());
+    const colIdx = (label) => headers.indexOf(label);
+    const iName = colIdx('商品名'), iMaker = colIdx('メーカー'), iModel = colIdx('型番'),
+          iJan = colIdx('JANコード'), iStock = colIdx('在庫数'), iCost = colIdx('仕入値（円）'),
+          iLocation = colIdx('保管場所'), iMemo = colIdx('備考');
+
+    const dataRows = rows.slice(headerIdx + 1).filter(r => Array.isArray(r) && r.some(c => String(c).trim() !== ''));
+    if (!dataRows.length) {
+      showToast('登録できる商品データが見つかりませんでした');
+      event.target.value = '';
+      return;
+    }
+
+    let createdCount = 0, restockedCount = 0, skippedCount = 0;
+
+    for (const r of dataRows) {
+      const name = iName >= 0 ? String(r[iName] || '').trim() : '';
+      if (!name) { continue; } // 商品名が空の行（区切り・合計行など）は無視する
+      const jan      = iJan      >= 0 ? String(r[iJan] || '').trim() : '';
+      const stockVal = iStock    >= 0 ? (parseInt(r[iStock]) || 0) : 0;
+      const maker    = iMaker    >= 0 ? String(r[iMaker] || '').trim() : '';
+      const model    = iModel    >= 0 ? String(r[iModel] || '').trim() : '';
+      const cost     = iCost     >= 0 ? (parseInt(r[iCost]) || 0) : 0;
+      const location = iLocation >= 0 ? String(r[iLocation] || '').trim() : '';
+      const memo     = iMemo     >= 0 ? String(r[iMemo] || '').trim() : '';
+
+      const existing = jan ? products.find(p => p.jan === jan) : null;
+      if (existing) {
+        // JANが既存商品と一致する場合は新規登録ではなく入荷として扱う（商品登録画面のJAN入力と同じルール）
+        if (stockVal > 0) {
+          const newStock = existing.stock + stockVal;
+          await Promise.all([
+            fetch(authedUrl('/products/' + existing._key + '/stock.json'), { method: 'PUT', body: JSON.stringify(newStock) }),
+            fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
+              productKey: existing._key, productName: existing.name, jan: existing.jan,
+              type: 'in', qty: stockVal, date: todayStr(), memo: 'CSV/Excel一括登録から入荷',
+              stockBefore: existing.stock, stockAfter: newStock, createdAt: Date.now()
+            })})
+          ]);
+          existing.stock = newStock; // 同じファイル内に同一JANの行が複数あっても正しく積み上がるようにする
+          restockedCount++;
+        } else {
+          skippedCount++;
+        }
+        continue;
+      }
+
+      const data = { maker, name, model, jan, stock: stockVal, lowStock: null, cost, category: '家電', location, memo, image: null, createdAt: Date.now() };
+      const res = await fetch(authedUrl('/products.json'), { method: 'POST', body: JSON.stringify(data) });
+      const resData = await res.json().catch(() => null);
+      const newKey = resData && resData.name;
+      if (newKey && data.stock > 0) {
+        await fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
+          productKey: newKey, productName: data.name, jan: data.jan,
+          type: 'in', qty: data.stock, date: todayStr(), memo: 'CSV/Excel一括登録',
+          stockBefore: 0, stockAfter: data.stock, createdAt: Date.now()
+        })});
+      }
+      if (newKey) products.push({ _key: newKey, ...data });
+      createdCount++;
+    }
+
+    event.target.value = '';
+    await loadInventory();
+    renderInventoryList();
+    showToast(`一括登録が完了しました（新規${createdCount}件・入荷${restockedCount}件${skippedCount ? `・スキップ${skippedCount}件` : ''}）`);
+  } catch (e) {
+    console.error('bulk import error', e);
+    showToast('一括登録に失敗しました。ファイル形式をご確認ください');
+    event.target.value = '';
+  }
 }
 
 // ── カメラスキャン（まずブラウザ内蔵のBarcodeDetectorを試し、使えない端末だけZXingにフォールバック）──
