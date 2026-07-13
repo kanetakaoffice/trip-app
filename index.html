@@ -870,26 +870,42 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 
 <!-- 在庫一覧 -->
 <div id="screen-inv-list" class="screen" style="display:none;padding-top:8px">
-  <!-- 梱包リスト・EC売上は「出荷管理」タブに一本化したため、ここには表示しない -->
-  <div id="inv-list-col">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div style="font-size:14px;color:var(--text-sub);font-weight:500" id="inv-list-count">0件</div>
-      <button class="btn btn-secondary" style="flex:none;padding:8px 14px;font-size:13px" onclick="doExportInventory()">📊 Excel出力</button>
-    </div>
-    <input type="text" id="inv-search" placeholder="🔍 商品名・JANコードで検索" oninput="renderInventoryList()" style="margin-bottom:10px">
-    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
-      <button onclick="setInvCatFilter(null)" id="inv-cat-all" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #3a3a3a;border-radius:20px;background:#3a3a3a;color:#fff;cursor:pointer">すべて</button>
-      <button onclick="setInvCatFilter('家電')" id="inv-cat-家電" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">家電</button>
-      <button onclick="setInvCatFilter('家具')" id="inv-cat-家具" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">家具</button>
-      <button onclick="setInvCatFilter('車用品')" id="inv-cat-車用品" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">車用品</button>
-      <button onclick="setInvCatFilter('ゴルフウェア')" id="inv-cat-ゴルフウェア" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">ゴルフウェア</button>
-      <button onclick="setInvCatFilter('ピラティスウェア')" id="inv-cat-ピラティスウェア" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">ピラティスウェア</button>
+  <div style="display:flex;gap:20px;align-items:flex-start">
+    <!-- 左：在庫一覧 -->
+    <div id="inv-list-col" style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="font-size:14px;color:var(--text-sub);font-weight:500" id="inv-list-count">0件</div>
+        <button class="btn btn-secondary" style="flex:none;padding:8px 14px;font-size:13px" onclick="doExportInventory()">📊 Excel出力</button>
+      </div>
+      <input type="text" id="inv-search" placeholder="🔍 商品名・JANコードで検索" oninput="renderInventoryList()" style="margin-bottom:10px">
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+        <button onclick="setInvCatFilter(null)" id="inv-cat-all" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #3a3a3a;border-radius:20px;background:#3a3a3a;color:#fff;cursor:pointer">すべて</button>
+        <button onclick="setInvCatFilter('家電')" id="inv-cat-家電" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">家電</button>
+        <button onclick="setInvCatFilter('家具')" id="inv-cat-家具" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">家具</button>
+        <button onclick="setInvCatFilter('車用品')" id="inv-cat-車用品" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">車用品</button>
+        <button onclick="setInvCatFilter('ゴルフウェア')" id="inv-cat-ゴルフウェア" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">ゴルフウェア</button>
+        <button onclick="setInvCatFilter('ピラティスウェア')" id="inv-cat-ピラティスウェア" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">ピラティスウェア</button>
 
+      </div>
+      <div id="inv-list-container"></div>
+      <div id="inv-list-empty" class="empty-state" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/><line x1="12" y1="12" x2="12" y2="16"/></svg>
+        <p>商品がまだ登録されていません</p>
+      </div>
     </div>
-    <div id="inv-list-container"></div>
-    <div id="inv-list-empty" class="empty-state" style="display:none">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/><line x1="12" y1="12" x2="12" y2="16"/></svg>
-      <p>商品がまだ登録されていません</p>
+    <!-- 右：入出庫カレンダー（PC幅のみ） -->
+    <div id="inv-cal-col" style="display:none;width:340px;flex-shrink:0;border-left:1px solid var(--border);padding-left:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <button onclick="changeInvCalMonth(-1)" style="background:none;border:none;font-size:16px;color:var(--text-sub);cursor:pointer;padding:4px 8px">◀</button>
+        <div id="inv-cal-label" style="font-size:14px;font-weight:700;color:var(--text)"></div>
+        <button onclick="changeInvCalMonth(1)" style="background:none;border:none;font-size:16px;color:var(--text-sub);cursor:pointer;padding:4px 8px">▶</button>
+      </div>
+      <div id="inv-cal-grid"></div>
+      <div style="display:flex;gap:12px;margin-top:8px;font-size:11px;color:var(--text-muted)">
+        <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#16a34a;margin-right:3px"></span>入庫</span>
+        <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#dc2626;margin-right:3px"></span>出庫</span>
+      </div>
+      <div id="inv-cal-detail" style="margin-top:16px"></div>
     </div>
   </div>
 </div>
@@ -1364,7 +1380,14 @@ function showInvScreen(name) {
       if (window.innerWidth >= 768) loadInventory().then(renderInvAddList);
     }
   }
-  if (name === 'inv-list') renderInventoryList();
+  if (name === 'inv-list') {
+    renderInventoryList();
+    const calCol = document.getElementById('inv-cal-col');
+    if (calCol) {
+      calCol.style.display = window.innerWidth >= 768 ? 'block' : 'none';
+      if (window.innerWidth >= 768) { initInvCalendar(); }
+    }
+  }
   if (name === 'inv-packec') {
     const addTab = document.getElementById('packec-tab-add');
     const ecTab  = document.getElementById('packec-tab-ec');
@@ -1397,7 +1420,10 @@ async function loadInventory() {
     ]);
     products   = objToArr(p);
     stockMoves = objToArr(m);
-    if (document.getElementById('screen-inv-list')?.classList.contains('active')) renderInventoryList();
+    if (document.getElementById('screen-inv-list')?.classList.contains('active')) {
+      renderInventoryList();
+      if (document.getElementById('inv-cal-col')?.style.display !== 'none') renderInvCalendar();
+    }
     if (document.getElementById('screen-inv-add')?.classList.contains('active')) renderInvAddList();
 
   } catch(e) { console.error('inventory load error', e); }
@@ -1445,6 +1471,29 @@ function clearInvAddExistingMode() {
   if (btn) btn.textContent = '商品を登録する';
 }
 
+// 検索結果のタイトル・スニペットから型番らしき文字列を推定する（ヒューリスティック・要確認）
+function guessModelNumber(text) {
+  if (!text) return '';
+  const tokens = text.match(/[A-Za-z0-9][A-Za-z0-9\-\/]{2,}/g) || [];
+  const stopWords = new Set(['価格com','kakakucom','http','https','www']);
+  const candidates = tokens.filter(t => {
+    const clean = t.replace(/[\-\/]/g, '');
+    if (clean.length < 3 || clean.length > 20) return false;
+    if (!/[A-Za-z]/.test(clean) || !/[0-9]/.test(clean)) return false;
+    if (stopWords.has(t.toLowerCase())) return false;
+    return true;
+  });
+  if (!candidates.length) return '';
+  // ハイフンを含む・より長いものを型番らしいと判断
+  candidates.sort((a, b) => {
+    const aHyphen = /[\-\/]/.test(a) ? 1 : 0;
+    const bHyphen = /[\-\/]/.test(b) ? 1 : 0;
+    if (aHyphen !== bHyphen) return bHyphen - aHyphen;
+    return b.length - a.length;
+  });
+  return candidates[0];
+}
+
 async function lookupJan() {
   const jan = document.getElementById('inv-jan').value.trim();
   const status = document.getElementById('jan-lookup-status');
@@ -1474,15 +1523,25 @@ async function lookupJan() {
       const snippet = item.snippet || '';
 
       let productName = title
-        .replace(/[-|｜].*価格\.com.*/gi, '')
-        .replace(/価格\.com.*/gi, '')
+        .replace(/\s*[-|｜]\s*価格\.com.*$/gi, '')
+        .replace(/の\s*価格比較.*$/gi, '')
         .replace(/の最安値.*$/gi, '')
         .replace(/\s*[-|｜]\s*$/, '')
         .trim();
 
       if (productName) {
         document.getElementById('inv-name').value = productName;
-        status.innerHTML = `✅ 商品名を取得しました！確認・修正してから登録してください。<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-size:12px">📦 価格.comで詳細を確認</a>`;
+
+        // 型番も推定してみる（タイトル・スニペットから抽出。あくまで推定のため要確認）
+        const guessedModel = guessModelNumber(title) || guessModelNumber(snippet);
+        const modelField = document.getElementById('inv-model');
+        let modelNote = '';
+        if (guessedModel && modelField && !modelField.value) {
+          modelField.value = guessedModel;
+          modelNote = '（型番は自動推定です。必ずご確認ください）';
+        }
+
+        status.innerHTML = `✅ 商品名を取得しました！確認・修正してから登録してください。${modelNote}<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-size:12px">📦 価格.comで詳細を確認</a>`;
         status.style.color = 'var(--success)';
       } else {
         status.innerHTML = `商品が見つかりませんでした。<a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-weight:600;text-decoration:underline">📦 価格.comで検索する</a>`;
@@ -1818,6 +1877,114 @@ function renderInventoryList() {
 
   const sorted = [...filtered].sort((a,b) => a.stock - b.stock);
   container.innerHTML = sorted.map(buildInvCard).join('');
+}
+
+// ── 在庫一覧：入出庫カレンダー ──
+let _invCalMonth = null; // {year, month} month は 0始まり
+let _invCalSelectedDate = null;
+
+function initInvCalendar() {
+  if (!_invCalMonth) {
+    const now = new Date();
+    _invCalMonth = { year: now.getFullYear(), month: now.getMonth() };
+  }
+  renderInvCalendar();
+}
+
+function changeInvCalMonth(delta) {
+  if (!_invCalMonth) initInvCalendar();
+  let { year, month } = _invCalMonth;
+  month += delta;
+  if (month < 0) { month = 11; year--; }
+  if (month > 11) { month = 0; year++; }
+  _invCalMonth = { year, month };
+  _invCalSelectedDate = null;
+  renderInvCalendar();
+}
+
+function _invCalMovesByDate() {
+  // stockMoves を日付ごとに集計（in/out の点数と件数）
+  const map = {};
+  (stockMoves || []).forEach(m => {
+    if (!m.date || (m.type !== 'in' && m.type !== 'out')) return;
+    if (!map[m.date]) map[m.date] = { in: 0, out: 0, items: [] };
+    map[m.date][m.type] += (m.qty || 0);
+    map[m.date].items.push(m);
+  });
+  return map;
+}
+
+function renderInvCalendar() {
+  if (!_invCalMonth) { const now = new Date(); _invCalMonth = { year: now.getFullYear(), month: now.getMonth() }; }
+  const { year, month } = _invCalMonth;
+  const label = document.getElementById('inv-cal-label');
+  const grid = document.getElementById('inv-cal-grid');
+  if (!label || !grid) return;
+  label.textContent = `${year}年${month + 1}月`;
+
+  const movesByDate = _invCalMovesByDate();
+  const firstDay = new Date(year, month, 1);
+  const startOffset = firstDay.getDay(); // 0=日
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = todayStr();
+
+  const dowNames = ['日','月','火','水','木','金','土'];
+  let html = '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px">';
+  dowNames.forEach(d => {
+    html += `<div style="text-align:center;font-size:11px;color:var(--text-muted);font-weight:600;padding:2px 0">${d}</div>`;
+  });
+  html += '</div>';
+
+  html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">';
+  for (let i = 0; i < startOffset; i++) html += '<div></div>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const mv = movesByDate[dateStr];
+    const isToday = dateStr === today;
+    const isSelected = dateStr === _invCalSelectedDate;
+    let bg = 'transparent';
+    if (isSelected) bg = 'var(--surface)';
+    let border = isToday ? '1px solid var(--gold)' : '1px solid transparent';
+    let dots = '';
+    if (mv) {
+      if (mv.in > 0) dots += `<span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--success);margin:0 1px"></span>`;
+      if (mv.out > 0) dots += `<span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--danger);margin:0 1px"></span>`;
+    }
+    html += `<div onclick="selectInvCalDay('${dateStr}')" style="cursor:pointer;text-align:center;padding:4px 0;border-radius:6px;background:${bg};border:${border}">
+      <div style="font-size:12px;color:${mv ? 'var(--text)' : 'var(--text-muted)'}">${d}</div>
+      <div style="height:8px">${dots}</div>
+    </div>`;
+  }
+  html += '</div>';
+  grid.innerHTML = html;
+
+  if (_invCalSelectedDate) selectInvCalDay(_invCalSelectedDate, true);
+  else document.getElementById('inv-cal-detail').innerHTML = '';
+}
+
+function selectInvCalDay(dateStr, skipRerenderGrid) {
+  _invCalSelectedDate = dateStr;
+  if (!skipRerenderGrid) renderInvCalendar();
+
+  const detail = document.getElementById('inv-cal-detail');
+  if (!detail) return;
+  const moves = (stockMoves || []).filter(m => m.date === dateStr && (m.type === 'in' || m.type === 'out'));
+  if (!moves.length) {
+    detail.innerHTML = `<div style="font-size:12px;color:var(--text-muted)">${fmtDateJP(dateStr)}の入出庫はありません</div>`;
+    return;
+  }
+  const sorted = [...moves].sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
+  const rows = sorted.map(m => {
+    const isIn = m.type === 'in';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
+      <div style="min-width:0">
+        <div style="color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.productName || ''}</div>
+        ${m.memo ? `<div style="color:var(--text-muted);font-size:11px;margin-top:1px">${m.memo}</div>` : ''}
+      </div>
+      <div style="flex-shrink:0;margin-left:8px;font-weight:700;color:${isIn ? 'var(--success)' : 'var(--danger)'}">${isIn ? '入庫 +' : '出庫 -'}${m.qty}</div>
+    </div>`;
+  }).join('');
+  detail.innerHTML = `<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px">${fmtDateJP(dateStr)}</div>${rows}`;
 }
 
 function setInvCatFilter(cat) {
