@@ -3617,14 +3617,18 @@ function buildPackItemCard(item) {
   const editBtns = isAdmin() ? `<div style="display:flex;flex-direction:column;gap:4px"><button onclick="openPackEdit('${item._key}')" style="padding:5px 10px;background:#bfdbfe;color:#1e3a5f;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">編集</button><button onclick="deletePackItem('${item._key}')" class="delete-btn">削除</button></div>` : '';
   const nameStyle = item.done ? 'text-decoration:line-through' : '';
   const jan = item.jan ? `<span style="font-size:11px;color:var(--text-muted)">JAN:${item.jan}</span>` : '';
-  const customer = item.customer ? `👤 ${item.customer} 様　` : '';
-  const address = (item.zip||item.dest) ? `🗺 ${item.zip?'〒'+item.zip+'　':''}${item.dest||''}` : '';
+  // 送り先：お名前・郵便番号・住所をまとめて1行に表示（絵文字なし）
+  const destParts = [];
+  if (item.customer) destParts.push(`${item.customer} 様`);
+  if (item.zip) destParts.push(`〒${item.zip}`);
+  if (item.dest) destParts.push(item.dest);
+  const destination = destParts.length ? `<div style="margin-top:2px">送り先：${destParts.join('　')}</div>` : '';
   const staff = item.staff ? `<div style="margin-top:2px">担当: ${item.staff}</div>` : '';
   const memo = item.memo ? `<div style="margin-top:2px;color:var(--text-muted);font-size:11px">📝 ${item.memo}</div>` : '';
   const doneLabel = item.done ? '<div style="font-size:11px;color:#a0a0a0;margin-top:3px">✅ 梱包完了</div>' : '';
   const btnColor = item.done ? '#a0a0a0' : 'var(--gold)';
   const btnBg = item.done ? '#a0a0a0' : 'transparent';
-  return `<div class="trip-card" style="${cardStyle}"><div class="trip-card-body"><div style="display:flex;align-items:center;gap:12px"><button onclick="togglePackDone('${item._key}')" style="flex-shrink:0;width:32px;height:32px;border-radius:50%;border:2px solid ${btnColor};background:${btnBg};cursor:pointer;color:#fff;font-size:18px;font-weight:700;line-height:1">${item.done?'✓':''}</button><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">${badge}<span style="font-size:14px;font-weight:700;color:var(--text);${nameStyle}">${item.product} × ${item.qty}</span>${jan}</div><div style="font-size:12px;color:var(--text-sub)">${customer}${address}${staff}${memo}</div>${doneLabel}</div>${editBtns}</div></div></div>`;
+  return `<div class="trip-card" style="${cardStyle}"><div class="trip-card-body"><div style="display:flex;align-items:center;gap:12px"><button onclick="togglePackDone('${item._key}')" style="flex-shrink:0;width:32px;height:32px;border-radius:50%;border:2px solid ${btnColor};background:${btnBg};cursor:pointer;color:#fff;font-size:18px;font-weight:700;line-height:1">${item.done?'✓':''}</button><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">${badge}<span style="font-size:14px;font-weight:700;color:var(--text);${nameStyle}">${item.product} × ${item.qty}</span>${jan}</div><div style="font-size:12px;color:var(--text-sub)">${destination}${staff}${memo}</div>${doneLabel}</div>${editBtns}</div></div></div>`;
 }
 
 function renderPackList() {
