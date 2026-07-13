@@ -881,6 +881,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
             <button class="btn btn-secondary" style="flex:none;padding:8px 14px;font-size:13px" onclick="document.getElementById('inv-bulk-import-file').click()">📥 CSV/Excelから一括登録</button>
             <input type="file" id="inv-bulk-import-file" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleBulkImportFile(event)">
           </div>
+          <button class="btn btn-secondary" style="flex:none;padding:8px 14px;font-size:13px" onclick="openInvCalModal()">📅 カレンダー</button>
           <button class="btn btn-secondary" style="flex:none;padding:8px 14px;font-size:13px" onclick="doExportInventory()">📊 Excel出力</button>
         </div>
       </div>
@@ -909,23 +910,29 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <p>商品がまだ登録されていません</p>
       </div>
     </div>
-    <!-- 右：入出庫カレンダー（PC幅のみ） -->
-    <div id="inv-cal-col" style="display:none;width:340px;flex-shrink:0;border-left:1px solid var(--border);padding-left:20px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <button onclick="changeInvCalMonth(-1)" style="background:none;border:none;font-size:16px;color:var(--text-sub);cursor:pointer;padding:4px 8px">◀</button>
-        <div id="inv-cal-label" style="font-size:14px;font-weight:700;color:var(--text)"></div>
-        <button onclick="changeInvCalMonth(1)" style="background:none;border:none;font-size:16px;color:var(--text-sub);cursor:pointer;padding:4px 8px">▶</button>
-      </div>
-      <div id="inv-cal-grid"></div>
-      <div style="display:flex;gap:12px;margin-top:8px;font-size:11px;color:var(--text-muted)">
-        <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#16a34a;margin-right:3px"></span>入庫</span>
-        <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#dc2626;margin-right:3px"></span>出庫</span>
-      </div>
-      <div id="inv-cal-detail" style="margin-top:16px"></div>
-      <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
-        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">月次入出庫推移（直近6ヶ月）</div>
-        <div id="inv-trend-chart"></div>
-      </div>
+  </div>
+</div>
+
+<div id="inv-cal-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div style="font-size:15px;font-weight:700;color:var(--text)">入出庫カレンダー</div>
+      <button onclick="closeInvCalModal()" style="background:none;border:none;font-size:20px;color:var(--text-muted);cursor:pointer;padding:0 4px">✕</button>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <button onclick="changeInvCalMonth(-1)" style="background:none;border:none;font-size:16px;color:var(--text-sub);cursor:pointer;padding:4px 8px">◀</button>
+      <div id="inv-cal-label" style="font-size:14px;font-weight:700;color:var(--text)"></div>
+      <button onclick="changeInvCalMonth(1)" style="background:none;border:none;font-size:16px;color:var(--text-sub);cursor:pointer;padding:4px 8px">▶</button>
+    </div>
+    <div id="inv-cal-grid"></div>
+    <div style="display:flex;gap:12px;margin-top:8px;font-size:11px;color:var(--text-muted)">
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#16a34a;margin-right:3px"></span>入庫</span>
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#dc2626;margin-right:3px"></span>出庫</span>
+    </div>
+    <div id="inv-cal-detail" style="margin-top:16px"></div>
+    <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">月次入出庫推移（直近6ヶ月）</div>
+      <div id="inv-trend-chart"></div>
     </div>
   </div>
 </div>
@@ -1425,11 +1432,6 @@ function showInvScreen(name) {
   }
   if (name === 'inv-list') {
     renderInventoryList();
-    const calCol = document.getElementById('inv-cal-col');
-    if (calCol) {
-      calCol.style.display = window.innerWidth >= 768 ? 'block' : 'none';
-      if (window.innerWidth >= 768) { initInvCalendar(); }
-    }
   }
   if (name === 'inv-packec') {
     const addTab = document.getElementById('packec-tab-add');
@@ -1465,7 +1467,7 @@ async function loadInventory() {
     stockMoves = objToArr(m);
     if (document.getElementById('screen-inv-list')?.classList.contains('active')) {
       renderInventoryList();
-      if (document.getElementById('inv-cal-col')?.style.display !== 'none') { renderInvCalendar(); renderInvTrendChart(); }
+      if (document.getElementById('inv-cal-modal')?.style.display === 'flex') { renderInvCalendar(); renderInvTrendChart(); }
     }
     if (document.getElementById('screen-inv-add')?.classList.contains('active')) renderInvAddList();
 
@@ -2132,6 +2134,19 @@ function initInvCalendar() {
   }
   renderInvCalendar();
   renderInvTrendChart();
+}
+
+// PC・スマホどちらの画面幅でも同じように使えるよう、モーダルとして開閉する
+function openInvCalModal() {
+  const modal = document.getElementById('inv-cal-modal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  initInvCalendar();
+}
+
+function closeInvCalModal() {
+  const modal = document.getElementById('inv-cal-modal');
+  if (modal) modal.style.display = 'none';
 }
 
 // 直近6ヶ月の月別入庫・出庫の合計数量を手描きバーチャートで表示
