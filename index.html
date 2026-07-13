@@ -962,13 +962,18 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     <div class="card">
       <div class="card-title">出荷リストに追加</div>
       <div class="field">
-        <div class="field-label">商品名 <span class="req">*</span></div>
-        <input type="text" id="pack-product-sp" placeholder="商品名を入力">
+        <div class="field-label">JANコード</div>
+        <div style="display:flex;gap:8px;margin-bottom:6px">
+          <button class="scan-btn" onclick="scanFromPhoto('pack-jan-sp')" style="flex:1">📸 写真で読み取る</button>
+          <button class="scan-btn" onclick="startScan('pack-jan-sp')" style="flex:1;background:var(--surface);color:var(--text);border:1.5px solid var(--border)">📷 連続スキャン</button>
+        </div>
+        <input type="text" id="pack-jan-sp" placeholder="または手入力" oninput="lookupPackJan()">
+        <div id="pack-jan-status" style="font-size:12px;margin-top:6px;color:var(--text-muted)"></div>
       </div>
       <div class="field-divider"></div>
       <div class="field" style="padding-top:16px">
-        <div class="field-label">JANコード <span style="font-size:11px;color:var(--text-muted)">（入出庫スキャン時に自動入力）</span></div>
-        <input type="text" id="pack-jan-sp" placeholder="入出庫でスキャンすると自動入力されます" style="color:var(--text-muted)">
+        <div class="field-label">商品名 <span class="req">*</span></div>
+        <input type="text" id="pack-product-sp" placeholder="商品名を入力（JANスキャンで自動入力されます）">
       </div>
       <div class="field-divider"></div>
       <div class="field" style="padding-top:16px">
@@ -1808,6 +1813,27 @@ function lookupProduct() {
   }
 }
 
+// 出荷リストへの追加フォーム：JANコードから商品名・カテゴリーを自動入力する（入出庫を経由しなくてもこの画面だけで完結する）
+function lookupPackJan() {
+  const jan = document.getElementById('pack-jan-sp').value.trim();
+  const status = document.getElementById('pack-jan-status');
+  if (!status) return;
+  if (!jan) { status.textContent = ''; return; }
+
+  const found = products.find(p => p.jan === jan);
+  if (found) {
+    const productField = document.getElementById('pack-product-sp');
+    if (productField) productField.value = found.name;
+    const catField = document.getElementById('pack-category-sp');
+    if (catField && found.category) catField.value = found.category;
+    status.innerHTML = `✅ ${found.name}（現在庫: ${found.stock}個）`;
+    status.style.color = 'var(--success)';
+  } else {
+    status.textContent = '登録されていない商品です。商品名は手入力してください';
+    status.style.color = 'var(--text-muted)';
+  }
+}
+
 async function submitMove() {
   const jan  = document.getElementById('move-jan').value.trim();
   const date = document.getElementById('move-date').value;
@@ -2436,6 +2462,7 @@ function handleScanResult(text) {
   stopScan();
   if (scanTarget === 'move-jan') lookupProduct();
   if (scanTarget === 'inv-jan') lookupJan();
+  if (scanTarget === 'pack-jan-sp') lookupPackJan();
 }
 
 // ── 写真から読み取る（iPhoneでの連続スキャンがうまく動かない場合の代替手段）──
