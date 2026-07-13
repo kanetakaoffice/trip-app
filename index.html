@@ -848,20 +848,6 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         </div>
         <div class="field-divider"></div>
         <div class="field" style="padding-top:16px">
-          <div class="field-label">売価（円）</div>
-          <input type="number" id="move-price" placeholder="0（出庫時のEC売上に連携）" style="font-size:18px;font-weight:700;text-align:right">
-        </div>
-        <div class="field-divider"></div>
-        <div class="field" style="padding-top:16px">
-          <div class="field-label">販路</div>
-          <select id="move-ec-channel" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;width:100%">
-            <option value="">EC売上に連携しない</option>
-            <option value="Amazon">Amazon</option>
-            <option value="自社EC">自社EC</option>
-          </select>
-        </div>
-        <div class="field-divider"></div>
-        <div class="field" style="padding-top:16px">
           <div class="field-label">メモ</div>
           <input type="text" id="move-memo" placeholder="理由・備考など">
         </div>
@@ -1592,6 +1578,15 @@ async function lookupJan() {
     const r = await fetch(url);
     const d = await r.json();
 
+    // 検索APIそのものがエラーを返した場合（キーの利用制限・クォータ超過など）は、
+    // 「見つからなかった」と区別してその旨を表示する（原因の切り分けをしやすくするため）
+    if (!r.ok || d.error) {
+      console.error('価格.com検索APIエラー:', r.status, d.error);
+      status.innerHTML = `商品情報の検索でエラーが発生しました（検索機能自体が一時的に利用できない可能性があります）。お手数ですが商品名・型番・メーカーは手入力をお願いします。<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-size:12px">📦 価格.comで手動検索する</a>`;
+      status.style.color = 'var(--danger)';
+      return;
+    }
+
     if (d.items && d.items.length > 0) {
       const item = d.items[0];
       const title = item.title || '';
@@ -1634,8 +1629,9 @@ async function lookupJan() {
       status.style.color = 'var(--text-muted)';
     }
   } catch(e) {
-    status.innerHTML = `<a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-weight:600;text-decoration:underline">📦 価格.comで検索する</a>`;
-    status.style.color = 'var(--text-muted)';
+    console.error('価格.com検索リクエスト失敗:', e);
+    status.innerHTML = `商品情報の検索に失敗しました（通信エラーの可能性があります）。お手数ですが商品名・型番・メーカーは手入力をお願いします。<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-weight:600;text-decoration:underline">📦 価格.comで手動検索する</a>`;
+    status.style.color = 'var(--danger)';
   }
 }
 
@@ -1862,19 +1858,10 @@ async function submitMove() {
         stockBefore: prod.stock, stockAfter: newStock, createdAt: Date.now()
       })})
     ]);
-    // 出庫かつ販路が選択されていればEC売上に自動追加
-    const price = parseInt(document.getElementById('move-price').value)||0;
-    const ecCh  = document.getElementById('move-ec-channel').value;
-    if (type === 'out' && price > 0 && ecCh) {
-      const productName = document.getElementById('move-product-name').textContent || jan;
-      await fetch(authedUrl('/ecSales.json'), { method:'POST',
-        body: JSON.stringify({channel:ecCh, amount:price, note:productName, date, createdAt:new Date().toISOString()})
-      });
-      await loadECSales(); renderECListSP();
-    }
-    ['move-jan','move-date','move-qty','move-memo','move-price'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+    // 卸売事業もあり出庫＝EC販売とは限らないため、入出庫からEC売上への自動連携は行わない
+    // （EC売上は出荷管理のEC売上タブから個別に記録する）
+    ['move-jan','move-date','move-qty','move-memo'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
     document.getElementById('move-type').selectedIndex = 0;
-    document.getElementById('move-ec-channel').selectedIndex = 0;
     document.getElementById('move-product-info').style.display = 'none';
     await loadInventory();
     showToast('入出庫を記録しました（在庫: ' + newStock + '個）');
