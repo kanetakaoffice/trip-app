@@ -1541,16 +1541,31 @@ async function loadAll() {
     updateBadge();
     document.getElementById('list-loading').style.display = 'none';
     if (document.getElementById('screen-list').classList.contains('active')) {
-      saveOpenGroups();
-      if (window.saveChartOpenMonths) window.saveChartOpenMonths();
-      renderList();
-      restoreOpenGroups();
-      if (window.restoreChartOpenMonths) window.restoreChartOpenMonths();
+      // 一覧画面で「編集」を開いたまま自動更新が来ると、入力途中の内容が消えてしまうため、
+      // 編集中の行がある間は再描画自体をスキップする（保存・キャンセルされるまで触らない）。
+      const listHasOpenEdit = Array.from(document.querySelectorAll('#list-container [id^="edit_"]')).some(el => el.style.display === 'block');
+      if (!listHasOpenEdit) {
+        saveOpenGroups();
+        if (window.saveChartOpenMonths) window.saveChartOpenMonths();
+        renderList();
+        restoreOpenGroups();
+        if (window.restoreChartOpenMonths) window.restoreChartOpenMonths();
+      }
     }
-    if (document.getElementById('screen-export').classList.contains('active')) renderMonthGrid(true);
+    if (document.getElementById('screen-export').classList.contains('active')) {
+      if (window.saveExportOpenAccordions) window.saveExportOpenAccordions();
+      renderMonthGrid(true);
+      if (window.restoreExportOpenAccordions) window.restoreExportOpenAccordions();
+    }
     if (document.getElementById('screen-receivable').classList.contains('active')) { saveRecvOpenGroups(); renderReceivable(true); }
-    if (document.getElementById('screen-myhistory').classList.contains('active')) renderMyHistory();
-    if (document.getElementById('screen-pc').classList.contains('active')) renderPCHistory();
+    if (document.getElementById('screen-myhistory').classList.contains('active')) {
+      const mhHasOpenEdit = Array.from(document.querySelectorAll('#myhistory-container [id^="edit_mh_"]')).some(el => el.style.display === 'block');
+      if (!mhHasOpenEdit) renderMyHistory();
+    }
+    if (document.getElementById('screen-pc').classList.contains('active')) {
+      const pcHasOpenEdit = Array.from(document.querySelectorAll('#pc-history-area [id^="pce_"]')).some(el => el.style.display === 'block');
+      if (!pcHasOpenEdit) renderPCHistory();
+    }
     document.getElementById('sync-dot').className = 'sync-dot';
     document.getElementById('sync-status').textContent = '同期済み';
   } catch(e) {
@@ -4278,6 +4293,25 @@ function saveChartOpenMonths() {
 }
 function restoreChartOpenMonths() {
   _chartOpenMonths.forEach(id => {
+    const body = document.getElementById(id);
+    const arrow = document.getElementById(id.replace('acc-body-', 'acc-arrow-'));
+    if (body) body.classList.add('open');
+    if (arrow) arrow.classList.add('open');
+  });
+}
+
+// 月次出力画面（selectMonthで組み立てるプレビュー内の出張・経費・仕入・売上、
+// および仕入先別・取引先別の内訳アコーディオン）も、同じ理由で自動更新のたびに閉じてしまう。
+// 同じ仕組みで開閉状態を保持する。
+let _exportOpenAccordions = new Set();
+function saveExportOpenAccordions() {
+  _exportOpenAccordions = new Set();
+  document.querySelectorAll('#preview-box [id^="acc-body-"]').forEach(el => {
+    if (el.classList.contains('open')) _exportOpenAccordions.add(el.id);
+  });
+}
+function restoreExportOpenAccordions() {
+  _exportOpenAccordions.forEach(id => {
     const body = document.getElementById(id);
     const arrow = document.getElementById(id.replace('acc-body-', 'acc-arrow-'));
     if (body) body.classList.add('open');
