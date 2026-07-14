@@ -66,9 +66,10 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Hira
 .screen.active { display: block; }
 .card { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
 .card-title { font-size: 11px; font-weight: 700; color: var(--gold-dark); letter-spacing: 0.1em; text-transform: uppercase; padding: 14px 16px 0; margin-bottom: 12px; }
-.home-action-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 14px 4px; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-size: 11px; font-weight: 600; color: var(--text); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.home-action-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 14px 4px; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-sm); color: var(--text); cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .home-action-btn:active { background: var(--gold-bg); border-color: var(--gold); }
-.home-action-btn > :first-child { font-size: 22px; }
+.home-icon { font-size: 22px; }
+.home-label { font-size: 12px; font-weight: 700; font-family: 'Hiragino Maru Gothic ProN', 'Hiragino Maru Gothic Pro', 'Yu Gothic', 'Noto Sans CJK JP', sans-serif; }
 .home-stat-card { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .home-stat-card:active { opacity: 0.7; }
 .field { padding: 0 16px 16px; }
@@ -254,17 +255,17 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
   <div id="screen-home" class="screen active">
     <div style="margin-bottom:16px">
       <div style="font-size:13px;color:var(--text-muted)" id="home-date">-</div>
-      <div style="font-size:20px;font-weight:700;color:var(--text);margin-top:2px">ホーム</div>
+      <div style="font-size:20px;font-weight:700;color:var(--text);margin-top:2px;letter-spacing:0.03em">HOME</div>
     </div>
     <div class="card">
-      <div class="card-title">よく使う操作</div>
+      <div class="card-title">Quick Menu</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:0 16px 16px">
-        <button class="home-action-btn" onclick="showScreen('form')">🧳<span>出張</span></button>
-        <button class="home-action-btn" onclick="showScreen('expense')">💴<span>経費</span></button>
-        <button class="home-action-btn" onclick="showScreen('purchase')">📦<span>仕入</span></button>
-        <button class="home-action-btn" onclick="showScreen('sales')">📈<span>売上</span></button>
-        <button class="home-action-btn" onclick="goHomeToInv('inv-move')">🔄<span>在庫入出庫</span></button>
-        <button class="home-action-btn" onclick="goHomeToInv('inv-packec')">🚚<span>出荷管理</span></button>
+        <button class="home-action-btn" onclick="showScreen('form')"><span class="home-icon">🧳</span><span class="home-label">出張</span></button>
+        <button class="home-action-btn" onclick="showScreen('expense')"><span class="home-icon">💴</span><span class="home-label">経費</span></button>
+        <button class="home-action-btn" onclick="showScreen('purchase')"><span class="home-icon">📦</span><span class="home-label">仕入</span></button>
+        <button class="home-action-btn" onclick="showScreen('sales')"><span class="home-icon">📈</span><span class="home-label">売上</span></button>
+        <button class="home-action-btn" onclick="goHomeToInv('inv-move')"><span class="home-icon">🔄</span><span class="home-label">在庫入出庫</span></button>
+        <button class="home-action-btn" onclick="goHomeToInv('inv-packec')"><span class="home-icon">🚚</span><span class="home-label">出荷管理</span></button>
       </div>
     </div>
     <div id="home-summary"></div>
@@ -4600,6 +4601,33 @@ async function renderHomeScreen() {
   renderHomeSummary();
 }
 
+// ホーム画面の「仕入・売上の推移（直近6ヶ月）」ミニグラフ
+function buildHomeTrendChart(purchases, sales, ecSales) {
+  const now = new Date();
+  const months = Array.from({length:6}, (_,i) => new Date(now.getFullYear(), now.getMonth()-5+i, 1).toISOString().slice(0,7));
+  const purVals = months.map(m => purchases.filter(p=>p.date?.startsWith(m)).reduce((s,p)=>s+p.amount,0));
+  const salVals = months.map(m => sales.filter(s=>s.date?.startsWith(m)).reduce((s,a)=>s+a.amount,0)
+                                  + ecSales.filter(e=>e.date?.startsWith(m)).reduce((s,e)=>s+e.amount,0));
+  const max = Math.max(...purVals, ...salVals, 1);
+  const barH = 90;
+  const cols = months.map((m,i) => `
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
+      <div style="width:100%;display:flex;gap:2px;align-items:flex-end;height:${barH}px">
+        <div style="flex:1;background:#d1d5db;height:${Math.round((purVals[i]/max)*barH)}px;border-radius:2px 2px 0 0"></div>
+        <div style="flex:1;background:#0f766e;height:${Math.round((salVals[i]/max)*barH)}px;border-radius:2px 2px 0 0"></div>
+      </div>
+      <div style="font-size:9px;color:var(--text-muted)">${parseInt(m.slice(5,7))}月</div>
+    </div>`).join('');
+  return `<div class="card home-stat-card" onclick="showScreen('list')">
+    <div class="card-title">仕入・売上の推移（直近6ヶ月）</div>
+    <div style="display:flex;gap:2px;padding:0 16px 12px;align-items:flex-end">${cols}</div>
+    <div style="display:flex;gap:12px;padding:0 16px 14px;font-size:10px;color:#9ca3af">
+      <span><span style="display:inline-block;width:10px;height:10px;background:#d1d5db;border-radius:2px;margin-right:3px"></span>仕入</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:#0f766e;border-radius:2px;margin-right:3px"></span>売上</span>
+    </div>
+  </div>`;
+}
+
 function renderHomeSummary() {
   const el = document.getElementById('home-summary');
   if (!el) return;
@@ -4629,6 +4657,7 @@ function renderHomeSummary() {
   const ecTodayTotal = _ecItems.filter(i=>i.date===today).reduce((s,i)=>s+i.amount,0);
 
   el.innerHTML = `
+    ${buildHomeTrendChart(purchases, sales, ecSales)}
     <div class="card home-stat-card" onclick="showScreen('list')">
       <div class="card-title">今月の実績</div>
       <div style="display:flex;padding:0 16px 16px;gap:8px;text-align:center">
