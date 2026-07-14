@@ -1634,20 +1634,12 @@ function switchMode(mode) {
       const el = document.getElementById('screen-' + s);
       if (el) { el.style.display = 'none'; el.classList.remove('active'); }
     });
-    if (isAdmin()) {
-      document.querySelectorAll('.screen:not([id^="screen-inv"])').forEach(s => {
-        s.style.display = '';
-      });
-      showScreen('home');
-    } else {
-      // 一般ユーザーはscreen-pcのみ表示可能に
-      document.querySelectorAll('.screen:not([id^="screen-inv"])').forEach(s => {
-        s.style.display = 'none'; s.classList.remove('active');
-      });
-      const pcEl = document.getElementById('screen-pc');
-      if (pcEl) pcEl.style.display = '';
-      setTimeout(() => showPCLayout(), 50);
-    }
+    // 一般ユーザー（倉庫作業員）にも簡易版のHOMEを表示する。経費・仕入・売上の入力は
+    // HOME内のQuick Menuから引き続きscreen-pc（簡易入力画面）に遷移できる
+    document.querySelectorAll('.screen:not([id^="screen-inv"])').forEach(s => {
+      s.style.display = '';
+    });
+    showScreen('home');
   } else {
     bizNav.style.display = 'none';
     invNav.style.display = 'flex';
@@ -1670,6 +1662,12 @@ function switchMode(mode) {
 }
 
 function showInvScreen(name) {
+  // 卸売管理（納品書作成・預かりリスト）は管理者専用。倉庫作業員は入出庫・出荷管理・在庫一覧のみ担当するため、
+  // ナビボタンを隠していても直接呼び出された場合に備えて念のためここでもブロックしておく
+  if (name === 'inv-wholesale' && !isAdmin()) {
+    showToast('この機能は管理者のみ利用できます');
+    name = 'inv-add';
+  }
   ['inv-add','inv-move','inv-list','inv-packec','inv-wholesale'].forEach(s => {
     const el = document.getElementById('screen-' + s);
     if (el) { el.style.cssText = 'display:none !important; padding-top:8px;'; el.classList.remove('active'); }
@@ -3853,15 +3851,9 @@ window._initApp = async function() {
   applyRoleUI();
   await loadAll();
   setInterval(loadAll, 30000);
-  // 一般ユーザーはloadAll完了後にPC画面を表示
-  if (!isAdmin()) {
-    const pcEl = document.getElementById('screen-pc');
-    if (pcEl) pcEl.style.display = '';
-    showPCLayout();
-  } else if (window.renderHomeScreen) {
-    // 管理者はログイン直後、静的に表示されているホーム画面の中身（日付・サマリー）を描画しておく
-    renderHomeScreen();
-  }
+  // ログイン直後、静的に表示されているホーム画面の中身を描画しておく（管理者は経営サマリー、
+  // 一般ユーザーは倉庫作業向けの簡易版HOMEをそれぞれ表示）
+  if (window.renderHomeScreen) renderHomeScreen();
 };
 
 function applyRoleUI() {
@@ -3880,6 +3872,10 @@ function applyRoleUI() {
   // モードスイッチ（在庫）は全ユーザーに表示
   const modeSwitch = document.querySelector('.mode-switch');
   if (modeSwitch) modeSwitch.style.display = '';
+  // 一般ユーザー（倉庫作業員）は入出庫・出荷管理・在庫一覧のみ担当し、
+  // 納品書作成や預かりリストを扱う卸売管理は管理者専用とする
+  const wholesaleNav = document.getElementById('nav-inv-wholesale');
+  if (wholesaleNav) wholesaleNav.parentElement.style.display = admin ? '' : 'none';
 }
 </script>
 <script>
@@ -4943,7 +4939,9 @@ function showPCLayout() {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const pc = document.getElementById('screen-pc');
-  if (pc) pc.classList.add('active');
+  // HOME（簡易版）のQuick Menuから直接呼ばれた場合など、インラインのdisplay:noneが
+  // 残っていると.activeクラスだけでは表示されないため、念のためここで解除しておく
+  if (pc) { pc.style.display = ''; pc.classList.add('active'); }
 
   _isWideLayout = window.innerWidth >= 768;
   const wide = document.getElementById('pc-layout-wide');
@@ -5610,7 +5608,8 @@ function renderECListSP() {
       <div style="max-height:240px;overflow-y:auto">${dSummaryRows}</div>
     </div>`;
     // 今日：明るい水色、他：淡いラベンダー
-    dailyEl.innerHTML = `<div style="display:flex;gap:0">
+    // 一覧グラフと同じように、一番上の目盛り（＝一番高い棒）の上にも少し余白を持たせる
+    dailyEl.innerHTML = `<div style="display:flex;gap:0;margin-top:12px">
       <div style="position:relative;width:26px;flex-shrink:0;height:85px">${dAxisHtml}</div>
       <div style="flex:1;min-width:0;overflow-x:auto;position:relative">
         <svg viewBox="0 0 ${dTotalW} 85" width="${dTotalW}" style="min-width:${dTotalW}px;display:block">
@@ -5668,7 +5667,8 @@ function renderECListSP() {
       <div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--surface);font-size:11px;font-weight:700;color:var(--text-muted);border-bottom:1px solid var(--border)"><span>月</span><span style="color:#16a34a">Amazon</span><span style="color:#0ea5e9">自社EC</span><span>合計</span></div>
       ${mSummaryRows}
     </div>`;
-    monthlyEl.innerHTML = `<div style="display:flex;gap:0">
+    // 一覧グラフと同じように、一番上の目盛り（＝一番高い棒）の上にも少し余白を持たせる
+    monthlyEl.innerHTML = `<div style="display:flex;gap:0;margin-top:12px">
       <div style="position:relative;width:30px;flex-shrink:0;height:95px">${mAxisHtml}</div>
       <div style="flex:1;min-width:0;overflow-x:auto;position:relative">
         <svg viewBox="0 0 ${mTotalW} 95" width="${mTotalW}" style="min-width:${mTotalW}px;display:block">
@@ -5755,6 +5755,8 @@ async function addPackItemSPAndSwitch() {
 
 // ── ホーム画面 ──
 async function renderHomeScreen() {
+  // 一般ユーザー（倉庫作業員）には経営数値を含まない簡易版のHOMEを表示する
+  if (!isAdmin()) { await renderGeneralHomeScreen(); return; }
   const dateEl = document.getElementById('home-date');
   if (dateEl) {
     const d = new Date();
@@ -5767,6 +5769,67 @@ async function renderHomeScreen() {
   if (!_packItems.length && typeof loadPackItems === 'function') needs.push(loadPackItems());
   if (needs.length) { try { await Promise.all(needs); } catch(e) {} }
   renderHomeSummary();
+}
+
+// 一般ユーザー（倉庫作業員）向けのHOME：在庫整理・Amazon/EC出荷・梱包作業に必要な情報だけに絞り、
+// 売上・仕入・粗利益・売掛金などの経営数値は一切含めない
+async function renderGeneralHomeScreen() {
+  const el = document.getElementById('screen-home');
+  if (!el) return;
+
+  const needs = [];
+  if (!(window._getProducts?.()||[]).length && window.loadInventory) needs.push(window.loadInventory());
+  if (!_packItems.length && typeof loadPackItems === 'function') needs.push(loadPackItems());
+  if (needs.length) { try { await Promise.all(needs); } catch(e) {} }
+
+  const products = window._getProducts ? window._getProducts() : [];
+  const lowStockCount = products.filter(p => p.stock <= getLowStockThreshold(p)).length;
+  const pendingItems = (_packItems || []).filter(i => !i.done);
+  const pendingShipCount = pendingItems.length;
+  const pendingPreview = pendingItems.slice(0, 3);
+
+  const d = new Date();
+  const week = ['日','月','火','水','木','金','土'][d.getDay()];
+  const dateStr = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${week}）`;
+
+  const pendingRowsHtml = pendingPreview.map(i => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;font-size:12px;border-bottom:1px solid var(--border)">
+      <span style="font-weight:600;color:var(--text)">${i.product||''}${i.customer?'／'+i.customer:''}</span>
+      <span style="color:#9ca3af">${i.qty||1}個・${i.category||''}</span>
+    </div>`).join('') || `<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:12px">出荷待ちの商品はありません</div>`;
+
+  el.innerHTML = `
+    <div style="margin-bottom:16px">
+      <div style="font-size:13px;color:var(--text-muted)">${dateStr}</div>
+      <div style="font-size:20px;font-weight:700;color:var(--text);margin-top:2px;letter-spacing:0.03em">HOME</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Quick Menu</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 16px 16px">
+        <button class="home-action-btn" onclick="goHomeToInv('inv-move')"><span class="home-icon">🔄</span><span class="home-label">入出庫</span></button>
+        <button class="home-action-btn" onclick="goHomeToInv('inv-packec')"><span class="home-icon">🚚</span><span class="home-label">出荷管理</span></button>
+        <button class="home-action-btn" onclick="goHomeToInv('inv-list')"><span class="home-icon">📋</span><span class="home-label">在庫一覧</span></button>
+        <button class="home-action-btn" onclick="showPCLayout()"><span class="home-icon">📝</span><span class="home-label">経費・仕入・売上</span></button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+      <div class="home-stat-card" onclick="goHomeToInv('inv-list')" style="background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-align:center">
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">在庫アラート</div>
+        <div style="font-size:22px;font-weight:700;color:${lowStockCount?'var(--warning)':'#4a4a4a'}">${lowStockCount}件</div>
+      </div>
+      <div class="home-stat-card" onclick="goHomeToInv('inv-packec')" style="background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-align:center">
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">出荷待ち</div>
+        <div style="font-size:22px;font-weight:700;color:#4a4a4a">${pendingShipCount}件</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">本日の出荷待ち（一部）</div>
+      ${pendingRowsHtml}
+      <div style="padding:10px 12px;text-align:center">
+        <button onclick="goHomeToInv('inv-packec')" style="background:none;border:none;color:var(--gold-dark);font-size:12px;font-weight:700;cursor:pointer">すべて見る →</button>
+      </div>
+    </div>
+  `;
 }
 
 // ホーム画面の「仕入・売上の推移（直近6ヶ月）」ミニグラフ
@@ -6709,7 +6772,8 @@ function doExportSales() {
 
 function showScreen(name) {
   // 一般ユーザーは制限画面にアクセス不可
-  if (!isAdmin() && ['home','form','list','export','receivable'].includes(name)) return;
+  // HOMEは一般ユーザー（倉庫作業員）にも簡易版を表示するため許可する。それ以外の管理者専用画面は従来通り制限
+  if (!isAdmin() && ['form','list','export','receivable'].includes(name)) return;
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('screen-' + name).classList.add('active');
@@ -6732,9 +6796,8 @@ function goHomeToInv(screenName, packecTab) {
   }, 60);
 }
 
-// ヘッダーのタップでどこからでもホームに戻れるようにする（一般ユーザーには定位置のPC簡易画面があるため対象外）
+// ヘッダーのタップでどこからでもホーム（簡易版）に戻れるようにする
 function goHome() {
-  if (!isAdmin()) return;
   switchMode('biz');
 }
 
