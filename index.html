@@ -6029,10 +6029,10 @@ function renderChart(container) {
   const LABEL_ROW_H = 13;
   const baseCols=months.map((m,i)=>`
     <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:1px;padding:0 2px">
-      <div style="width:100%;display:flex;gap:2px;margin-bottom:2px;opacity:${i===0?1:0}"><div style="flex:1;text-align:center;font-size:8px;color:#9ca3af;white-space:nowrap;overflow:hidden">仕入</div><div style="flex:1;text-align:center;font-size:8px;color:#9ca3af;white-space:nowrap;overflow:hidden">売上</div></div>
+      <div style="width:100%;display:flex;gap:2px;margin-bottom:2px;opacity:${i===0?1:0}"><div style="flex:1;min-width:0;text-align:center;font-size:8px;color:#9ca3af;white-space:nowrap;overflow:hidden">仕入</div><div style="flex:1;min-width:0;text-align:center;font-size:8px;color:#9ca3af;white-space:nowrap;overflow:hidden">売上</div></div>
       <div class="chart-bar-col" style="width:100%;display:flex;gap:2px;align-items:flex-end;height:${barH}px">
-        <div style="flex:1">${stackedPurBar(i)}</div>
-        <div style="flex:1">${stackedSalBar(i)}</div>
+        <div style="flex:1;min-width:0">${stackedPurBar(i)}</div>
+        <div style="flex:1;min-width:0">${stackedSalBar(i)}</div>
       </div>
       <div style="font-size:9px;color:var(--text-muted);margin-top:3px">${parseInt(m.slice(5,7))}月</div>
     </div>`).join('');
@@ -6068,7 +6068,7 @@ function renderChart(container) {
     </div>
     <div style="display:flex;gap:0">
       <div style="position:relative;width:32px;flex-shrink:0;height:${barH}px;margin-top:${LABEL_ROW_H}px">${yLabels}</div>
-      <div style="flex:1;position:relative">
+      <div style="flex:1;min-width:0;position:relative">
         <div style="display:flex;gap:8px;align-items:flex-end;overflow-x:hidden;padding-bottom:4px">${baseCols}</div>
         <svg id="chart-svg-overlay" style="position:absolute;top:${LABEL_ROW_H}px;left:0;width:100%;height:${barH}px;pointer-events:all" viewBox="0 0 ${svgW} ${svgH}" preserveAspectRatio="none">
           ${svgPatterns.g1}
