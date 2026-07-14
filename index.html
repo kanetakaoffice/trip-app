@@ -1546,7 +1546,7 @@ async function loadAll() {
       restoreOpenGroups();
     }
     if (document.getElementById('screen-export').classList.contains('active')) renderMonthGrid(true);
-    if (document.getElementById('screen-receivable').classList.contains('active')) renderReceivable(true);
+    if (document.getElementById('screen-receivable').classList.contains('active')) { saveRecvOpenGroups(); renderReceivable(true); }
     if (document.getElementById('screen-myhistory').classList.contains('active')) renderMyHistory();
     if (document.getElementById('screen-pc').classList.contains('active')) renderPCHistory();
     document.getElementById('sync-dot').className = 'sync-dot';
@@ -6203,7 +6203,23 @@ function renderChart(container) {
     const pr=s-p;
     const bd=purBySupplier.filter(sup=>sup.curr[i]>0).map(sup=>`<span style="display:inline-flex;align-items:center;gap:3px;margin-right:8px;font-size:10px;color:#666"><span style="display:inline-block;width:8px;height:8px;background:${sup.color};border-radius:2px"></span>${sup.supplier} ${yen(sup.curr[i])}</span>`).join('');
     const sd=salByType.filter(t=>t.curr[i]>0).map(t=>`<span style="display:inline-flex;align-items:center;gap:3px;margin-right:8px;font-size:10px;color:#666"><span style="display:inline-block;width:8px;height:8px;background:${t.color};border-radius:2px"></span>${salTypeLabel(t.type)} ${yen(t.curr[i])}</span>`).join('');
-    return `<div style="border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;font-size:12px"><span style="font-weight:600;color:var(--text)">${m.slice(0,4)}年${parseInt(m.slice(5,7))}月</span><span style="color:#4a4a4a">${yen(p)}</span><span style="color:var(--teal)">${yen(s)}</span><span style="font-weight:700;color:${pr>=0?'var(--success)':'var(--danger)'}">${yen(pr)}</span></div>${bd?`<div style="padding:0 12px 4px;flex-wrap:wrap;display:flex">${bd}</div>`:''}${sd?`<div style="padding:0 12px 8px;flex-wrap:wrap;display:flex">${sd}</div>`:''}</div>`;
+    // 仕入先別・売上種別の内訳は、月ごとにタップで開閉できるようにする（他の画面と同じアコーディオン方式）。
+    // これにより、まず12ヶ月分の合計を一覧でざっと比較でき、気になる月だけ内訳を開いて詳しく見られる。
+    const headerRow = `<div style="display:flex;justify-content:space-between;align-items:center;flex:1;font-size:12px"><span style="font-weight:600;color:var(--text)">${m.slice(0,4)}年${parseInt(m.slice(5,7))}月</span><span style="color:#4a4a4a">${yen(p)}</span><span style="color:var(--teal)">${yen(s)}</span><span style="font-weight:700;color:${pr>=0?'var(--success)':'var(--danger)'}">${yen(pr)}</span></div>`;
+    if (!bd && !sd) {
+      return `<div style="border-bottom:1px solid var(--border);padding:8px 12px">${headerRow}</div>`;
+    }
+    const accId = 'chart-m-' + m;
+    return `<div style="border-bottom:1px solid var(--border)">
+      <div class="accordion-header" style="padding:8px 12px;border-bottom:none" onclick="toggleAccordion('${accId}')">
+        ${headerRow}
+        <span class="accordion-arrow" id="acc-arrow-${accId}" style="font-size:10px;margin-left:8px;flex-shrink:0">▼</span>
+      </div>
+      <div class="accordion-body" id="acc-body-${accId}">
+        ${bd?`<div style="padding:0 12px 4px;flex-wrap:wrap;display:flex">${bd}</div>`:''}
+        ${sd?`<div style="padding:0 12px 8px;flex-wrap:wrap;display:flex">${sd}</div>`:''}
+      </div>
+    </div>`;
   }).filter(Boolean).join('');
   const summaryTable=`<div style="background:var(--white);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;margin-bottom:16px"><div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--surface);font-size:11px;font-weight:700;color:var(--text-muted);border-bottom:1px solid var(--border)"><span>月</span><span>仕入合計</span><span style="color:var(--teal)">売上合計</span><span>粗利益</span></div>${summaryRows||'<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">データがありません</div>'}</div>`;
 
@@ -6588,6 +6604,16 @@ function doExportPurchase() {
 }
 
 let _recvOpenBefore = new Set();
+// 入金確認などでデータを再取得してrenderReceivable()を呼び直す前に、現在開いている
+// 月・日付の折りたたみ（recv_ / recv_paid_ で始まるid）を記録しておく。
+// これが無いと、renderReceivable(true)で開閉状態を復元しようとしても_recvOpenBeforeが
+// 常に空のままになり、入金確認のたびに開いていたタブが閉じてしまっていた。
+function saveRecvOpenGroups() {
+  _recvOpenBefore = new Set();
+  document.querySelectorAll('[id^="recv_"]').forEach(el => {
+    if (el.style.display !== 'none') _recvOpenBefore.add(el.id);
+  });
+}
 function renderReceivable(restoreState) {
   const allSales = window._getSales ? window._getSales() : [];
   const container = document.getElementById('recv-container');
