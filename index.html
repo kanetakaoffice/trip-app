@@ -260,12 +260,12 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     <div class="card">
       <div class="card-title">Quick Menu</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:0 16px 16px">
-        <button class="home-action-btn" onclick="showScreen('form')"><span class="home-icon">🧳</span><span class="home-label">出張</span></button>
-        <button class="home-action-btn" onclick="showScreen('expense')"><span class="home-icon">💴</span><span class="home-label">経費</span></button>
-        <button class="home-action-btn" onclick="showScreen('purchase')"><span class="home-icon">📦</span><span class="home-label">仕入</span></button>
-        <button class="home-action-btn" onclick="showScreen('sales')"><span class="home-icon">📈</span><span class="home-label">売上</span></button>
-        <button class="home-action-btn" onclick="goHomeToInv('inv-move')"><span class="home-icon">🔄</span><span class="home-label">在庫入出庫</span></button>
+        <button class="home-action-btn" onclick="goHomeToInv('inv-move')"><span class="home-icon">🔄</span><span class="home-label">入出庫</span></button>
         <button class="home-action-btn" onclick="goHomeToInv('inv-packec')"><span class="home-icon">🚚</span><span class="home-label">出荷管理</span></button>
+        <button class="home-action-btn" onclick="goHomeToInv('inv-wholesale')"><span class="home-icon">🤝</span><span class="home-label">卸売管理</span></button>
+        <button class="home-action-btn" onclick="showScreen('purchase')"><span class="home-icon">📦</span><span class="home-label">仕入</span></button>
+        <button class="home-action-btn" onclick="showScreen('expense')"><span class="home-icon">💴</span><span class="home-label">経費</span></button>
+        <button class="home-action-btn" onclick="showScreen('form')"><span class="home-icon">🧳</span><span class="home-label">出張</span></button>
       </div>
     </div>
     <div id="home-summary"></div>
@@ -1179,13 +1179,26 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <div id="wh-item-status" style="font-size:12px;margin-top:6px;color:var(--text-muted)"></div>
       </div>
     </div>
+    <div id="wh-deliv-edit-banner" style="display:none;background:#fff4e0;border:1px solid #f0c674;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#7a5a00;align-items:center;justify-content:space-between">
+      <span>編集中の納品書があります</span>
+      <button onclick="cancelEditDeliverySlip()" style="background:none;border:none;color:#7a5a00;text-decoration:underline;font-size:12px;cursor:pointer">編集をやめる</button>
+    </div>
     <div class="card">
       <div class="card-title">納品明細</div>
       <div id="wh-deliv-items" style="margin-bottom:8px"></div>
       <div id="wh-deliv-empty" style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">まだ商品が追加されていません</div>
       <div id="wh-deliv-total" style="display:none;justify-content:space-between;align-items:center;padding-top:10px;border-top:1px solid var(--border);font-size:14px;font-weight:700;color:var(--text)"></div>
       <div style="margin-top:14px">
-        <button class="btn btn-gold" style="width:100%" onclick="submitWhDeliverySlip()">🖨 納品書を発行して印刷する</button>
+        <button class="btn btn-gold" id="wh-deliv-submit-btn" style="width:100%" onclick="submitWhDeliverySlip()">発行する</button>
+      </div>
+    </div>
+    <div style="margin-top:16px;background:var(--surface);border-radius:10px;padding:10px 12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAccordion('wh-deliv-history')">
+        <span style="font-size:13px;font-weight:700;color:var(--text)">発行済みの納品書</span>
+        <span class="accordion-arrow" id="acc-arrow-wh-deliv-history" style="font-size:10px;color:var(--text-muted)">▼</span>
+      </div>
+      <div class="accordion-body" id="acc-body-wh-deliv-history" style="margin-top:8px">
+        <div id="wh-deliv-history-list"></div>
       </div>
     </div>
   </div>
@@ -1266,6 +1279,23 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     <div style="display:flex;gap:10px;margin-top:18px">
       <button onclick="confirmSettleConsign()" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8d8d8,#a8a8a8);color:#1a1a1a;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">精算する</button>
       <button onclick="closeSettleConsign()" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- 預かり商品の数量編集モーダル（商談中の変更などに対応） -->
+<div id="wh-consign-edit-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:340px;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">預け数量を編集</div>
+    <div id="wh-consign-edit-desc" style="font-size:12px;color:var(--text-muted);margin-bottom:14px"></div>
+    <div class="field">
+      <div class="field-label">新しい数量 <span class="req">*</span></div>
+      <input type="number" id="wh-consign-edit-qty" placeholder="0" min="1">
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">在庫数もあわせて自動で調整されます</div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button onclick="confirmEditConsignQty()" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8d8d8,#a8a8a8);color:#1a1a1a;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">保存する</button>
+      <button onclick="closeEditConsignQty()" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">キャンセル</button>
     </div>
   </div>
 </div>
@@ -1578,6 +1608,9 @@ window._getStockMoves = () => stockMoves;
 
 // ── 在庫管理 ──
 let products = [], stockMoves = [], wholesaleClients = [];
+// 納品書などの印刷書類に載せる自社情報。角印画像は用意でき次第 COMPANY_SEAL_DATA_URI に base64 data URI を設定する。
+const COMPANY_INFO = { name: '株式会社KANETAKA', zip: '453-0811', address1: '愛知県名古屋市中村区太閤通3-25-1', address2: 'AROME DE JOIE 908', tel: '080-2414-8907' };
+let COMPANY_SEAL_DATA_URI = 'data:image/png;base64,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';
 const DEFAULT_LOW_STOCK_THRESHOLD = 3; // 商品ごとにlowStockが未設定の場合に使う共通のしきい値
 let currentMode = 'biz';
 let scanStream = null;
@@ -1713,7 +1746,7 @@ async function loadInventory() {
       if (document.getElementById('inv-cal-modal')?.style.display === 'flex') { renderInvCalendar(); renderInvTrendChart(); }
     }
     if (document.getElementById('screen-inv-add')?.classList.contains('active')) renderInvAddList();
-    if (document.getElementById('screen-inv-wholesale')?.classList.contains('active')) renderWhConsignList();
+    if (document.getElementById('screen-inv-wholesale')?.classList.contains('active')) { renderWhConsignList(); renderWhDelivHistory(); }
 
   } catch(e) { console.error('inventory load error', e); }
 }
@@ -1738,6 +1771,7 @@ async function ensureWholesaleClient(name) {
 
 // ── 卸売管理（納品書作成・預かりリスト） ──
 let _whDelivItems = [];
+let _editingSlipId = null; // 発行済みの納品書を編集中の場合、そのslipIdが入る（新規作成時はnull）
 
 function switchWhTab(tab) {
   ['deliv','consign'].forEach(t => {
@@ -1754,6 +1788,7 @@ function switchWhTab(tab) {
   if (tab === 'deliv') {
     const dateEl = document.getElementById('wh-deliv-date');
     if (dateEl && !dateEl.value) dateEl.value = todayStr();
+    renderWhDelivHistory();
   }
 }
 
@@ -1876,6 +1911,7 @@ function renderWhDelivItems() {
 }
 
 // 納品書を発行：明細ごとに出庫記録＋在庫減算、まとめて売上（未入金）を1件登録し、印刷用の納品書を開く
+// （_editingSlipIdが設定されている場合は、既存の納品書を一度取り消してから新しい内容で作り直す＝実質的な「編集」）
 async function submitWhDeliverySlip() {
   const client = document.getElementById('wh-deliv-client').value.trim();
   const date = document.getElementById('wh-deliv-date').value;
@@ -1884,120 +1920,320 @@ async function submitWhDeliverySlip() {
   if (!_whDelivItems.length) { showToast('商品を1つ以上追加してください'); return; }
   for (const it of _whDelivItems) {
     if (!it.qty || it.qty < 1) { showToast(`${it.name}の数量を確認してください`); return; }
-    const prod = products.find(p => p._key === it.productKey);
-    if (prod && it.qty > prod.stock) { showToast(`${it.name}の在庫数（${prod.stock}個）を超えています`); return; }
   }
 
-  const slipId = 'slip_' + Date.now();
+  const editingSlipId = _editingSlipId;
+  // 編集中の場合、元の納品書がすでに減らしている分は「まだ在庫にある」ものとして在庫チェックする
+  const oldQtyByProduct = {};
+  if (editingSlipId) {
+    stockMoves.filter(m => m.slipId === editingSlipId && m.type === 'out').forEach(m => {
+      oldQtyByProduct[m.productKey] = (oldQtyByProduct[m.productKey] || 0) + m.qty;
+    });
+  }
+  // 同じ商品が複数行（傷などで単価が違う行）に分かれていることがあるため、商品ごとの合計数量で在庫チェック・在庫減算する
+  // （行ごとにバラバラに減算すると、2行目が古い在庫数を元に計算してしまい片方の減算が消えてしまうため）
+  const newQtyByProduct = {};
+  _whDelivItems.forEach(it => { newQtyByProduct[it.productKey] = (newQtyByProduct[it.productKey] || 0) + it.qty; });
+  for (const pk of Object.keys(newQtyByProduct)) {
+    const prod = products.find(p => p._key === pk);
+    const availableStock = (prod ? prod.stock : 0) + (oldQtyByProduct[pk] || 0);
+    if (newQtyByProduct[pk] > availableStock) {
+      showToast(`${(prod && prod.name) || ''}の在庫数（${availableStock}個）を超えています`);
+      return;
+    }
+  }
+
+  const slipId = editingSlipId || ('slip_' + Date.now());
   const total = _whDelivItems.reduce((s,it) => s + it.amount, 0);
   try {
     await ensureWholesaleClient(client);
-    await Promise.all(_whDelivItems.map(it => {
-      const prod = products.find(p => p._key === it.productKey);
-      const stockBefore = prod ? prod.stock : null;
-      const newStock = (stockBefore || 0) - it.qty;
-      return Promise.all([
-        fetch(authedUrl('/products/' + it.productKey + '/stock.json'), { method: 'PUT', body: JSON.stringify(newStock) }),
-        fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
-          productKey: it.productKey, productName: it.name, jan: it.jan,
-          type: 'out', channel: '卸売', client, qty: it.qty, unitPrice: it.unitPrice, amount: it.amount,
-          slipId, date, memo: '', stockBefore, stockAfter: newStock, createdAt: Date.now()
-        })})
-      ]);
+
+    // 編集の場合は先に元の納品書分を取り消す（在庫を戻し、古い出庫記録・売上記録を削除する）
+    if (editingSlipId) await cancelDeliverySlip(editingSlipId);
+
+    const stockBeforeByProduct = {};
+    await Promise.all(Object.keys(newQtyByProduct).map(async pk => {
+      const prod = products.find(p => p._key === pk);
+      const before = prod ? prod.stock : 0;
+      stockBeforeByProduct[pk] = before;
+      const newStock = before - newQtyByProduct[pk];
+      await fetch(authedUrl('/products/' + pk + '/stock.json'), { method: 'PUT', body: JSON.stringify(newStock) });
     }));
-    await window._fbPushSales({ type: 'sales', date, salesType: '国内（請求書）', client, amount: total, due: '', note: `卸売納品書（${slipId}）より自動登録`, payStatus: '未入金', submittedAt: new Date().toLocaleDateString('ja-JP') });
 
-    // 印刷は取引先名（見出し）・型番・数量・単価のみに絞った簡易リスト。
-    // 商品数が多い（30〜50件程度）場合にも対応できるよう、1列目が用紙の縦半分あたりまで埋まったら
-    // 自動的に2列目へ続きが入るようにする（件数ではなく実際の高さで判定するため、印刷用ウィンドウ側で
-    // 一度隠して高さを測ってから、収まる分だけ1列目に、はみ出す分を2列目に振り分けている）
-    const dsItemsForPrint = _whDelivItems.map(it => ({ model: it.model || '', qty: it.qty, unitPrice: it.unitPrice }));
-    const html = `
-      <style>
-        .ds-wrap { font-size:11px; }
-        .ds-header h2 { font-size:15px; margin:0 0 2px; }
-        .ds-header p { font-size:10px; color:#666; margin:0 0 2px; }
-        .ds-cols-wrap { display:flex; gap:24px; margin-top:8px; }
-        .ds-col { flex:1; min-width:0; }
-        .ds-row { display:flex; align-items:baseline; gap:6px; padding:4px 0; margin-bottom:3px; border-bottom:1px solid #ccc; font-size:10.5px; }
-        .ds-row.ds-headrow { font-weight:700; border-bottom:1.5px solid #999; margin-bottom:5px; }
-        .ds-model { flex:1.6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .ds-qty { flex:0.7; text-align:right; }
-        .ds-price { flex:0.9; text-align:right; }
-        .ds-total { margin-top:10px; padding-top:6px; border-top:1.5px solid #333; font-weight:700; font-size:13px; text-align:right; }
-      </style>
-      <div class="ds-wrap">
-        <div class="ds-header">
-          <h2>納品書</h2>
-          <p>取引先: ${client} 様</p>
-          <p>納品日: ${fmtDateJP(date)}</p>
-        </div>
-        <div id="ds-measure" style="position:absolute;visibility:hidden;left:-9999px;top:0;width:50%"></div>
-        <div id="ds-final"></div>
-        <div class="ds-total">合計金額　¥${total.toLocaleString('ja-JP')}</div>
-      </div>
-      <script>
-      (function() {
-        const items = ${JSON.stringify(dsItemsForPrint)};
-        const headerHtml = '<div class="ds-row ds-headrow"><span class="ds-model">型番</span><span class="ds-qty">数量</span><span class="ds-price">単価</span></div>';
-        const rowHtml = function(it) {
-          return '<div class="ds-row"><span class="ds-model">' + (it.model||'') + '</span><span class="ds-qty">' + it.qty + '</span><span class="ds-price">¥' + it.unitPrice.toLocaleString('ja-JP') + '</span></div>';
-        };
-        const finalEl = document.getElementById('ds-final');
-        const measureEl = document.getElementById('ds-measure');
+    await Promise.all(_whDelivItems.map(it => fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
+      productKey: it.productKey, productName: it.name, jan: it.jan,
+      type: 'out', channel: '卸売', client, qty: it.qty, unitPrice: it.unitPrice, amount: it.amount,
+      slipId, date, memo: '', stockBefore: stockBeforeByProduct[it.productKey], stockAfter: stockBeforeByProduct[it.productKey] - newQtyByProduct[it.productKey], createdAt: Date.now()
+    })})));
 
-        // 用紙の縦半分（A4想定）に収まる高さをmm→px換算で測り、そこから取引先名・日付などの見出しと
-        // 一番下の合計金額の分を差し引いた「残り」を、明細1列目に割り当てられる高さとする
-        const ruler = document.createElement('div');
-        ruler.style.cssText = 'position:absolute;visibility:hidden;height:100mm;width:1px;';
-        document.body.appendChild(ruler);
-        const pxPerMm = ruler.getBoundingClientRect().height / 100;
-        document.body.removeChild(ruler);
-        const HALF_PAGE_MM = 148; // A4（297mm）の約半分
-        const wrapTop = document.querySelector('.ds-wrap').getBoundingClientRect().top;
-        const usedBeforeItems = document.getElementById('ds-final').getBoundingClientRect().top - wrapTop; // 見出し部分の高さ
-        const totalH = document.querySelector('.ds-total').getBoundingClientRect().height;
-
-        measureEl.innerHTML = headerHtml + items.map(rowHtml).join('');
-        const allRowEls = measureEl.querySelectorAll('.ds-row');
-        const headerH = allRowEls[0].getBoundingClientRect().height;
-        const rowHeights = [];
-        for (let i = 1; i < allRowEls.length; i++) rowHeights.push(allRowEls[i].getBoundingClientRect().height);
-        const oneColumnHeight = headerH + rowHeights.reduce(function(s,h){ return s+h; }, 0);
-        // 万一マイナスなどの異常値になっても最低限の行数は1列に残るようフロアを設ける
-        const targetHeightPx = Math.max((pxPerMm * HALF_PAGE_MM) - usedBeforeItems - totalH - 12, headerH * 5);
-
-        let splitIdx = items.length; // 既定は1列のまま（全部が目安の高さに収まる場合）
-        if (oneColumnHeight > targetHeightPx) {
-          // 2列に分ける必要がある場合は、1列目を目安の高さまで詰め込むのではなく、
-          // 2列とも見出し込みでなるべく同じ高さになるよう分割点を探す（2列目だけ長くなるのを防ぐ）
-          const idealPerColumn = (oneColumnHeight + headerH) / 2;
-          let cum = headerH;
-          for (let i = 0; i < rowHeights.length; i++) {
-            cum += rowHeights[i];
-            if (cum >= idealPerColumn) { splitIdx = i + 1; break; }
-          }
-          splitIdx = Math.max(1, Math.min(splitIdx, items.length - 1));
-        }
-        measureEl.innerHTML = '';
-
-        const col1 = items.slice(0, splitIdx);
-        const col2 = items.slice(splitIdx);
-        let colsHtml = '<div class="ds-col">' + headerHtml + col1.map(rowHtml).join('') + '</div>';
-        if (col2.length) colsHtml += '<div class="ds-col">' + headerHtml + col2.map(rowHtml).join('') + '</div>';
-        finalEl.innerHTML = '<div class="ds-cols-wrap">' + colsHtml + '</div>';
-      })();
-      <\/script>`;
-    const w = window.open('', '_blank');
-    w.document.write(buildPrintHtml(`納品書_${client}_${date}`, html));
-    w.document.close();
+    await window._fbPushSales({ type: 'sales', date, salesType: '国内（請求書）', client, amount: total, due: '', slipId, note: `卸売納品書（${slipId}）より自動登録`, payStatus: '未入金', submittedAt: new Date().toLocaleDateString('ja-JP') });
 
     _whDelivItems = [];
+    _editingSlipId = null;
     renderWhDelivItems();
+    updateWhDelivSubmitButtonLabel();
+    const banner = document.getElementById('wh-deliv-edit-banner');
+    if (banner) banner.style.display = 'none';
     document.getElementById('wh-deliv-client').value = '';
     await loadInventory();
-    showToast('納品書を発行しました（合計 ¥' + total.toLocaleString('ja-JP') + '）');
-  } catch(e) { showToast('発行に失敗しました'); console.error(e); }
+    renderWhDelivHistory();
+    // 発行・編集と印刷を分けているため、ここでは自動で印刷ウィンドウを開かず、
+    // 代わりに「発行済みの納品書」の履歴を開いて、そこから好きなタイミングで印刷できるようにする
+    openWhDelivHistoryAccordion();
+    showToast((editingSlipId ? '納品書を更新しました' : '納品書を発行しました') + '（合計 ¥' + total.toLocaleString('ja-JP') + '）。印刷は下の履歴からできます');
+  } catch(e) { showToast(editingSlipId ? '更新に失敗しました' : '発行に失敗しました'); console.error(e); }
+}
+
+function openWhDelivHistoryAccordion() {
+  const body = document.getElementById('acc-body-wh-deliv-history');
+  const arrow = document.getElementById('acc-arrow-wh-deliv-history');
+  if (body) body.classList.add('open');
+  if (arrow) arrow.classList.add('open');
+  const section = document.getElementById('wh-deliv-history-list');
+  if (section) section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// 納品書の印刷用ドキュメントを開く（取引先名・型番・数量・単価・金額のみの簡易リスト）。
+// 商品数が多い（30〜50件程度）場合にも対応できるよう、1列目が用紙の縦半分あたりまで埋まったら
+// 自動的に2列目へ続きが入るようにする（件数ではなく実際の高さで判定するため、印刷用ウィンドウ側で
+// 一度隠して高さを測ってから、収まる分だけ1列目に、はみ出す分を2列目に振り分けている）
+function openDeliverySlipPrint(client, date, items) {
+  const total = items.reduce((s,it) => s + it.amount, 0);
+  // 単価は税込みのため、合計金額はそのまま変えず、内訳として税抜金額と消費税相当額を割り戻して表示する
+  const taxAmount = Math.round(total * 10 / 110);
+  const subtotal = total - taxAmount;
+  const html = `
+    <style>
+      .ds-wrap { font-size:11px; }
+      .ds-title-row { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; }
+      .ds-title { font-size:17px; font-weight:700; letter-spacing:0.15em; }
+      .ds-date { font-size:10px; color:#555; }
+      .ds-head-box { border:1.2px solid #999; border-radius:5px; padding:9px 12px; margin-bottom:14px; }
+      .ds-head-row { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+      .ds-client { font-size:17px; font-weight:700; }
+      .ds-client .ds-client-suffix { font-size:17px; font-weight:700; margin-left:8px; }
+      .ds-issuer { text-align:right; font-size:10px; color:#333; line-height:1.5; }
+      .ds-issuer .ds-issuer-name-row { display:flex; align-items:center; justify-content:flex-end; gap:0; }
+      .ds-issuer .ds-issuer-name { font-weight:700; font-size:12px; }
+      .ds-issuer .ds-seal-img { width:34px; height:34px; object-fit:contain; margin-left:-7px; position:relative; z-index:1; }
+      .ds-cols-wrap { display:flex; gap:24px; margin-top:8px; }
+      .ds-col { flex:1; min-width:0; }
+      .ds-row { display:flex; align-items:baseline; gap:6px; padding:4px 0; margin-bottom:3px; border-bottom:1px solid #ccc; font-size:10.5px; }
+      .ds-row.ds-headrow { font-weight:700; border-bottom:1.5px solid #999; margin-bottom:5px; }
+      .ds-model { flex:1.6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .ds-qty { flex:0.6; text-align:right; }
+      .ds-price { flex:0.85; text-align:right; }
+      .ds-amount { flex:0.85; text-align:right; }
+      .ds-tax-summary { margin-top:10px; }
+      .ds-tax-row { display:flex; justify-content:flex-end; gap:10px; font-size:10.5px; color:#555; }
+      .ds-total { margin-top:4px; padding-top:6px; border-top:1.5px solid #333; font-weight:700; font-size:13px; text-align:right; }
+    </style>
+    <div class="ds-wrap">
+      <div class="ds-title-row">
+        <div class="ds-title">納品書</div>
+        <div class="ds-date">納品日　${fmtDateJPLong(date)}</div>
+      </div>
+      <div class="ds-head-box">
+        <div class="ds-head-row">
+          <div class="ds-client">${client}<span class="ds-client-suffix">御中</span></div>
+          <div class="ds-issuer">
+            <div class="ds-issuer-name-row">
+              <span class="ds-issuer-name">${COMPANY_INFO.name}</span>
+              ${COMPANY_SEAL_DATA_URI ? `<img class="ds-seal-img" src="${COMPANY_SEAL_DATA_URI}" alt="印">` : ''}
+            </div>
+            <div>〒${COMPANY_INFO.zip}</div>
+            <div>${COMPANY_INFO.address1}</div>
+            <div>${COMPANY_INFO.address2}</div>
+            <div>TEL: ${COMPANY_INFO.tel}</div>
+          </div>
+        </div>
+      </div>
+      <div id="ds-measure" style="position:absolute;visibility:hidden;left:-9999px;top:0;width:50%"></div>
+      <div id="ds-final"></div>
+      <div class="ds-tax-summary">
+        <div class="ds-tax-row"><span>小計（税抜）</span><span>¥${subtotal.toLocaleString('ja-JP')}</span></div>
+        <div class="ds-tax-row"><span>消費税（10%）</span><span>¥${taxAmount.toLocaleString('ja-JP')}</span></div>
+      </div>
+      <div class="ds-total">合計金額（税込）　¥${total.toLocaleString('ja-JP')}</div>
+    </div>
+    <script>
+    (function() {
+      const items = ${JSON.stringify(items)};
+      const headerHtml = '<div class="ds-row ds-headrow"><span class="ds-model">型番</span><span class="ds-qty">数量</span><span class="ds-price">単価</span><span class="ds-amount">金額</span></div>';
+      const rowHtml = function(it) {
+        return '<div class="ds-row"><span class="ds-model">' + (it.model||'') + '</span><span class="ds-qty">' + it.qty + '</span><span class="ds-price">¥' + it.unitPrice.toLocaleString('ja-JP') + '</span><span class="ds-amount">¥' + it.amount.toLocaleString('ja-JP') + '</span></div>';
+      };
+      const finalEl = document.getElementById('ds-final');
+      const measureEl = document.getElementById('ds-measure');
+
+      // 用紙の縦半分（A4想定）に収まる高さをmm→px換算で測り、そこから取引先名・日付などの見出しと
+      // 一番下の合計金額の分を差し引いた「残り」を、明細1列目に割り当てられる高さとする
+      const ruler = document.createElement('div');
+      ruler.style.cssText = 'position:absolute;visibility:hidden;height:100mm;width:1px;';
+      document.body.appendChild(ruler);
+      const pxPerMm = ruler.getBoundingClientRect().height / 100;
+      document.body.removeChild(ruler);
+      const HALF_PAGE_MM = 148; // A4（297mm）の約半分
+      const wrapTop = document.querySelector('.ds-wrap').getBoundingClientRect().top;
+      const usedBeforeItems = document.getElementById('ds-final').getBoundingClientRect().top - wrapTop; // 見出し部分の高さ
+      const taxSummaryH = document.querySelector('.ds-tax-summary').getBoundingClientRect().height;
+      const totalH = document.querySelector('.ds-total').getBoundingClientRect().height + taxSummaryH;
+
+      measureEl.innerHTML = headerHtml + items.map(rowHtml).join('');
+      const allRowEls = measureEl.querySelectorAll('.ds-row');
+      const headerH = allRowEls[0].getBoundingClientRect().height;
+      const rowHeights = [];
+      for (let i = 1; i < allRowEls.length; i++) rowHeights.push(allRowEls[i].getBoundingClientRect().height);
+      const oneColumnHeight = headerH + rowHeights.reduce(function(s,h){ return s+h; }, 0);
+      // 万一マイナスなどの異常値になっても最低限の行数は1列に残るようフロアを設ける
+      const targetHeightPx = Math.max((pxPerMm * HALF_PAGE_MM) - usedBeforeItems - totalH - 12, headerH * 5);
+
+      let splitIdx = items.length; // 既定は1列のまま（全部が目安の高さに収まる場合）
+      if (oneColumnHeight > targetHeightPx) {
+        // 2列に分ける必要がある場合は、1列目を目安の高さまで詰め込むのではなく、
+        // 2列とも見出し込みでなるべく同じ高さになるよう分割点を探す（2列目だけ長くなるのを防ぐ）
+        const idealPerColumn = (oneColumnHeight + headerH) / 2;
+        let cum = headerH;
+        for (let i = 0; i < rowHeights.length; i++) {
+          cum += rowHeights[i];
+          if (cum >= idealPerColumn) { splitIdx = i + 1; break; }
+        }
+        splitIdx = Math.max(1, Math.min(splitIdx, items.length - 1));
+      }
+      measureEl.innerHTML = '';
+
+      const col1 = items.slice(0, splitIdx);
+      const col2 = items.slice(splitIdx);
+      let colsHtml = '<div class="ds-col">' + headerHtml + col1.map(rowHtml).join('') + '</div>';
+      if (col2.length) colsHtml += '<div class="ds-col">' + headerHtml + col2.map(rowHtml).join('') + '</div>';
+      finalEl.innerHTML = '<div class="ds-cols-wrap">' + colsHtml + '</div>';
+    })();
+    <\/script>`;
+  const w = window.open('', '_blank');
+  w.document.write(buildPrintHtml(`納品書_${client}_${date}`, html));
+  w.document.close();
+}
+
+// 発行済みの納品書を、保存されている出庫記録から再構成して印刷する（履歴一覧から呼ばれる）
+function printDeliverySlip(slipId) {
+  const moves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'out')
+    .sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+  if (!moves.length) { showToast('対象の納品書が見つかりません'); return; }
+  const items = moves.map(m => ({
+    model: (products.find(p => p._key === m.productKey) || {}).model || '',
+    qty: m.qty, unitPrice: m.unitPrice, amount: m.amount
+  }));
+  openDeliverySlipPrint(moves[0].client, moves[0].date, items);
+}
+
+// slipIdに紐づく出庫記録を取り消して在庫を戻し、対応する売上記録も削除する（編集・取消の両方から呼ばれる共通処理）
+// 編集（取消→作り直し）から呼ばれた直後にloadInventory()を待たずに新しい在庫数を計算できるよう、
+// サーバー側の更新だけでなく、ローカルのproducts/stockMovesの状態もその場で反映しておく。
+async function cancelDeliverySlip(slipId) {
+  const moves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'out');
+  if (!moves.length) return;
+  // 同じ商品が複数行にまたがっていても正しく計算できるよう、商品ごとにまとめて在庫を戻す
+  const qtyByProduct = {};
+  moves.forEach(m => { qtyByProduct[m.productKey] = (qtyByProduct[m.productKey] || 0) + m.qty; });
+  await Promise.all(Object.keys(qtyByProduct).map(async pk => {
+    const prod = products.find(p => p._key === pk);
+    const newStock = (prod ? prod.stock : 0) + qtyByProduct[pk];
+    await fetch(authedUrl('/products/' + pk + '/stock.json'), { method: 'PUT', body: JSON.stringify(newStock) });
+    if (prod) prod.stock = newStock;
+  }));
+  await Promise.all(moves.map(m => fetch(authedUrl('/stockMoves/' + m._key + '.json'), { method: 'DELETE' })));
+  stockMoves = stockMoves.filter(m => !(m.slipId === slipId && m.type === 'out'));
+  const salesRecs = (window._getSales?.() || []).filter(s => s.slipId === slipId);
+  await Promise.all(salesRecs.map(s => window._fbRemoveSales(s._key)));
+}
+
+// 発行済みの納品書を取り消す（確認ダイアログ付き）。在庫と売上を元に戻す。
+function confirmCancelDeliverySlip(slipId) {
+  showConfirm('この納品書を取り消して、在庫と売上を元に戻しますか？').then(async ok => {
+    if (!ok) return;
+    try {
+      await cancelDeliverySlip(slipId);
+      if (_editingSlipId === slipId) cancelEditDeliverySlip();
+      await loadInventory();
+      renderWhDelivHistory();
+      showToast('納品書を取り消しました');
+    } catch(e) { showToast('取り消しに失敗しました'); console.error(e); }
+  });
+}
+
+// 発行済みの納品書を編集モードで読み込む（内容を修正して保存すると、元の分を取り消して新しい内容で作り直す）
+function editDeliverySlip(slipId) {
+  const moves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'out')
+    .sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+  if (!moves.length) { showToast('対象の納品書が見つかりません'); return; }
+  _whDelivItems = moves.map(m => ({
+    productKey: m.productKey, jan: m.jan, name: m.productName,
+    model: (products.find(p => p._key === m.productKey) || {}).model || '',
+    qty: m.qty, unitPrice: m.unitPrice, amount: m.amount
+  }));
+  document.getElementById('wh-deliv-client').value = moves[0].client || '';
+  document.getElementById('wh-deliv-date').value = moves[0].date || '';
+  _editingSlipId = slipId;
+  renderWhDelivItems();
+  updateWhDelivSubmitButtonLabel();
+  const banner = document.getElementById('wh-deliv-edit-banner');
+  if (banner) banner.style.display = 'flex';
+  showToast('編集モードにしました。内容を修正して保存してください');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// 編集モードをやめて、明細を空の状態に戻す（在庫・売上には何も影響しない＝まだ保存していないため）
+function cancelEditDeliverySlip() {
+  _editingSlipId = null;
+  _whDelivItems = [];
+  document.getElementById('wh-deliv-client').value = '';
+  renderWhDelivItems();
+  updateWhDelivSubmitButtonLabel();
+  const banner = document.getElementById('wh-deliv-edit-banner');
+  if (banner) banner.style.display = 'none';
+  showToast('編集をやめました');
+}
+
+function updateWhDelivSubmitButtonLabel() {
+  const btn = document.getElementById('wh-deliv-submit-btn');
+  if (!btn) return;
+  btn.textContent = _editingSlipId ? '💾 変更を保存する' : '発行する';
+}
+
+// 発行済みの納品書一覧（slipIdごとにまとめて表示。編集・取消ができる）
+function renderWhDelivHistory() {
+  const listEl = document.getElementById('wh-deliv-history-list');
+  if (!listEl) return;
+  const outMoves = (stockMoves || []).filter(m => m.type === 'out' && m.channel === '卸売' && m.slipId);
+  const bySlip = {};
+  outMoves.forEach(m => { (bySlip[m.slipId] = bySlip[m.slipId] || []).push(m); });
+  const slips = Object.keys(bySlip).map(slipId => {
+    const items = bySlip[slipId];
+    const first = items[0];
+    return {
+      slipId,
+      client: first.client,
+      date: first.date,
+      total: items.reduce((s,m) => s + (m.amount || 0), 0),
+      itemQty: items.reduce((s,m) => s + (m.qty || 0), 0),
+      createdAt: Math.max(...items.map(m => m.createdAt || 0))
+    };
+  }).sort((a,b) => b.createdAt - a.createdAt);
+
+  if (!slips.length) {
+    listEl.innerHTML = `<div style="font-size:12px;color:var(--text-muted)">まだ発行した納品書はありません</div>`;
+    return;
+  }
+  listEl.innerHTML = slips.map(s => `
+    <div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:13px">
+      <div style="color:var(--text);font-weight:600">${s.client || ''}／${fmtDateJP(s.date)}</div>
+      <div style="color:var(--text-muted);font-size:11px;margin-top:2px">数量合計 ${s.itemQty}個／合計 ¥${s.total.toLocaleString('ja-JP')}</div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button onclick="printDeliverySlip('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">🖨 印刷</button>
+        <button onclick="editDeliverySlip('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">編集する</button>
+        <button onclick="confirmCancelDeliverySlip('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--danger);cursor:pointer">取り消す</button>
+      </div>
+    </div>`).join('');
 }
 
 let _whConsignItems = [];
@@ -2122,6 +2358,7 @@ function renderWhConsignList() {
         <div style="display:flex;gap:8px;margin-top:8px">
           <button onclick="openSettleConsign('${m._key}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">精算（売れた）</button>
           <button onclick="returnConsign('${m._key}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">返却（在庫に戻す）</button>
+          <button onclick="openEditConsignQty('${m._key}')" style="flex:0.7;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">数量を編集</button>
         </div>
       </div>`).join('');
   }
@@ -2185,6 +2422,50 @@ function closeSettleConsign() {
   const modal = document.getElementById('wh-settle-modal');
   if (modal) modal.style.display = 'none';
   _settleTargetKey = null;
+}
+
+let _consignEditKey = null;
+
+// 商談中の変更に対応するため、預けている数量を後から修正できるようにする（在庫は差分に応じて自動調整）
+function openEditConsignQty(key) {
+  const m = stockMoves.find(x => x._key === key);
+  if (!m) return;
+  _consignEditKey = key;
+  const desc = document.getElementById('wh-consign-edit-desc');
+  if (desc) desc.textContent = `${m.productName || ''}／預け先: ${m.client || ''}／現在の数量: ${m.qty}個`;
+  const qtyInput = document.getElementById('wh-consign-edit-qty');
+  if (qtyInput) qtyInput.value = m.qty;
+  const modal = document.getElementById('wh-consign-edit-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeEditConsignQty() {
+  const modal = document.getElementById('wh-consign-edit-modal');
+  if (modal) modal.style.display = 'none';
+  _consignEditKey = null;
+}
+
+async function confirmEditConsignQty() {
+  const key = _consignEditKey;
+  if (!key) return;
+  const m = stockMoves.find(x => x._key === key);
+  if (!m) { closeEditConsignQty(); return; }
+  const newQty = parseInt(document.getElementById('wh-consign-edit-qty').value);
+  if (!newQty || newQty < 1) { showToast('数量を入力してください'); return; }
+  const delta = newQty - m.qty; // 増える分は在庫からさらに減らし、減る分は在庫に戻す
+  const prod = products.find(p => p._key === m.productKey);
+  if (delta > 0 && prod && delta > prod.stock) { showToast(`在庫（${prod.stock}個）を超えています`); return; }
+  const newStock = (prod ? prod.stock : 0) - delta;
+  try {
+    await Promise.all([
+      fetch(authedUrl('/products/' + m.productKey + '/stock.json'), { method: 'PUT', body: JSON.stringify(newStock) }),
+      fetch(authedUrl('/stockMoves/' + key + '.json'), { method: 'PATCH', body: JSON.stringify({ qty: newQty }) })
+    ]);
+    closeEditConsignQty();
+    await loadInventory();
+    renderWhConsignList();
+    showToast('数量を変更しました（' + newQty + '個）');
+  } catch(e) { showToast('処理に失敗しました'); console.error(e); }
 }
 
 // 預かり商品を精算：ステータスを更新し、通常の売上（未入金）としても1件登録して普段の売上集計に反映する。
@@ -2642,6 +2923,14 @@ function fmtDateJP(d) {
   const dt = typeof d === 'number' ? new Date(d) : new Date(d + 'T00:00:00');
   if (isNaN(dt.getTime())) return String(d);
   return dt.toLocaleDateString('ja-JP');
+}
+
+// 納品書などフォーマルな書類向け：「2026年7月14日」形式（in-app一覧表示のfmtDateJPとは別に用意）
+function fmtDateJPLong(d) {
+  if (!d) return '';
+  const dt = typeof d === 'number' ? new Date(d) : new Date(d + 'T00:00:00');
+  if (isNaN(dt.getTime())) return String(d);
+  return `${dt.getFullYear()}年${dt.getMonth() + 1}月${dt.getDate()}日`;
 }
 
 // ある商品の入荷履歴（入出庫の「入庫」記録から集計。商品登録時にも自動で1件目が記録される）
