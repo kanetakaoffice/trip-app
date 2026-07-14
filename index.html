@@ -6087,9 +6087,9 @@ function renderChart(container) {
   const months     = fiscalMonthKeys(fiscalStartYear);     // 今期（3月始まり）の年月キー
   const prevMonths = fiscalMonthKeys(prevFiscalStartYear); // 前期の年月キー
 
-  const SUPPLIER_COLORS = { '店舗':'#fdba74','電脳':'#a5f3fc','（株）HAK':'#fde68a','（株）GAIN':'#fca5a5' };
+  const SUPPLIER_COLORS = { '店舗':'#f7a8c4','電脳':'#fbd0e0','（株）HAK':'#f281a8','（株）GAIN':'#e8578f' };
   // 売上：国内＝薄いネイビー、国外＝やや濃いネイビー、EC＝オレンジ（在庫の出荷管理で記録されたAmazon・自社EC分）
-  const SAL_COLORS = { '国内（請求書）':'#0f766e', '国外（インボイス）':'#99c4bf', 'EC':'#f97316' };
+  const SAL_COLORS = { '国内（請求書）':'#4caf82', '国外（インボイス）':'#8de0b8', 'EC':'#35a06e' };
   function getSalColor(type) { return SAL_COLORS[type] || '#93c5fd'; }
   function salTypeLabel(type) {
     if (type === '国内（請求書）') return '国内';
@@ -6206,7 +6206,7 @@ function renderChart(container) {
       const anchor = i===0 ? 'start' : (i===lastI ? 'end' : 'middle');
       const lx = i===0 ? x+6 : (i===lastI ? x-6 : x);
       const ly=y>20?y-18:y+14;
-      return `<g style="cursor:pointer" onclick="this.querySelector('.tip').style.display=this.querySelector('.tip').style.display==='none'?'block':'none'"><circle cx="${x}" cy="${y}" r="4" fill="${col}" stroke="white" stroke-width="1.5"/><text class="tip" x="${lx}" y="${ly}" text-anchor="${anchor}" font-size="9" fill="${col}" font-weight="700" style="display:none">${yen(v)}</text></g>`;
+      return `<g style="cursor:pointer" onclick="this.querySelector('.tip').style.display=this.querySelector('.tip').style.display==='none'?'block':'none'"><circle cx="${x}" cy="${y}" r="4" fill="white" stroke="#38bdf8" stroke-width="2"/><text class="tip" x="${lx}" y="${ly}" text-anchor="${anchor}" font-size="9" fill="${col}" font-weight="700" style="display:none">${yen(v)}</text></g>`;
     }).join('');
   }
 
@@ -6228,7 +6228,7 @@ function renderChart(container) {
     const recvLine=makeLine(recv,'#dc2626',displayMax,svgW,svgH,false,xFracs);
     const recvDots=makeDotsWithLabel(recv,'#dc2626',displayMax,svgW,svgH,xFracs);
     return {
-      g1:`${gridLines}<line x1="0" y1="${midY}" x2="${svgW}" y2="${midY}" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/><polyline points="${profitPts}" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${profitDots}`,
+      g1:`${gridLines}<line x1="0" y1="${midY}" x2="${svgW}" y2="${midY}" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/><polyline points="${profitPts}" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${profitDots}`,
       g2:`${gridLines}${purPrevLine}${salPrevLine}${salPrevDots}`,
       g3:`${gridLines}${cumulLineP}${cumulLine}${cumulDots}`,
       g4:`${gridLines}${recvLine}${recvDots}`
@@ -6250,7 +6250,7 @@ function renderChart(container) {
 
   const svgPatterns=buildSvgPatterns(naiveFracs);
   const legends={
-    g1:`<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:3px;background:#7c3aed;border-radius:2px"></span>粗利益</span>`,
+    g1:`<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:3px;background:#38bdf8;border-radius:2px"></span>粗利益</span>`,
     g2:`<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:2px;border-top:2px dashed #9ca3af"></span>仕入(前年)</span><span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:2px;border-top:2px dashed #0d9488"></span>売上(前年)</span>`,
     g3:`<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:3px;background:#f59e0b;border-radius:2px"></span>累計売上(今年)</span><span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:2px;border-top:2px dashed #fcd34d"></span>累計売上(前年)</span>`,
     g4:`<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:3px;background:#dc2626;border-radius:2px"></span>未回収売掛金</span>`
