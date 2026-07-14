@@ -860,11 +860,20 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <div class="field-divider"></div>
         <div class="field" style="padding-top:16px">
           <div class="field-label">種別 <span class="req">*</span></div>
-          <select id="move-type">
+          <select id="move-type" onchange="handleMoveType()">
             <option value="">選択してください</option>
             <option value="in">入庫</option>
             <option value="out">出庫</option>
             <option value="adjust">在庫調整</option>
+          </select>
+        </div>
+        <div class="field-divider" id="move-channel-divider" style="display:none"></div>
+        <div class="field" id="move-channel-wrap" style="padding-top:16px;display:none">
+          <div class="field-label">出庫先 <span class="req">*</span></div>
+          <select id="move-channel">
+            <option value="">選択してください</option>
+            <option value="Amazon">Amazon</option>
+            <option value="卸売">卸売</option>
           </select>
         </div>
         <div class="field-divider"></div>
@@ -908,6 +917,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
             <input type="file" id="inv-bulk-import-file" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleBulkImportFile(event)">
           </div>
           <button class="btn btn-secondary" style="flex:none;padding:8px 14px;font-size:13px" onclick="openInvCalModal()">📅 カレンダー</button>
+          <button class="btn btn-secondary" style="flex:none;padding:8px 14px;font-size:13px" onclick="openOutPrintModal()">🖨 出庫印刷</button>
           <button class="btn btn-secondary" style="flex:none;padding:8px 14px;font-size:13px" onclick="doExportInventory()">📊 Excel出力</button>
         </div>
       </div>
@@ -959,6 +969,39 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
       <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">月次入出庫推移（直近6ヶ月）</div>
       <div id="inv-trend-chart"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 出庫だけを印刷 -->
+<div id="inv-outprint-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:380px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <div style="font-size:15px;font-weight:700;color:var(--text)">出庫記録の印刷</div>
+      <button onclick="closeOutPrintModal()" style="background:none;border:none;font-size:20px;color:var(--text-muted);cursor:pointer;padding:0 4px">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">期間を指定して、出庫記録だけを一覧印刷できます。</div>
+    <div class="field">
+      <div class="field-label">開始日</div>
+      <input type="date" id="outprint-from">
+    </div>
+    <div class="field-divider"></div>
+    <div class="field" style="padding-top:16px">
+      <div class="field-label">終了日</div>
+      <input type="date" id="outprint-to">
+    </div>
+    <div class="field-divider"></div>
+    <div class="field" style="padding-top:16px">
+      <div class="field-label">出庫先で絞り込み</div>
+      <select id="outprint-channel">
+        <option value="">すべて</option>
+        <option value="Amazon">Amazon</option>
+        <option value="卸売">卸売</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:20px">
+      <button onclick="printOutOnlyReport()" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8d8d8,#a8a8a8);color:#1a1a1a;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">🖨 印刷</button>
+      <button onclick="closeOutPrintModal()" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">キャンセル</button>
     </div>
   </div>
 </div>
@@ -1102,6 +1145,131 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
   </div>
 </div>
 
+<!-- 卸売管理（納品書作成・預かりリスト） -->
+<datalist id="wh-client-datalist"></datalist>
+<div id="screen-inv-wholesale" class="screen" style="display:none;padding-top:8px">
+  <div class="tab-switch" style="margin-bottom:12px">
+    <button class="tab-switch-btn active" id="wh-tab-deliv" onclick="switchWhTab('deliv')">📝 納品書作成</button>
+    <button class="tab-switch-btn" id="wh-tab-consign" onclick="switchWhTab('consign')">📦 預かりリスト</button>
+  </div>
+
+  <div id="wh-body-deliv">
+    <div class="card">
+      <div class="card-title">納品書を作成</div>
+      <div class="field">
+        <div class="field-label">取引先 <span class="req">*</span></div>
+        <input type="text" id="wh-deliv-client" list="wh-client-datalist" placeholder="取引先名を入力または選択">
+      </div>
+      <div class="field-divider"></div>
+      <div class="field" style="padding-top:16px">
+        <div class="field-label">日付 <span class="req">*</span></div>
+        <input type="date" id="wh-deliv-date">
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">商品をスキャンして追加</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">スキャン・入力するたびに下の納品明細へ自動で追加されます（同じ商品は数量が増えます）</div>
+      <div class="field">
+        <div class="field-label">JANコード</div>
+        <div style="display:flex;gap:8px;margin-bottom:6px">
+          <button class="scan-btn" onclick="scanFromPhoto('wh-item-jan')" style="flex:1">📸 写真で読み取る</button>
+          <button class="scan-btn" onclick="startScan('wh-item-jan')" style="flex:1;background:var(--surface);color:var(--text);border:1.5px solid var(--border)">📷 連続スキャン</button>
+        </div>
+        <input type="text" id="wh-item-jan" placeholder="または手入力" oninput="lookupWhItem()">
+        <div id="wh-item-status" style="font-size:12px;margin-top:6px;color:var(--text-muted)"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">納品明細</div>
+      <div id="wh-deliv-items" style="margin-bottom:8px"></div>
+      <div id="wh-deliv-empty" style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">まだ商品が追加されていません</div>
+      <div id="wh-deliv-total" style="display:none;justify-content:space-between;align-items:center;padding-top:10px;border-top:1px solid var(--border);font-size:14px;font-weight:700;color:var(--text)"></div>
+      <div style="margin-top:14px">
+        <button class="btn btn-gold" style="width:100%" onclick="submitWhDeliverySlip()">🖨 納品書を発行して印刷する</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="wh-body-consign" style="display:none">
+    <div class="card">
+      <div class="card-title">預け商品を記録</div>
+      <div class="field">
+        <div class="field-label">取引先（預け先） <span class="req">*</span></div>
+        <input type="text" id="wh-consign-client" list="wh-client-datalist" placeholder="取引先名を入力または選択">
+      </div>
+      <div class="field-divider"></div>
+      <div class="field" style="padding-top:16px">
+        <div class="field-label">日付 <span class="req">*</span></div>
+        <input type="date" id="wh-consign-date">
+      </div>
+      <div class="field-divider"></div>
+      <div class="field" style="padding-top:16px">
+        <div class="field-label">メモ</div>
+        <input type="text" id="wh-consign-memo" placeholder="自由にメモを入力（任意）">
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">商品をスキャンして追加</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">スキャン・入力するたびに下のリストへ自動で追加されます（同じ商品は数量が増えます）</div>
+      <div class="field">
+        <div class="field-label">JANコード</div>
+        <div style="display:flex;gap:8px;margin-bottom:6px">
+          <button class="scan-btn" onclick="scanFromPhoto('wh-consign-jan')" style="flex:1">📸 写真で読み取る</button>
+          <button class="scan-btn" onclick="startScan('wh-consign-jan')" style="flex:1;background:var(--surface);color:var(--text);border:1.5px solid var(--border)">📷 連続スキャン</button>
+        </div>
+        <input type="text" id="wh-consign-jan" placeholder="または手入力" oninput="lookupWhConsignItem()">
+        <div id="wh-consign-status" style="font-size:12px;margin-top:6px;color:var(--text-muted)"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">預ける商品</div>
+      <div id="wh-consign-items" style="margin-bottom:8px"></div>
+      <div id="wh-consign-items-empty" style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">まだ商品が追加されていません</div>
+      <div style="margin-top:14px">
+        <button class="btn btn-gold" style="width:100%" onclick="submitConsign()">まとめて記録する</button>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <span style="font-size:13px;font-weight:700;color:#3a3a3a">現在預けている商品</span>
+      <span id="wh-consign-summary" style="font-size:12px;color:#909090"></span>
+    </div>
+    <div id="wh-consign-list"></div>
+    <div id="wh-consign-empty" style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">現在預けている商品はありません</div>
+
+    <div style="margin-top:16px;background:var(--surface);border-radius:10px;padding:10px 12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAccordion('wh-consign-history')">
+        <span style="font-size:13px;font-weight:700;color:var(--text)">精算・返却済みの履歴</span>
+        <span class="accordion-arrow" id="acc-arrow-wh-consign-history" style="font-size:10px;color:var(--text-muted)">▼</span>
+      </div>
+      <div class="accordion-body" id="acc-body-wh-consign-history" style="margin-top:8px">
+        <div id="wh-consign-history-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 預かり商品の精算モーダル -->
+<div id="wh-settle-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:340px;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">精算（売れた）</div>
+    <div id="wh-settle-desc" style="font-size:12px;color:var(--text-muted);margin-bottom:14px"></div>
+    <div class="field">
+      <div class="field-label">精算する数量 <span class="req">*</span></div>
+      <input type="number" id="wh-settle-qty" placeholder="0" min="1">
+      <div id="wh-settle-qty-hint" style="font-size:11px;color:var(--text-muted);margin-top:4px">傷・潰れなどで一部だけ単価が違う場合は、数量を減らして精算し、残りは後からもう一度精算してください</div>
+    </div>
+    <div class="field" style="padding-top:16px">
+      <div class="field-label">単価（円） <span class="req">*</span></div>
+      <input type="number" id="wh-settle-price" placeholder="0" min="0">
+      <div id="wh-settle-hint" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button onclick="confirmSettleConsign()" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8d8d8,#a8a8a8);color:#1a1a1a;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">精算する</button>
+      <button onclick="closeSettleConsign()" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">キャンセル</button>
+    </div>
+  </div>
+</div>
+
 <!-- カメラスキャンオーバーレイ -->
 <div id="scan-overlay">
   <video id="scan-video" autoplay playsinline muted></video>
@@ -1195,6 +1363,12 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     <button class="nav-btn" id="nav-inv-packec" onclick="showInvScreen('inv-packec')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
       出荷管理
+    </button>
+  </div>
+  <div class="nav-btn-wrap">
+    <button class="nav-btn" id="nav-inv-wholesale" onclick="showInvScreen('inv-wholesale')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3h18v4H3z"/><path d="M5 7v13h14V7"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+      卸売管理
     </button>
   </div>
 
@@ -1399,9 +1573,11 @@ window._getNameAmount = () => NAME_AMOUNT;
 window._getSelectedMonth = () => selectedMonth;
 window._setSelectedMonth = v => { selectedMonth = v; };
 window._getProducts   = () => products;
+window._getWholesaleClients = () => wholesaleClients;
+window._getStockMoves = () => stockMoves;
 
 // ── 在庫管理 ──
-let products = [], stockMoves = [];
+let products = [], stockMoves = [], wholesaleClients = [];
 const DEFAULT_LOW_STOCK_THRESHOLD = 3; // 商品ごとにlowStockが未設定の場合に使う共通のしきい値
 let currentMode = 'biz';
 let scanStream = null;
@@ -1421,7 +1597,7 @@ function switchMode(mode) {
     bizNav.style.display = isAdmin() ? 'flex' : 'none';
     invNav.style.display = 'none';
     document.querySelector('.main').style.paddingTop = '';
-    ['inv-add','inv-move','inv-list','inv-packec'].forEach(s => {
+    ['inv-add','inv-move','inv-list','inv-packec','inv-wholesale'].forEach(s => {
       const el = document.getElementById('screen-' + s);
       if (el) { el.style.display = 'none'; el.classList.remove('active'); }
     });
@@ -1451,7 +1627,7 @@ function switchMode(mode) {
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
     // 全在庫画面を一旦非表示
-    ['inv-add','inv-move','inv-list','inv-packec'].forEach(s => {
+    ['inv-add','inv-move','inv-list','inv-packec','inv-wholesale'].forEach(s => {
       const el = document.getElementById('screen-' + s);
       if (el) el.style.display = 'none';
     });
@@ -1461,7 +1637,7 @@ function switchMode(mode) {
 }
 
 function showInvScreen(name) {
-  ['inv-add','inv-move','inv-list','inv-packec'].forEach(s => {
+  ['inv-add','inv-move','inv-list','inv-packec','inv-wholesale'].forEach(s => {
     const el = document.getElementById('screen-' + s);
     if (el) { el.style.cssText = 'display:none !important; padding-top:8px;'; el.classList.remove('active'); }
   });
@@ -1515,23 +1691,539 @@ function showInvScreen(name) {
       if (window.innerWidth >= 768) loadPackItems().then(renderMovePackList);
     }
   }
+  if (name === 'inv-wholesale') {
+    switchWhTab('deliv');
+    loadInventory();
+  }
 }
 
 async function loadInventory() {
   try {
-    const [p, m] = await Promise.all([
+    const [p, m, c] = await Promise.all([
       fetch(authedUrl('/products.json')).then(r => r.json()),
-      fetch(authedUrl('/stockMoves.json')).then(r => r.json())
+      fetch(authedUrl('/stockMoves.json')).then(r => r.json()),
+      fetch(authedUrl('/wholesaleClients.json')).then(r => r.json())
     ]);
     products   = objToArr(p);
     stockMoves = objToArr(m);
+    wholesaleClients = objToArr(c);
+    renderWhClientDatalist();
     if (document.getElementById('screen-inv-list')?.classList.contains('active')) {
       renderInventoryList();
       if (document.getElementById('inv-cal-modal')?.style.display === 'flex') { renderInvCalendar(); renderInvTrendChart(); }
     }
     if (document.getElementById('screen-inv-add')?.classList.contains('active')) renderInvAddList();
+    if (document.getElementById('screen-inv-wholesale')?.classList.contains('active')) renderWhConsignList();
 
   } catch(e) { console.error('inventory load error', e); }
+}
+
+// 卸売の取引先候補（datalist）を再描画。新しい取引先は納品書・預かりの記録時に自動で追加される
+function renderWhClientDatalist() {
+  const dl = document.getElementById('wh-client-datalist');
+  if (!dl) return;
+  dl.innerHTML = wholesaleClients.map(c => `<option value="${(c.name||'').replace(/"/g,'&quot;')}"></option>`).join('');
+}
+
+// 取引先名が既存リストになければ新規登録する（あれば何もしない）
+async function ensureWholesaleClient(name) {
+  if (!name) return;
+  if (wholesaleClients.some(c => c.name === name)) return;
+  try {
+    await fetch(authedUrl('/wholesaleClients.json'), { method: 'POST', body: JSON.stringify({ name, createdAt: Date.now() }) });
+    wholesaleClients.push({ name });
+    renderWhClientDatalist();
+  } catch(e) { console.error('wholesale client add error', e); }
+}
+
+// ── 卸売管理（納品書作成・預かりリスト） ──
+let _whDelivItems = [];
+
+function switchWhTab(tab) {
+  ['deliv','consign'].forEach(t => {
+    const body = document.getElementById('wh-body-' + t);
+    const btn  = document.getElementById('wh-tab-' + t);
+    if (body) body.style.display = t === tab ? 'block' : 'none';
+    if (btn)  btn.classList.toggle('active', t === tab);
+  });
+  if (tab === 'consign') {
+    const dateEl = document.getElementById('wh-consign-date');
+    if (dateEl && !dateEl.value) dateEl.value = todayStr();
+    renderWhConsignList();
+  }
+  if (tab === 'deliv') {
+    const dateEl = document.getElementById('wh-deliv-date');
+    if (dateEl && !dateEl.value) dateEl.value = todayStr();
+  }
+}
+
+// 同じ取引先・同じ商品で直近に使った単価を探す（納品書での販売、預かりの精算いずれの履歴も対象）
+function suggestUnitPrice(client, productKey) {
+  if (!client || !productKey) return null;
+  const matches = (stockMoves || []).filter(m => m.productKey === productKey && m.client === client && m.unitPrice != null);
+  if (!matches.length) return null;
+  matches.sort((a,b) => (b.settledAt || b.createdAt || 0) - (a.settledAt || a.createdAt || 0));
+  return matches[0].unitPrice;
+}
+
+// JANが商品と一致した瞬間だけ（部分入力中は何もしない）明細に自動追加する。すでに同じ商品があれば数量を+1する
+function lookupWhItem() {
+  const input = document.getElementById('wh-item-jan');
+  const status = document.getElementById('wh-item-status');
+  const jan = input.value.trim();
+  if (!jan) { if (status) status.textContent = ''; return; }
+  const found = products.find(p => p.jan === jan);
+  if (found) {
+    addWhItemRow(found);
+    input.value = '';
+    if (status) status.textContent = '';
+    return;
+  }
+  if (status) {
+    status.textContent = jan.length >= 8 ? '登録されていない商品です。JANコードをご確認ください' : '';
+    status.style.color = 'var(--text-muted)';
+  }
+}
+
+// スキャンのたびに「その商品・通常単価」の行へ数量を積み増していく。
+// ただし単価を変更した行（傷や潰れなどで値引きした行）には合流させず、通常単価の行を別に作る。
+// これにより、傷物などで単価を下げた分だけ後から個別に管理できる。
+function addWhItemRow(prod) {
+  const client = document.getElementById('wh-deliv-client').value.trim();
+  const suggested = suggestUnitPrice(client, prod._key);
+  const defaultPrice = suggested != null ? suggested : 0;
+  const existing = _whDelivItems.find(it => it.productKey === prod._key && it.unitPrice === defaultPrice);
+  if (existing) {
+    existing.qty += 1;
+    existing.amount = existing.qty * existing.unitPrice;
+  } else {
+    _whDelivItems.push({ productKey: prod._key, jan: prod.jan, name: prod.name, model: prod.model || '', qty: 1, unitPrice: defaultPrice, amount: defaultPrice });
+  }
+  renderWhDelivItems();
+  showToast(`${prod.name} を追加しました（${existing ? existing.qty : 1}個）`);
+}
+
+function removeWhDelivItem(idx) {
+  _whDelivItems.splice(idx, 1);
+  renderWhDelivItems();
+}
+
+// 傷・潰れなどで単価が異なる分だけ、その行から1個だけ切り分けて別行にする（単価はそのままコピーされるので、切り分けた後に金額を修正する）
+function splitWhDelivItem(idx) {
+  const it = _whDelivItems[idx];
+  if (!it || it.qty <= 1) return;
+  it.qty -= 1;
+  it.amount = it.qty * it.unitPrice;
+  _whDelivItems.splice(idx + 1, 0, { productKey: it.productKey, jan: it.jan, name: it.name, model: it.model, qty: 1, unitPrice: it.unitPrice, amount: it.unitPrice });
+  renderWhDelivItems();
+}
+
+// 数量・単価は明細に追加された後、行の中で直接編集できる（編集のたびに金額欄と合計だけをその場で更新し、リスト全体は再描画しない）
+function updateWhItemField(idx, field, value) {
+  const it = _whDelivItems[idx];
+  if (!it) return;
+  const num = parseInt(value);
+  it[field] = isNaN(num) ? 0 : num;
+  it.amount = it.qty * it.unitPrice;
+  const amountEl = document.getElementById('wh-item-amount-' + idx);
+  if (amountEl) amountEl.textContent = '¥' + it.amount.toLocaleString('ja-JP');
+  updateWhDelivTotalDisplay();
+}
+
+function updateWhDelivTotalDisplay() {
+  const totalEl = document.getElementById('wh-deliv-total');
+  if (!totalEl) return;
+  if (!_whDelivItems.length) { totalEl.style.display = 'none'; return; }
+  const total = _whDelivItems.reduce((s,it) => s + it.amount, 0);
+  totalEl.style.display = 'flex';
+  totalEl.innerHTML = `<span>合計</span><span>¥${total.toLocaleString('ja-JP')}</span>`;
+}
+
+function renderWhDelivItems() {
+  const container = document.getElementById('wh-deliv-items');
+  const empty = document.getElementById('wh-deliv-empty');
+  if (!container || !empty) return;
+  if (!_whDelivItems.length) {
+    container.innerHTML = '';
+    empty.style.display = 'block';
+    updateWhDelivTotalDisplay();
+    return;
+  }
+  empty.style.display = 'none';
+  container.innerHTML = _whDelivItems.map((it, idx) => `
+    <div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="min-width:0;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${it.name}${it.model ? '（' + it.model + '）' : ''}</div>
+        <button onclick="removeWhDelivItem(${idx})" style="background:none;border:none;color:var(--danger);font-size:16px;cursor:pointer;padding:0 4px;flex-shrink:0">✕</button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-end">
+        <div style="flex:1">
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">数量</div>
+          <input type="number" min="1" value="${it.qty}" oninput="updateWhItemField(${idx},'qty',this.value)" style="width:100%;padding:6px 8px;font-size:13px;border:1.5px solid var(--border);border-radius:6px">
+        </div>
+        <div style="flex:1">
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">単価（円）</div>
+          <input type="number" min="0" value="${it.unitPrice}" oninput="updateWhItemField(${idx},'unitPrice',this.value)" style="width:100%;padding:6px 8px;font-size:13px;border:1.5px solid var(--border);border-radius:6px">
+        </div>
+        <div style="flex:1;text-align:right">
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">金額</div>
+          <div id="wh-item-amount-${idx}" style="font-weight:700;color:var(--text);padding:6px 0">¥${it.amount.toLocaleString('ja-JP')}</div>
+        </div>
+      </div>
+      ${it.qty > 1 ? `<button onclick="splitWhDelivItem(${idx})" style="margin-top:6px;background:none;border:none;color:var(--text-muted);font-size:11px;text-decoration:underline;cursor:pointer;padding:0">傷・潰れなどで1個だけ単価を変える</button>` : ''}
+    </div>`).join('');
+  updateWhDelivTotalDisplay();
+}
+
+// 納品書を発行：明細ごとに出庫記録＋在庫減算、まとめて売上（未入金）を1件登録し、印刷用の納品書を開く
+async function submitWhDeliverySlip() {
+  const client = document.getElementById('wh-deliv-client').value.trim();
+  const date = document.getElementById('wh-deliv-date').value;
+  if (!client) { showToast('取引先を入力してください'); return; }
+  if (!date) { showToast('日付を入力してください'); return; }
+  if (!_whDelivItems.length) { showToast('商品を1つ以上追加してください'); return; }
+  for (const it of _whDelivItems) {
+    if (!it.qty || it.qty < 1) { showToast(`${it.name}の数量を確認してください`); return; }
+    const prod = products.find(p => p._key === it.productKey);
+    if (prod && it.qty > prod.stock) { showToast(`${it.name}の在庫数（${prod.stock}個）を超えています`); return; }
+  }
+
+  const slipId = 'slip_' + Date.now();
+  const total = _whDelivItems.reduce((s,it) => s + it.amount, 0);
+  try {
+    await ensureWholesaleClient(client);
+    await Promise.all(_whDelivItems.map(it => {
+      const prod = products.find(p => p._key === it.productKey);
+      const stockBefore = prod ? prod.stock : null;
+      const newStock = (stockBefore || 0) - it.qty;
+      return Promise.all([
+        fetch(authedUrl('/products/' + it.productKey + '/stock.json'), { method: 'PUT', body: JSON.stringify(newStock) }),
+        fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
+          productKey: it.productKey, productName: it.name, jan: it.jan,
+          type: 'out', channel: '卸売', client, qty: it.qty, unitPrice: it.unitPrice, amount: it.amount,
+          slipId, date, memo: '', stockBefore, stockAfter: newStock, createdAt: Date.now()
+        })})
+      ]);
+    }));
+    await window._fbPushSales({ type: 'sales', date, salesType: '国内（請求書）', client, amount: total, due: '', note: `卸売納品書（${slipId}）より自動登録`, payStatus: '未入金', submittedAt: new Date().toLocaleDateString('ja-JP') });
+
+    // 印刷は取引先名（見出し）・型番・数量・単価のみに絞った簡易リスト。
+    // 商品数が多い（30〜50件程度）場合にも対応できるよう、1列目が用紙の縦半分あたりまで埋まったら
+    // 自動的に2列目へ続きが入るようにする（件数ではなく実際の高さで判定するため、印刷用ウィンドウ側で
+    // 一度隠して高さを測ってから、収まる分だけ1列目に、はみ出す分を2列目に振り分けている）
+    const dsItemsForPrint = _whDelivItems.map(it => ({ model: it.model || '', qty: it.qty, unitPrice: it.unitPrice }));
+    const html = `
+      <style>
+        .ds-wrap { font-size:11px; }
+        .ds-header h2 { font-size:15px; margin:0 0 2px; }
+        .ds-header p { font-size:10px; color:#666; margin:0 0 2px; }
+        .ds-cols-wrap { display:flex; gap:24px; margin-top:8px; }
+        .ds-col { flex:1; min-width:0; }
+        .ds-row { display:flex; align-items:baseline; gap:6px; padding:4px 0; margin-bottom:3px; border-bottom:1px solid #ccc; font-size:10.5px; }
+        .ds-row.ds-headrow { font-weight:700; border-bottom:1.5px solid #999; margin-bottom:5px; }
+        .ds-model { flex:1.6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .ds-qty { flex:0.7; text-align:right; }
+        .ds-price { flex:0.9; text-align:right; }
+        .ds-total { margin-top:10px; padding-top:6px; border-top:1.5px solid #333; font-weight:700; font-size:13px; text-align:right; }
+      </style>
+      <div class="ds-wrap">
+        <div class="ds-header">
+          <h2>納品書</h2>
+          <p>取引先: ${client} 様</p>
+          <p>納品日: ${fmtDateJP(date)}</p>
+        </div>
+        <div id="ds-measure" style="position:absolute;visibility:hidden;left:-9999px;top:0;width:50%"></div>
+        <div id="ds-final"></div>
+        <div class="ds-total">合計金額　¥${total.toLocaleString('ja-JP')}</div>
+      </div>
+      <script>
+      (function() {
+        const items = ${JSON.stringify(dsItemsForPrint)};
+        const headerHtml = '<div class="ds-row ds-headrow"><span class="ds-model">型番</span><span class="ds-qty">数量</span><span class="ds-price">単価</span></div>';
+        const rowHtml = function(it) {
+          return '<div class="ds-row"><span class="ds-model">' + (it.model||'') + '</span><span class="ds-qty">' + it.qty + '</span><span class="ds-price">¥' + it.unitPrice.toLocaleString('ja-JP') + '</span></div>';
+        };
+        const finalEl = document.getElementById('ds-final');
+        const measureEl = document.getElementById('ds-measure');
+
+        // 用紙の縦半分（A4想定）に収まる高さをmm→px換算で測り、そこから取引先名・日付などの見出しと
+        // 一番下の合計金額の分を差し引いた「残り」を、明細1列目に割り当てられる高さとする
+        const ruler = document.createElement('div');
+        ruler.style.cssText = 'position:absolute;visibility:hidden;height:100mm;width:1px;';
+        document.body.appendChild(ruler);
+        const pxPerMm = ruler.getBoundingClientRect().height / 100;
+        document.body.removeChild(ruler);
+        const HALF_PAGE_MM = 148; // A4（297mm）の約半分
+        const wrapTop = document.querySelector('.ds-wrap').getBoundingClientRect().top;
+        const usedBeforeItems = document.getElementById('ds-final').getBoundingClientRect().top - wrapTop; // 見出し部分の高さ
+        const totalH = document.querySelector('.ds-total').getBoundingClientRect().height;
+
+        measureEl.innerHTML = headerHtml + items.map(rowHtml).join('');
+        const allRowEls = measureEl.querySelectorAll('.ds-row');
+        const headerH = allRowEls[0].getBoundingClientRect().height;
+        const rowHeights = [];
+        for (let i = 1; i < allRowEls.length; i++) rowHeights.push(allRowEls[i].getBoundingClientRect().height);
+        const oneColumnHeight = headerH + rowHeights.reduce(function(s,h){ return s+h; }, 0);
+        // 万一マイナスなどの異常値になっても最低限の行数は1列に残るようフロアを設ける
+        const targetHeightPx = Math.max((pxPerMm * HALF_PAGE_MM) - usedBeforeItems - totalH - 12, headerH * 5);
+
+        let splitIdx = items.length; // 既定は1列のまま（全部が目安の高さに収まる場合）
+        if (oneColumnHeight > targetHeightPx) {
+          // 2列に分ける必要がある場合は、1列目を目安の高さまで詰め込むのではなく、
+          // 2列とも見出し込みでなるべく同じ高さになるよう分割点を探す（2列目だけ長くなるのを防ぐ）
+          const idealPerColumn = (oneColumnHeight + headerH) / 2;
+          let cum = headerH;
+          for (let i = 0; i < rowHeights.length; i++) {
+            cum += rowHeights[i];
+            if (cum >= idealPerColumn) { splitIdx = i + 1; break; }
+          }
+          splitIdx = Math.max(1, Math.min(splitIdx, items.length - 1));
+        }
+        measureEl.innerHTML = '';
+
+        const col1 = items.slice(0, splitIdx);
+        const col2 = items.slice(splitIdx);
+        let colsHtml = '<div class="ds-col">' + headerHtml + col1.map(rowHtml).join('') + '</div>';
+        if (col2.length) colsHtml += '<div class="ds-col">' + headerHtml + col2.map(rowHtml).join('') + '</div>';
+        finalEl.innerHTML = '<div class="ds-cols-wrap">' + colsHtml + '</div>';
+      })();
+      <\/script>`;
+    const w = window.open('', '_blank');
+    w.document.write(buildPrintHtml(`納品書_${client}_${date}`, html));
+    w.document.close();
+
+    _whDelivItems = [];
+    renderWhDelivItems();
+    document.getElementById('wh-deliv-client').value = '';
+    await loadInventory();
+    showToast('納品書を発行しました（合計 ¥' + total.toLocaleString('ja-JP') + '）');
+  } catch(e) { showToast('発行に失敗しました'); console.error(e); }
+}
+
+let _whConsignItems = [];
+
+// JANが商品と一致した瞬間だけ、預ける商品リストに自動追加する。すでに同じ商品があれば数量を+1する
+function lookupWhConsignItem() {
+  const input = document.getElementById('wh-consign-jan');
+  const status = document.getElementById('wh-consign-status');
+  const jan = input.value.trim();
+  if (!jan) { if (status) status.textContent = ''; return; }
+  const found = products.find(p => p.jan === jan);
+  if (found) {
+    addWhConsignRow(found);
+    input.value = '';
+    if (status) status.textContent = '';
+    return;
+  }
+  if (status) {
+    status.textContent = jan.length >= 8 ? '登録されていない商品です。JANコードをご確認ください' : '';
+    status.style.color = 'var(--text-muted)';
+  }
+}
+
+function addWhConsignRow(prod) {
+  const existing = _whConsignItems.find(it => it.productKey === prod._key);
+  if (existing) { existing.qty += 1; }
+  else { _whConsignItems.push({ productKey: prod._key, jan: prod.jan, name: prod.name, model: prod.model || '', qty: 1 }); }
+  renderWhConsignItems();
+  showToast(`${prod.name} を追加しました（${existing ? existing.qty : 1}個）`);
+}
+
+function removeWhConsignItem(idx) {
+  _whConsignItems.splice(idx, 1);
+  renderWhConsignItems();
+}
+
+function updateWhConsignQty(idx, value) {
+  const it = _whConsignItems[idx];
+  if (!it) return;
+  const num = parseInt(value);
+  it.qty = isNaN(num) ? 0 : num;
+}
+
+function renderWhConsignItems() {
+  const container = document.getElementById('wh-consign-items');
+  const empty = document.getElementById('wh-consign-items-empty');
+  if (!container || !empty) return;
+  if (!_whConsignItems.length) { container.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  container.innerHTML = _whConsignItems.map((it, idx) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+      <div style="min-width:0;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${it.name}${it.model ? '（' + it.model + '）' : ''}</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:8px">
+        <input type="number" min="1" value="${it.qty}" oninput="updateWhConsignQty(${idx},this.value)" style="width:56px;padding:6px;font-size:13px;border:1.5px solid var(--border);border-radius:6px;text-align:right">
+        <span style="font-size:12px;color:var(--text-muted)">個</span>
+        <button onclick="removeWhConsignItem(${idx})" style="background:none;border:none;color:var(--danger);font-size:16px;cursor:pointer;padding:0 4px">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+// 預け（委託）をまとめて記録：通常の出庫と同様に在庫は減らすが、type='consign' として通常の出庫（販売）とは区別する
+async function submitConsign() {
+  const client = document.getElementById('wh-consign-client').value.trim();
+  const date = document.getElementById('wh-consign-date').value;
+  const memo = document.getElementById('wh-consign-memo').value.trim();
+  if (!client) { showToast('取引先（預け先）を入力してください'); return; }
+  if (!date) { showToast('日付を入力してください'); return; }
+  if (!_whConsignItems.length) { showToast('商品を1つ以上追加してください'); return; }
+  for (const it of _whConsignItems) {
+    const prod = products.find(p => p._key === it.productKey);
+    if (!it.qty || it.qty < 1) { showToast(`${it.name}の数量を確認してください`); return; }
+    if (prod && it.qty > prod.stock) { showToast(`${it.name}の在庫数（${prod.stock}個）を超えています`); return; }
+  }
+
+  try {
+    await ensureWholesaleClient(client);
+    await Promise.all(_whConsignItems.map(it => {
+      const prod = products.find(p => p._key === it.productKey);
+      const stockBefore = prod ? prod.stock : null;
+      const newStock = (stockBefore || 0) - it.qty;
+      return Promise.all([
+        fetch(authedUrl('/products/' + it.productKey + '/stock.json'), { method: 'PUT', body: JSON.stringify(newStock) }),
+        fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
+          productKey: it.productKey, productName: it.name, jan: it.jan,
+          type: 'consign', status: 'holding', client, qty: it.qty, date, memo,
+          stockBefore, stockAfter: newStock, createdAt: Date.now()
+        })})
+      ]);
+    }));
+    _whConsignItems = [];
+    renderWhConsignItems();
+    document.getElementById('wh-consign-memo').value = '';
+    await loadInventory();
+    renderWhConsignList();
+    showToast('預けを記録しました');
+  } catch(e) { showToast('記録に失敗しました'); console.error(e); }
+}
+
+function renderWhConsignList() {
+  const listEl = document.getElementById('wh-consign-list');
+  const emptyEl = document.getElementById('wh-consign-empty');
+  const summaryEl = document.getElementById('wh-consign-summary');
+  const historyEl = document.getElementById('wh-consign-history-list');
+  if (!listEl) return;
+  const holding = (stockMoves || []).filter(m => m.type === 'consign' && m.status === 'holding');
+  const history = (stockMoves || []).filter(m => m.type === 'consign' && m.status && m.status !== 'holding')
+    .sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
+
+  if (summaryEl) summaryEl.textContent = holding.length ? `${holding.length}件` : '';
+  if (!holding.length) {
+    listEl.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'block';
+  } else {
+    if (emptyEl) emptyEl.style.display = 'none';
+    const sorted = [...holding].sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
+    listEl.innerHTML = sorted.map(m => `
+      <div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <div style="min-width:0">
+          <div style="color:var(--text);font-weight:600">${m.productName || ''}</div>
+          <div style="color:var(--text-muted);font-size:11px;margin-top:2px">預け先: ${m.client || ''}／${fmtDateJP(m.date)}／${m.qty}個${m.memo ? '／' + m.memo : ''}</div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button onclick="openSettleConsign('${m._key}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">精算（売れた）</button>
+          <button onclick="returnConsign('${m._key}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">返却（在庫に戻す）</button>
+        </div>
+      </div>`).join('');
+  }
+
+  if (historyEl) {
+    if (!history.length) {
+      historyEl.innerHTML = `<div style="font-size:12px;color:var(--text-muted)">まだ精算・返却の記録はありません</div>`;
+    } else {
+      historyEl.innerHTML = history.map(m => {
+        const label = m.status === 'settled' ? '精算済み' : '返却済み';
+        const color = m.status === 'settled' ? 'var(--success)' : 'var(--text-muted)';
+        const amountStr = m.status === 'settled' && m.amount != null ? `／¥${m.amount.toLocaleString('ja-JP')}` : '';
+        return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
+          <span style="color:${color};font-weight:700">${label}</span>
+          　${m.productName || ''}／預け先: ${m.client || ''}／${m.qty}個${amountStr}
+        </div>`;
+      }).join('');
+    }
+  }
+}
+
+function returnConsign(key) {
+  showConfirm('この商品を在庫に戻しますか？').then(async ok => {
+    if (!ok) return;
+    const m = stockMoves.find(x => x._key === key);
+    if (!m) return;
+    const prod = products.find(p => p._key === m.productKey);
+    const newStock = (prod ? prod.stock : 0) + m.qty;
+    try {
+      await Promise.all([
+        fetch(authedUrl('/products/' + m.productKey + '/stock.json'), { method: 'PUT', body: JSON.stringify(newStock) }),
+        fetch(authedUrl('/stockMoves/' + key + '.json'), { method: 'PATCH', body: JSON.stringify({ status: 'returned', returnedAt: Date.now() }) })
+      ]);
+      await loadInventory();
+      renderWhConsignList();
+      showToast('在庫に戻しました（在庫: ' + newStock + '個）');
+    } catch(e) { showToast('処理に失敗しました'); console.error(e); }
+  });
+}
+
+let _settleTargetKey = null;
+
+function openSettleConsign(key) {
+  const m = stockMoves.find(x => x._key === key);
+  if (!m) return;
+  _settleTargetKey = key;
+  const desc = document.getElementById('wh-settle-desc');
+  const qtyInput = document.getElementById('wh-settle-qty');
+  const priceInput = document.getElementById('wh-settle-price');
+  const hint = document.getElementById('wh-settle-hint');
+  if (desc) desc.textContent = `${m.productName || ''}／${m.client || ''}／預けている数量: ${m.qty}個`;
+  if (qtyInput) { qtyInput.max = m.qty; qtyInput.value = m.qty; }
+  const suggested = suggestUnitPrice(m.client, m.productKey);
+  if (priceInput) priceInput.value = suggested != null ? suggested : '';
+  if (hint) hint.textContent = suggested != null ? `前回この取引先に販売した単価: ¥${suggested.toLocaleString('ja-JP')}（必要なら修正してください）` : '';
+  const modal = document.getElementById('wh-settle-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeSettleConsign() {
+  const modal = document.getElementById('wh-settle-modal');
+  if (modal) modal.style.display = 'none';
+  _settleTargetKey = null;
+}
+
+// 預かり商品を精算：ステータスを更新し、通常の売上（未入金）としても1件登録して普段の売上集計に反映する。
+// 精算数量が預けている数量より少ない場合（傷・潰れなどで一部だけ単価が違う場合など）は、
+// その数量分だけを精算済みとして切り分け、残りは引き続き「預け中」として残す。
+async function confirmSettleConsign() {
+  const key = _settleTargetKey;
+  if (!key) return;
+  const m = stockMoves.find(x => x._key === key);
+  if (!m) { closeSettleConsign(); return; }
+  const settleQty = parseInt(document.getElementById('wh-settle-qty').value);
+  const unitPrice = parseInt(document.getElementById('wh-settle-price').value);
+  if (!settleQty || settleQty < 1) { showToast('精算する数量を入力してください'); return; }
+  if (settleQty > m.qty) { showToast('預けている数量（' + m.qty + '個）を超えています'); return; }
+  if (isNaN(unitPrice)) { showToast('単価を入力してください'); return; }
+  const amount = unitPrice * settleQty;
+  try {
+    if (settleQty === m.qty) {
+      // 全数量を精算
+      await fetch(authedUrl('/stockMoves/' + key + '.json'), { method: 'PATCH', body: JSON.stringify({
+        status: 'settled', unitPrice, amount, settledAt: Date.now()
+      })});
+    } else {
+      // 一部だけ精算：残りは引き続き「預け中」として数量を減らして残す
+      await Promise.all([
+        fetch(authedUrl('/stockMoves/' + key + '.json'), { method: 'PATCH', body: JSON.stringify({ qty: m.qty - settleQty }) }),
+        fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
+          productKey: m.productKey, productName: m.productName, jan: m.jan,
+          type: 'consign', status: 'settled', client: m.client, qty: settleQty, unitPrice, amount,
+          date: m.date, memo: m.memo || '', createdAt: Date.now(), settledAt: Date.now()
+        })})
+      ]);
+    }
+    await window._fbPushSales({ type: 'sales', date: todayStr(), salesType: '国内（請求書）', client: m.client, amount, due: '', note: `預かり精算（${m.productName || ''}／${settleQty}個）より自動登録`, payStatus: '未入金', submittedAt: new Date().toLocaleDateString('ja-JP') });
+    closeSettleConsign();
+    await loadInventory();
+    renderWhConsignList();
+    showToast('精算しました（¥' + amount.toLocaleString('ja-JP') + '）');
+  } catch(e) { showToast('処理に失敗しました'); console.error(e); }
 }
 
 const YAHOO_CLIENT_ID = "dmVyPTIwMjUwNyZpZD1oZWl6dUs1MUZSJmhhc2g9TXpOak5qSTNNREkzTkRCaVl6UTVaQQ";
@@ -1892,12 +2584,25 @@ function lookupPackJan() {
   }
 }
 
+// 種別が「出庫」の時だけ、出庫先（Amazon／卸売）の選択欄を表示する
+function handleMoveType() {
+  const type = document.getElementById('move-type').value;
+  const wrap = document.getElementById('move-channel-wrap');
+  const divider = document.getElementById('move-channel-divider');
+  const show = type === 'out';
+  if (wrap) wrap.style.display = show ? '' : 'none';
+  if (divider) divider.style.display = show ? '' : 'none';
+  if (!show) { const ch = document.getElementById('move-channel'); if (ch) ch.selectedIndex = 0; }
+}
+
 async function submitMove() {
   const jan  = document.getElementById('move-jan').value.trim();
   const date = document.getElementById('move-date').value;
   const type = document.getElementById('move-type').value;
   const qty  = parseInt(document.getElementById('move-qty').value);
+  const channel = document.getElementById('move-channel')?.value || '';
   if (!jan || !date || !type || !qty) { showAlert('move-alert-box','move-alert-msg','必須項目をすべて入力してください','error'); return; }
+  if (type === 'out' && !channel) { showAlert('move-alert-box','move-alert-msg','出庫先（Amazon／卸売）を選択してください','error'); return; }
 
   const info = document.getElementById('move-product-info');
   const prodKey = info.dataset.key;
@@ -1916,7 +2621,7 @@ async function submitMove() {
       fetch(authedUrl('/products/' + prodKey + '/stock.json'), { method: 'PUT', body: JSON.stringify(newStock) }),
       fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
         productKey: prodKey, productName: prod.name, jan,
-        type, qty, date, memo: document.getElementById('move-memo').value.trim(),
+        type, qty, date, channel: type === 'out' ? channel : '', memo: document.getElementById('move-memo').value.trim(),
         stockBefore: prod.stock, stockAfter: newStock, createdAt: Date.now()
       })})
     ]);
@@ -1924,6 +2629,7 @@ async function submitMove() {
     // （EC売上は出荷管理のEC売上タブから個別に記録する）
     ['move-jan','move-date','move-qty','move-memo'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
     document.getElementById('move-type').selectedIndex = 0;
+    handleMoveType();
     document.getElementById('move-product-info').style.display = 'none';
     await loadInventory();
     showToast('入出庫を記録しました（在庫: ' + newStock + '個）');
@@ -1959,7 +2665,7 @@ function getLowStockThreshold(p) {
 function estimateStockoutForecast(p) {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 30);
-  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  const cutoffStr = ymdKey(cutoff);
   const recentOut = (stockMoves || []).filter(m => m.productKey === p._key && m.type === 'out' && m.date && m.date >= cutoffStr);
   if (!recentOut.length) return null;
   const totalOut = recentOut.reduce((s, m) => s + (m.qty || 0), 0);
@@ -1978,7 +2684,7 @@ function buildInvCard(p, opts) {
   const totalVal = (p.cost || 0) * p.stock;
   // 入荷履歴（同じ商品でも入荷日が複数ある場合はここに積み重なる）
   const receipts = getProductReceipts(p._key);
-  const latestDate = receipts.length ? receipts[0].date : (p.createdAt ? new Date(p.createdAt).toISOString().slice(0,10) : '');
+  const latestDate = receipts.length ? receipts[0].date : (p.createdAt ? ymdKey(new Date(p.createdAt)) : '');
   const latestDateDisp = fmtDateJP(latestDate);
   const forecast = estimateStockoutForecast(p);
   const forecastDays = forecast ? Math.max(0, Math.round(forecast.daysLeft)) : null;
@@ -2028,7 +2734,7 @@ function renderInvAddList() {
   const summaryEl = document.getElementById('inv-add-list-summary');
   if (!listEl) return;
   const today = todayStr();
-  const todays = products.filter(p => p.createdAt && new Date(p.createdAt).toISOString().slice(0,10) === today);
+  const todays = products.filter(p => p.createdAt && ymdKey(new Date(p.createdAt)) === today);
   const q = (document.getElementById('inv-add-search')?.value || '').toLowerCase();
   const filtered = todays.filter(p => !q || p.name?.toLowerCase().includes(q) || (p.jan||'').includes(q) || (p.maker||'').toLowerCase().includes(q));
   if (summaryEl) summaryEl.textContent = todays.length ? filtered.length + '/' + todays.length + '件' : '';
@@ -2344,7 +3050,101 @@ function selectInvCalDay(dateStr, skipRerenderGrid) {
       <div style="flex-shrink:0;margin-left:8px;font-weight:700;color:${isIn ? 'var(--success)' : 'var(--danger)'}">${isIn ? '入庫 +' : '出庫 -'}${m.qty}</div>
     </div>`;
   }).join('');
-  detail.innerHTML = `<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px">${fmtDateJP(dateStr)}</div>${rows}`;
+  detail.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+    <div style="font-size:13px;font-weight:700;color:var(--text)">${fmtDateJP(dateStr)}</div>
+    <button onclick="printInvCalDayReport('${dateStr}')" style="padding:4px 10px;font-size:11px;font-weight:600;border:1.5px solid var(--border);border-radius:20px;background:var(--white);color:var(--text);cursor:pointer">🖨 印刷</button>
+  </div>${rows}`;
+}
+
+// その日の入出庫記録を一覧表示できる印刷用ページを開く（棚卸や月次出力と同じ印刷パターンを利用）
+function printInvCalDayReport(dateStr) {
+  const moves = (stockMoves || []).filter(m => m.date === dateStr && (m.type === 'in' || m.type === 'out'));
+  if (!moves.length) { showToast('この日の入出庫記録がありません'); return; }
+  const sorted = [...moves].sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+  const totalIn  = sorted.filter(m=>m.type==='in').reduce((s,m)=>s+m.qty,0);
+  const totalOut = sorted.filter(m=>m.type==='out').reduce((s,m)=>s+m.qty,0);
+  const rows = sorted.map(m => {
+    const isIn = m.type === 'in';
+    const stockChange = (m.stockBefore != null && m.stockAfter != null) ? `${m.stockBefore} → ${m.stockAfter}` : '';
+    return `<tr>
+      <td>${isIn ? '入庫' : '出庫'}</td>
+      <td>${m.productName || ''}</td>
+      <td>${m.jan || ''}</td>
+      <td style="text-align:right;color:${isIn?'#16a34a':'#dc2626'};font-weight:700">${isIn ? '+' : '-'}${m.qty}</td>
+      <td style="text-align:right">${stockChange}</td>
+      <td>${m.memo || ''}</td>
+    </tr>`;
+  }).join('');
+  const html = `<h2>入出庫記録　${fmtDateJP(dateStr)}</h2><p>出力日: ${new Date().toLocaleDateString('ja-JP')}</p>
+    <table>
+      <tr><th>種別</th><th>商品名</th><th>JAN</th><th>数量</th><th>在庫（変化前→後）</th><th>メモ</th></tr>
+      ${rows}
+      <tr class="total"><td colspan="3" style="text-align:right">合計</td><td style="text-align:right">入庫 +${totalIn}／出庫 -${totalOut}</td><td colspan="2"></td></tr>
+    </table>`;
+  const w = window.open('', '_blank');
+  w.document.write(buildPrintHtml(`入出庫記録_${dateStr}`, html));
+  w.document.close();
+  showToast('印刷ダイアログを開きました');
+}
+
+// 出庫記録だけを期間・出庫先で絞り込んで印刷する（入出庫カレンダーの印刷とは別機能）
+function openOutPrintModal() {
+  const modal = document.getElementById('inv-outprint-modal');
+  if (!modal) return;
+  const from = document.getElementById('outprint-from');
+  const to = document.getElementById('outprint-to');
+  if (from && !from.value) {
+    const now = new Date();
+    from.value = ymKey(now) + '-01';
+  }
+  if (to && !to.value) to.value = todayStr();
+  const ch = document.getElementById('outprint-channel');
+  if (ch) ch.selectedIndex = 0;
+  modal.style.display = 'flex';
+}
+
+function closeOutPrintModal() {
+  const modal = document.getElementById('inv-outprint-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function printOutOnlyReport() {
+  const from = document.getElementById('outprint-from').value;
+  const to = document.getElementById('outprint-to').value;
+  const channelFilter = document.getElementById('outprint-channel').value;
+  if (!from || !to) { showToast('開始日と終了日を入力してください'); return; }
+  if (from > to) { showToast('開始日は終了日より前の日付にしてください'); return; }
+
+  let moves = (stockMoves || []).filter(m => m.type === 'out' && m.date && m.date >= from && m.date <= to);
+  if (channelFilter) moves = moves.filter(m => (m.channel || '') === channelFilter);
+  if (!moves.length) { showToast('該当する出庫記録がありません'); return; }
+
+  const sorted = [...moves].sort((a,b) => (a.date||'') === (b.date||'') ? (a.createdAt||0) - (b.createdAt||0) : ((a.date||'') > (b.date||'') ? 1 : -1));
+  const totalQty = sorted.reduce((s,m) => s + (m.qty||0), 0);
+  const rows = sorted.map(m => {
+    const prod = (products || []).find(p => p._key === m.productKey);
+    const model = (prod && prod.model) ? prod.model : '';
+    return `<tr>
+      <td>${fmtDateJP(m.date)}</td>
+      <td>${m.channel || ''}</td>
+      <td>${model}</td>
+      <td>${m.jan || ''}</td>
+      <td style="text-align:right;color:#dc2626;font-weight:700">${m.qty}</td>
+    </tr>`;
+  }).join('');
+  const rangeLabel = from === to ? fmtDateJP(from) : `${fmtDateJP(from)}　〜　${fmtDateJP(to)}`;
+  const chLabel = channelFilter ? `（${channelFilter}のみ）` : '';
+  const html = `<h2>出庫記録　${rangeLabel}${chLabel}</h2><p>出力日: ${new Date().toLocaleDateString('ja-JP')}</p>
+    <table>
+      <tr><th>日付</th><th>出庫先</th><th>型番</th><th>JAN</th><th>数量</th></tr>
+      ${rows}
+      <tr class="total"><td colspan="4" style="text-align:right">合計</td><td style="text-align:right">${totalQty}</td></tr>
+    </table>`;
+  const w = window.open('', '_blank');
+  w.document.write(buildPrintHtml(`出庫記録_${from}_${to}`, html));
+  w.document.close();
+  closeOutPrintModal();
+  showToast('印刷ダイアログを開きました');
 }
 
 function setInvCatFilter(cat) {
@@ -2386,7 +3186,7 @@ function doExportInventory() {
   ws['!cols'] = [{wch:20},{wch:16},{wch:14},{wch:16},{wch:8},{wch:12},{wch:14},{wch:14},{wch:20}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '在庫一覧');
-  XLSX.writeFile(wb, `在庫一覧_${new Date().toISOString().slice(0,10).replace(/-/g,'')}.xlsx`);
+  XLSX.writeFile(wb, `在庫一覧_${ymdKey(new Date()).replace(/-/g,'')}.xlsx`);
   showToast('在庫ExcelをExcelで出力しました');
 }
 
@@ -2525,6 +3325,8 @@ function handleScanResult(text) {
   if (scanTarget === 'move-jan') lookupProduct();
   if (scanTarget === 'inv-jan') lookupJan();
   if (scanTarget === 'pack-jan-sp') lookupPackJan();
+  if (scanTarget === 'wh-item-jan') lookupWhItem();
+  if (scanTarget === 'wh-consign-jan') lookupWhConsignItem();
 }
 
 // ── 写真から読み取る（iPhoneでの連続スキャンがうまく動かない場合の代替手段）──
@@ -2796,6 +3598,8 @@ function applyRoleUI() {
 // 日本など UTC+の地域では月がひとつ前にずれてしまう（例：3/1 00:00 JST → 2/28 15:00 UTC）。
 // 必ずローカルの年月から直接文字列を組み立てることでこのズレを防ぐ。
 function ymKey(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'); }
+// 同様の理由で、日付（YYYY-MM-DD）が必要な箇所も toISOString() ではなくローカルの年月日から組み立てる
+function ymdKey(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 
 let currentListTab = 'trip';
 
@@ -4617,11 +5421,26 @@ function buildHomeTrendChart(purchases, sales, ecSales) {
                                   + ecSales.filter(e=>e.date?.startsWith(m)).reduce((s,e)=>s+e.amount,0));
   const max = Math.max(...purVals, ...salVals, 1);
   const barH = 90;
+  // 棒の上に金額（万円単位に省略）を常時表示する。ラベル分の高さをあらかじめ確保しておき、
+  // 一番高い棒でもラベルがはみ出さないようにする
+  const LABEL_H = 13;
+  const availH = barH - LABEL_H;
+  function abbrevYen(v) {
+    if (!v) return '';
+    if (v >= 10000) return (Math.round(v/1000)/10).toString().replace(/\.0$/,'') + '万';
+    return '¥' + v.toLocaleString('ja-JP');
+  }
   const cols = months.map((m,i) => `
-    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px">
       <div style="width:100%;display:flex;gap:2px;align-items:flex-end;height:${barH}px">
-        <div style="flex:1;background:#d1d5db;height:${Math.round((purVals[i]/max)*barH)}px;border-radius:2px 2px 0 0"></div>
-        <div style="flex:1;background:#0f766e;height:${Math.round((salVals[i]/max)*barH)}px;border-radius:2px 2px 0 0"></div>
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end">
+          <div style="font-size:8px;color:#6b7280;white-space:nowrap;margin-bottom:1px">${abbrevYen(purVals[i])}</div>
+          <div style="width:100%;background:#d1d5db;height:${Math.round((purVals[i]/max)*availH)}px;border-radius:2px 2px 0 0"></div>
+        </div>
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end">
+          <div style="font-size:8px;color:#0f766e;font-weight:700;white-space:nowrap;margin-bottom:1px">${abbrevYen(salVals[i])}</div>
+          <div style="width:100%;background:#0f766e;height:${Math.round((salVals[i]/max)*availH)}px;border-radius:2px 2px 0 0"></div>
+        </div>
       </div>
       <div style="font-size:9px;color:var(--text-muted)">${parseInt(m.slice(5,7))}月</div>
     </div>`).join('');
@@ -4655,7 +5474,7 @@ function renderHomeSummary() {
   const unpaid = sales.filter(s=>s.payStatus!=='入金済み');
   const recvTotal = unpaid.reduce((s,a)=>s+a.amount,0);
   const dueSoonCutoff = new Date(); dueSoonCutoff.setDate(dueSoonCutoff.getDate()+7);
-  const dueSoonStr = dueSoonCutoff.toISOString().slice(0,10);
+  const dueSoonStr = ymdKey(dueSoonCutoff);
   const overdueCount = unpaid.filter(s=>s.due && s.due < today).length;
   const dueSoonCount = unpaid.filter(s=>s.due && s.due >= today && s.due <= dueSoonStr).length;
 
@@ -5321,7 +6140,7 @@ function renderReceivable(restoreState) {
   const paidTotal   = paid.reduce((s,a) => s+a.amount, 0);
   summary.innerHTML = `未回収: <span style="color:var(--danger);font-weight:700">¥${unpaidTotal.toLocaleString('ja-JP')}</span> ／ 入金済: <span style="color:var(--success);font-weight:700">¥${paidTotal.toLocaleString('ja-JP')}</span>`;
 
-  const today = new Date().toISOString().slice(0,10);
+  const today = todayStr();
 
   // 月別にグループ化（新しい月が上）
   const byMonth = groupByMonth([...allSales].sort((a,b) => (b.date||'') > (a.date||'') ? 1 : -1));
@@ -5449,7 +6268,7 @@ function doExportReceivable() {
   ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:5}}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '未回収売掛金');
-  const d = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  const d = todayStr().replace(/-/g,'');
   XLSX.writeFile(wb, `未回収売掛金_${d}.xlsx`);
   showToast('未回収売掛金Excelを出力しました');
 }
@@ -5604,7 +6423,7 @@ function isAdmin() {
   const session = JSON.parse(sessionStorage.getItem(AUTH_STORAGE_KEY) || '{}');
   return ADMIN_EMAILS.includes((session.email || '').toLowerCase());
 }
-function todayStr() { return new Date().toISOString().slice(0,10); }
+function todayStr() { return ymdKey(new Date()); }
 
 // idToken自動更新（Firebase refreshToken使用）
 async function refreshIdToken() {
