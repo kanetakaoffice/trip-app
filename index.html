@@ -1275,6 +1275,8 @@ async function loadAll() {
     expenses  = objToArr(e).sort((a,b) => (b.date||'') > (a.date||'') ? 1 : -1);
     purchases = objToArr(p).sort((a,b) => (b.date||'') > (a.date||'') ? 1 : -1);
     sales     = objToArr(s).sort((a,b) => (b.date||'') > (a.date||'') ? 1 : -1);
+    // 業務一覧のグラフでEC売上も合わせて見られるよう、出荷管理画面を訪れていなくても最新化しておく
+    await loadECSales();
     console.log('Loaded:', trips.length, expenses.length, purchases.length, sales.length);
     updateBadge();
     document.getElementById('list-loading').style.display = 'none';
@@ -1334,6 +1336,7 @@ window._getTrips      = () => trips;
 window._getExpenses   = () => expenses;
 window._getPurchases  = () => purchases;
 window._getSales      = () => sales;
+window._getEcSales    = () => _ecAllItems;
 window._getNames      = () => NAMES;
 window._getSuppliers  = () => SUPPLIERS;
 window._getNameAmount = () => NAME_AMOUNT;
@@ -4600,14 +4603,20 @@ function toggleDayGroup(uid) {
 function renderChart(container) {
   const purchases = window._getPurchases ? window._getPurchases() : [];
   const sales     = window._getSales     ? window._getSales()     : [];
+  const ecSales   = window._getEcSales   ? window._getEcSales()   : [];
   const currentYear = new Date().getFullYear();
   const prevYear    = currentYear - 1;
   const months = Array.from({length:12}, (_,i) => String(i+1).padStart(2,'0'));
 
   const SUPPLIER_COLORS = { '店舗':'#fdba74','電脳':'#a5f3fc','（株）HAK':'#fde68a','（株）GAIN':'#fca5a5' };
-  // 売上：国内＝薄いネイビー、国外＝やや濃いネイビー
-  const SAL_COLORS = { '国内（請求書）':'#0f766e', '国外（インボイス）':'#99c4bf' };
+  // 売上：国内＝薄いネイビー、国外＝やや濃いネイビー、EC＝オレンジ（在庫の出荷管理で記録されたAmazon・自社EC分）
+  const SAL_COLORS = { '国内（請求書）':'#0f766e', '国外（インボイス）':'#99c4bf', 'EC':'#f97316' };
   function getSalColor(type) { return SAL_COLORS[type] || '#93c5fd'; }
+  function salTypeLabel(type) {
+    if (type === '国内（請求書）') return '国内';
+    if (type === '国外（インボイス）') return '国外';
+    return type;
+  }
 
   function getSupplierColor(s) {
     if (!s) return '#d1d5db';
@@ -4625,17 +4634,22 @@ function renderChart(container) {
   ];
   const purBySupplier = sortedSuppliers.map(sup=>({ supplier:sup, color:getSupplierColor(sup), curr:months.map(m=>purchases.filter(p=>p.date?.startsWith(currentYear+'-'+m)&&normalizeSupplier(p.supplier)===sup).reduce((s,p)=>s+p.amount,0)) }));
 
-  // 売上：国内・国外で積み上げ
+  // 売上：国内・国外で積み上げ、さらにEC売上（在庫管理の出荷管理で記録したAmazon・自社EC分）も同じ売上バーに積み上げる
   const salTypes = ['国内（請求書）','国外（インボイス）'];
   const salByType = salTypes.map(type=>({ type, color:getSalColor(type), curr:months.map(m=>sales.filter(s=>s.date?.startsWith(currentYear+'-'+m)&&s.salesType===type).reduce((s,p)=>s+p.amount,0)) }));
+  const ecCurrByMonth = months.map(m=>ecSales.filter(e=>e.date?.startsWith(currentYear+'-'+m)).reduce((s,e)=>s+e.amount,0));
+  const ecPrevByMonth = months.map(m=>ecSales.filter(e=>e.date?.startsWith(prevYear+'-'+m)).reduce((s,e)=>s+e.amount,0));
+  salByType.push({ type:'EC', color:getSalColor('EC'), curr:ecCurrByMonth });
 
   const purCurr = months.map(m=>purchases.filter(p=>p.date?.startsWith(currentYear+'-'+m)).reduce((s,p)=>s+p.amount,0));
   const purPrev = months.map(m=>purchases.filter(p=>p.date?.startsWith(prevYear+'-'+m)).reduce((s,p)=>s+p.amount,0));
-  const salCurr = months.map(m=>sales.filter(s=>s.date?.startsWith(currentYear+'-'+m)).reduce((s,p)=>s+p.amount,0));
-  const salPrev = months.map(m=>sales.filter(s=>s.date?.startsWith(prevYear+'-'+m)).reduce((s,p)=>s+p.amount,0));
+  const salCurr = months.map((m,i)=>sales.filter(s=>s.date?.startsWith(currentYear+'-'+m)).reduce((s,p)=>s+p.amount,0) + ecCurrByMonth[i]);
+  const salPrev = months.map((m,i)=>sales.filter(s=>s.date?.startsWith(prevYear+'-'+m)).reduce((s,p)=>s+p.amount,0) + ecPrevByMonth[i]);
   const profit  = months.map((_,i)=>salCurr[i]-purCurr[i]);
   const salCumul  = salCurr.reduce((acc,v,i)=>{ acc.push((acc[i-1]||0)+v); return acc; },[]);
   const salCumulP = salPrev.reduce((acc,v,i)=>{ acc.push((acc[i-1]||0)+v); return acc; },[]);
+  // 未回収売掛金はあくまで請求書ベースの売上（sales）のみが対象。ECの売上はプラットフォーム側で
+  // 即時決済されるため、入金ステータス（payStatus）の概念がなく、ここには含めない。
   const allSalesData = window._getSales ? window._getSales() : [];
   const recv = months.map(m=>{ const ym=currentYear+'-'+m; return allSalesData.filter(s=>s.date<=ym+'-31'&&s.payStatus!=='入金済み'&&s.date?.startsWith(currentYear+'')).reduce((s,a)=>s+a.amount,0); });
 
@@ -4729,13 +4743,13 @@ function renderChart(container) {
   const titles={g1:'粗利益ライン',g2:'前年比ライン',g3:'累計売上ライン',g4:'売掛金残高ライン'};
 
   const supplierLegend=sortedSuppliers.map(sup=>`<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;background:${getSupplierColor(sup)};border-radius:2px"></span>${sup}</span>`).join('');
-  const salTypeLegend=salTypes.map(t=>`<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;background:${getSalColor(t)};border-radius:2px"></span>${t==='国内（請求書）'?'国内':'国外'}</span>`).join('');
+  const salTypeLegend=salByType.map(t=>`<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;background:${t.color};border-radius:2px"></span>${salTypeLabel(t.type)}</span>`).join('');
 
   const summaryRows=months.map((m,i)=>{
     const p=purCurr[i],s=salCurr[i]; if(p===0&&s===0) return '';
     const pr=s-p;
     const bd=purBySupplier.filter(sup=>sup.curr[i]>0).map(sup=>`<span style="display:inline-flex;align-items:center;gap:3px;margin-right:8px;font-size:10px;color:#666"><span style="display:inline-block;width:8px;height:8px;background:${sup.color};border-radius:2px"></span>${sup.supplier} ${yen(sup.curr[i])}</span>`).join('');
-    const sd=salByType.filter(t=>t.curr[i]>0).map(t=>`<span style="display:inline-flex;align-items:center;gap:3px;margin-right:8px;font-size:10px;color:#666"><span style="display:inline-block;width:8px;height:8px;background:${t.color};border-radius:2px"></span>${t.type==='国内（請求書）'?'国内':'国外'} ${yen(t.curr[i])}</span>`).join('');
+    const sd=salByType.filter(t=>t.curr[i]>0).map(t=>`<span style="display:inline-flex;align-items:center;gap:3px;margin-right:8px;font-size:10px;color:#666"><span style="display:inline-block;width:8px;height:8px;background:${t.color};border-radius:2px"></span>${salTypeLabel(t.type)} ${yen(t.curr[i])}</span>`).join('');
     return `<div style="border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;font-size:12px"><span style="font-weight:600;color:var(--text)">${currentYear}年${parseInt(m)}月</span><span style="color:#4a4a4a">${yen(p)}</span><span style="color:var(--teal)">${yen(s)}</span><span style="font-weight:700;color:${pr>=0?'var(--success)':'var(--danger)'}">${yen(pr)}</span></div>${bd?`<div style="padding:0 12px 4px;flex-wrap:wrap;display:flex">${bd}</div>`:''}${sd?`<div style="padding:0 12px 8px;flex-wrap:wrap;display:flex">${sd}</div>`:''}</div>`;
   }).filter(Boolean).join('');
   const summaryTable=`<div style="background:var(--white);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;margin-bottom:16px"><div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--surface);font-size:11px;font-weight:700;color:var(--text-muted);border-bottom:1px solid var(--border)"><span>月</span><span>仕入合計</span><span style="color:var(--teal)">売上合計</span><span>粗利益</span></div>${summaryRows||'<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">データがありません</div>'}</div>`;
