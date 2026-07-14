@@ -262,10 +262,10 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:0 16px 16px">
         <button class="home-action-btn" onclick="goHomeToInv('inv-move')"><span class="home-icon">🔄</span><span class="home-label">入出庫</span></button>
         <button class="home-action-btn" onclick="goHomeToInv('inv-packec')"><span class="home-icon">🚚</span><span class="home-label">出荷管理</span></button>
-        <button class="home-action-btn" onclick="goHomeToInv('inv-wholesale')"><span class="home-icon">🤝</span><span class="home-label">卸売管理</span></button>
-        <button class="home-action-btn" onclick="showScreen('purchase')"><span class="home-icon">📦</span><span class="home-label">仕入</span></button>
+        <button class="home-action-btn" onclick="goHomeToInv('inv-wholesale')"><span class="home-icon">📦</span><span class="home-label">卸売管理</span></button>
+        <button class="home-action-btn" onclick="showScreen('purchase')"><span class="home-icon">🛒</span><span class="home-label">仕入</span></button>
         <button class="home-action-btn" onclick="showScreen('expense')"><span class="home-icon">💴</span><span class="home-label">経費</span></button>
-        <button class="home-action-btn" onclick="showScreen('form')"><span class="home-icon">🧳</span><span class="home-label">出張</span></button>
+        <button class="home-action-btn" onclick="showScreen('form')"><span class="home-icon">✈️</span><span class="home-label">出張</span></button>
       </div>
     </div>
     <div id="home-summary"></div>
@@ -5601,7 +5601,7 @@ function renderECListSP() {
       jisha:  allItems.filter(x=>x.date?.startsWith(m)&&x.channel==='自社EC').reduce((s,x)=>s+x.amount,0),
     }));
     const maxM = Math.max(...monthlyData.map(m=>m.amazon+m.jisha), 1);
-    const W = 36; const GAP = 4;
+    const W = 30; const GAP = 10;
     monthlyEl.innerHTML = `<div style="overflow-x:auto"><svg viewBox="0 0 ${12*(W+GAP)+4} 95" width="${12*(W+GAP)+4}" style="min-width:${12*(W+GAP)+4}px;display:block">
       ${monthlyData.map((m,i)=>{
         const total = m.amazon+m.jisha;
@@ -5720,8 +5720,8 @@ function buildHomeTrendChart(purchases, sales, ecSales) {
     return '¥' + v.toLocaleString('ja-JP');
   }
   const cols = months.map((m,i) => `
-    <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px">
-      <div style="width:100%;display:flex;gap:2px;align-items:flex-end;height:${barH}px">
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;padding:0 2px">
+      <div style="width:100%;display:flex;gap:3px;align-items:flex-end;height:${barH}px">
         <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end">
           <div style="font-size:8px;color:#6b7280;white-space:nowrap;margin-bottom:1px">${abbrevYen(purVals[i])}</div>
           <div style="width:100%;background:#d1d5db;height:${Math.round((purVals[i]/max)*availH)}px;border-radius:2px 2px 0 0"></div>
@@ -5735,7 +5735,7 @@ function buildHomeTrendChart(purchases, sales, ecSales) {
     </div>`).join('');
   return `<div class="card home-stat-card" onclick="showScreen('list')">
     <div class="card-title">仕入・売上の推移（今期）</div>
-    <div style="display:flex;gap:2px;padding:0 16px 12px;align-items:flex-end">${cols}</div>
+    <div style="display:flex;gap:10px;padding:0 16px 12px;align-items:flex-end">${cols}</div>
     <div style="display:flex;gap:12px;padding:0 16px 14px;font-size:10px;color:#9ca3af">
       <span><span style="display:inline-block;width:10px;height:10px;background:#d1d5db;border-radius:2px;margin-right:3px"></span>仕入</span>
       <span><span style="display:inline-block;width:10px;height:10px;background:#0f766e;border-radius:2px;margin-right:3px"></span>売上</span>
@@ -5969,15 +5969,19 @@ function renderChart(container) {
     let bars=''; [...segs].reverse().forEach((seg,idx)=>{ const h=Math.round((seg.val/displayMax)*barH); bars+=`<div style="width:100%;height:${h}px;background:${seg.color};border-radius:${idx===segs.length-1?'3px 3px 0 0':'0'};min-height:${h>0?2:0}px"></div>`; });
     return `<div style="width:100%;height:${barH}px;display:flex;flex-direction:column;justify-content:flex-end">${bars}</div>`;
   }
-  function makeLine(values,color,maxV,w,h,dashed) {
+  // xFracs：各月の列が実際に描画された横位置（コンテナ幅に対する0〜1の割合）。
+  // 列の間隔（gap）を広げても点線・ドットが棒の真上からずれないよう、初回は「等間隔」という前提値で仮描画し、
+  // 実際にDOMへ挿入した後で実測した位置に描き直す（下のrequestAnimationFrame部分）。
+  const naiveFracs = months.map((_,i)=>i/11);
+  function makeLine(values,color,maxV,w,h,dashed,xFracs) {
     if (!values.some(v=>v!==0)) return '';
-    const pts=values.map((v,i)=>`${(i/11)*w},${h-(v/maxV)*h}`).join(' ');
+    const pts=values.map((v,i)=>`${xFracs[i]*w},${h-(v/maxV)*h}`).join(' ');
     return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5" ${dashed?'stroke-dasharray="4 3"':''} stroke-linejoin="round" stroke-linecap="round"/>`;
   }
-  function makeDotsWithLabel(values,color,maxV,w,h) {
+  function makeDotsWithLabel(values,color,maxV,w,h,xFracs) {
     return values.map((v,i)=>{
       if(v===0) return '';
-      const x=(i/11)*w; const y=h-(v/maxV)*h;
+      const x=xFracs[i]*w; const y=h-(v/maxV)*h;
       const lx=i>9?x-62:x+6; const ly=y>20?y-18:y+14;
       return `<g style="cursor:pointer" onclick="this.querySelector('.tip').style.display=this.querySelector('.tip').style.display==='none'?'block':'none'"><circle cx="${x}" cy="${y}" r="4" fill="${color}" stroke="white" stroke-width="1.5"/><text class="tip" x="${lx}" y="${ly}" font-size="9" fill="${color}" font-weight="700" style="display:none">${yen(v)}</text></g>`;
     }).join('');
@@ -5992,42 +5996,48 @@ function renderChart(container) {
   const maxProfitRaw=Math.max(...profit.map(Math.abs),1);
   const maxProfit=Math.ceil(maxProfitRaw*1.4/10000)*10000||10000;
   const midY=svgH/2;
-  const profitPts=profit.map((v,i)=>`${(i/11)*svgW},${midY-(v/maxProfit)*(svgH/2)}`).join(' ');
-  const profitDots=profit.map((v,i)=>{ const x=(i/11)*svgW; const y=midY-(v/maxProfit)*(svgH/2); const col=v>=0?'#16a34a':'#dc2626'; const lx=i>9?x-62:x+6; const ly=y>20?y-18:y+14; return `<g style="cursor:pointer" onclick="this.querySelector('.tip').style.display=this.querySelector('.tip').style.display==='none'?'block':'none'"><circle cx="${x}" cy="${y}" r="4" fill="${col}" stroke="white" stroke-width="1.5"/><text class="tip" x="${lx}" y="${ly}" font-size="9" fill="${col}" font-weight="700" style="display:none">${yen(v)}</text></g>`; }).join('');
+  function computeProfitPts(xFracs) { return profit.map((v,i)=>`${xFracs[i]*svgW},${midY-(v/maxProfit)*(svgH/2)}`).join(' '); }
+  function computeProfitDots(xFracs) { return profit.map((v,i)=>{ const x=xFracs[i]*svgW; const y=midY-(v/maxProfit)*(svgH/2); const col=v>=0?'#16a34a':'#dc2626'; const lx=i>9?x-62:x+6; const ly=y>20?y-18:y+14; return `<g style="cursor:pointer" onclick="this.querySelector('.tip').style.display=this.querySelector('.tip').style.display==='none'?'block':'none'"><circle cx="${x}" cy="${y}" r="4" fill="${col}" stroke="white" stroke-width="1.5"/><text class="tip" x="${lx}" y="${ly}" font-size="9" fill="${col}" font-weight="700" style="display:none">${yen(v)}</text></g>`; }).join(''); }
 
-  // g2：前年比はdisplayMaxに合わせる
-  const salPrevLine=makeLine(salPrev,'#0d9488',displayMax,svgW,svgH,true);
-  const purPrevLine=makeLine(purPrev,'#9ca3af',displayMax,svgW,svgH,true);
-  const salPrevDots=makeDotsWithLabel(salPrev,'#0d9488',displayMax,svgW,svgH);
   // g3：累計もdisplayMaxの1.3倍に余裕を持たせる
   const maxCumulRaw=Math.max(...salCumul,...salCumulP,1);
   const maxCumul=Math.ceil(maxCumulRaw*1.3/10000)*10000||10000;
-  const cumulLine=makeLine(salCumul,'#f59e0b',maxCumul,svgW,svgH,false);
-  const cumulLineP=makeLine(salCumulP,'#fcd34d',maxCumul,svgW,svgH,true);
-  const cumulDots=makeDotsWithLabel(salCumul,'#d97706',maxCumul,svgW,svgH);
-  // g4：売掛金もdisplayMaxに合わせる
-  const recvLine=makeLine(recv,'#dc2626',displayMax,svgW,svgH,false);
-  const recvDots=makeDotsWithLabel(recv,'#dc2626',displayMax,svgW,svgH);
+
+  // svgPatterns（g1〜g4）を、指定したxFracs（列の横位置）を使って組み立てる。
+  // 初回は仮の等間隔位置で、実測後は正しい位置で呼び直す。
+  function buildSvgPatterns(xFracs) {
+    const profitPts = computeProfitPts(xFracs);
+    const profitDots = computeProfitDots(xFracs);
+    const salPrevLine=makeLine(salPrev,'#0d9488',displayMax,svgW,svgH,true,xFracs);
+    const purPrevLine=makeLine(purPrev,'#9ca3af',displayMax,svgW,svgH,true,xFracs);
+    const salPrevDots=makeDotsWithLabel(salPrev,'#0d9488',displayMax,svgW,svgH,xFracs);
+    const cumulLine=makeLine(salCumul,'#f59e0b',maxCumul,svgW,svgH,false,xFracs);
+    const cumulLineP=makeLine(salCumulP,'#fcd34d',maxCumul,svgW,svgH,true,xFracs);
+    const cumulDots=makeDotsWithLabel(salCumul,'#d97706',maxCumul,svgW,svgH,xFracs);
+    const recvLine=makeLine(recv,'#dc2626',displayMax,svgW,svgH,false,xFracs);
+    const recvDots=makeDotsWithLabel(recv,'#dc2626',displayMax,svgW,svgH,xFracs);
+    return {
+      g1:`${gridLines}<line x1="0" y1="${midY}" x2="${svgW}" y2="${midY}" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/><polyline points="${profitPts}" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${profitDots}`,
+      g2:`${gridLines}${purPrevLine}${salPrevLine}${salPrevDots}`,
+      g3:`${gridLines}${cumulLineP}${cumulLine}${cumulDots}`,
+      g4:`${gridLines}${recvLine}${recvDots}`
+    };
+  }
 
   // 一番左（当期最初の月）の棒の上にだけ「仕入」「売上」の凡例ラベルを表示し、以降の月はその位置で判別できるようにする。
   // 全ての列に同じ高さのラベル行を確保（表示は1列目だけ）することで、列ごとの高さがずれてバー・グリッド線の位置が狂わないようにする。
   const LABEL_ROW_H = 13;
   const baseCols=months.map((m,i)=>`
-    <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:1px">
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:1px;padding:0 2px">
       <div style="width:100%;display:flex;gap:2px;margin-bottom:2px;opacity:${i===0?1:0}"><div style="flex:1;text-align:center;font-size:8px;color:#9ca3af;white-space:nowrap;overflow:hidden">仕入</div><div style="flex:1;text-align:center;font-size:8px;color:#9ca3af;white-space:nowrap;overflow:hidden">売上</div></div>
-      <div style="width:100%;display:flex;gap:2px;align-items:flex-end;height:${barH}px">
+      <div class="chart-bar-col" style="width:100%;display:flex;gap:2px;align-items:flex-end;height:${barH}px">
         <div style="flex:1">${stackedPurBar(i)}</div>
         <div style="flex:1">${stackedSalBar(i)}</div>
       </div>
       <div style="font-size:9px;color:var(--text-muted);margin-top:3px">${parseInt(m.slice(5,7))}月</div>
     </div>`).join('');
 
-  const svgPatterns={
-    g1:`${gridLines}<line x1="0" y1="${midY}" x2="${svgW}" y2="${midY}" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/><polyline points="${profitPts}" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${profitDots}`,
-    g2:`${gridLines}${purPrevLine}${salPrevLine}${salPrevDots}`,
-    g3:`${gridLines}${cumulLineP}${cumulLine}${cumulDots}`,
-    g4:`${gridLines}${recvLine}${recvDots}`
-  };
+  const svgPatterns=buildSvgPatterns(naiveFracs);
   const legends={
     g1:`<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:3px;background:#7c3aed;border-radius:2px"></span>粗利益</span>`,
     g2:`<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:2px;border-top:2px dashed #9ca3af"></span>仕入(前年)</span><span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:2px;border-top:2px dashed #0d9488"></span>売上(前年)</span>`,
@@ -6059,7 +6069,7 @@ function renderChart(container) {
     <div style="display:flex;gap:0">
       <div style="position:relative;width:32px;flex-shrink:0;height:${barH}px;margin-top:${LABEL_ROW_H}px">${yLabels}</div>
       <div style="flex:1;position:relative">
-        <div style="display:flex;gap:2px;align-items:flex-end;overflow-x:hidden;padding-bottom:4px">${baseCols}</div>
+        <div style="display:flex;gap:8px;align-items:flex-end;overflow-x:hidden;padding-bottom:4px">${baseCols}</div>
         <svg id="chart-svg-overlay" style="position:absolute;top:${LABEL_ROW_H}px;left:0;width:100%;height:${barH}px;pointer-events:all" viewBox="0 0 ${svgW} ${svgH}" preserveAspectRatio="none">
           ${svgPatterns.g1}
         </svg>
@@ -6083,6 +6093,26 @@ function renderChart(container) {
   window._chartTitles=titles;
   window._chartSupplierLegend=supplierLegend;
   window._currentChartKey='g1';
+
+  // 列の間隔を実測して、点線・ドットの位置を棒の真上に正確に合わせ直す
+  // （列の間にすき間を空けたぶん、等間隔前提の仮位置とは実際の見た目が少しずれるため）
+  requestAnimationFrame(() => {
+    try {
+      const colEls = container.querySelectorAll('.chart-bar-col');
+      const overlayEl = container.querySelector('#chart-svg-overlay');
+      if (!colEls.length || !overlayEl) return;
+      const overlayRect = overlayEl.getBoundingClientRect();
+      if (!overlayRect.width) return;
+      const measuredFracs = Array.from(colEls).map(el => {
+        const r = el.getBoundingClientRect();
+        return (r.left + r.width / 2 - overlayRect.left) / overlayRect.width;
+      });
+      const correctedPatterns = buildSvgPatterns(measuredFracs);
+      window._chartSvgPatterns = correctedPatterns;
+      const svgNow = document.getElementById('chart-svg-overlay');
+      if (svgNow && window._currentChartKey) svgNow.innerHTML = correctedPatterns[window._currentChartKey];
+    } catch(e) { console.error('chart overlay reposition error', e); }
+  });
 }
 
 function switchChartLine(key) {
