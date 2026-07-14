@@ -5531,6 +5531,24 @@ function selectECChannel(ch) {
   if (btnJ) { btnJ.style.background = ch==='自社EC'?'#3a3a3a':'none'; btnJ.style.color = ch==='自社EC'?'#fff':'#909090'; btnJ.style.borderColor = ch==='自社EC'?'#3a3a3a':'var(--border)'; }
 }
 
+// 金額の目盛り（Y軸）を作る共通ヘルパー。一覧グラフのmakeYAxisと同じ考え方で、
+// 最大値の1.3倍を上限に4段階の目盛りを作り、1万円以上は「◯万」表記にする。
+// EC画面は日別グラフ（金額が小さめ）にも使うため、1万未満は千円・百円単位にも対応させている。
+function buildAmountAxis(maxV, numTicks) {
+  numTicks = numTicks || 4;
+  const unit = maxV >= 10000 ? 10000 : (maxV >= 1000 ? 1000 : 100);
+  const ceilV = Math.ceil(maxV * 1.3 / unit) * unit || unit;
+  const step = Math.ceil(ceilV / numTicks / unit) * unit || unit;
+  const ticks = [];
+  for (let v = 0; v <= ceilV; v += step) ticks.push(v);
+  const displayMax = ticks[ticks.length - 1] || ceilV;
+  return ticks.map(v => ({
+    v, frac: v / displayMax,
+    label: v >= 10000 ? (v / 10000) + '万' : v.toLocaleString('ja-JP'),
+    displayMax
+  }));
+}
+
 function renderECListSP() {
   const listEl    = document.getElementById('ec-list-sp');
   const emptyEl   = document.getElementById('ec-empty-sp');
@@ -5570,23 +5588,50 @@ function renderECListSP() {
     });
     const maxD = Math.max(...dailyData, 1);
     const today = parseInt(todayStr().slice(8));
+    // 一覧グラフと同じように、左側に金額目盛り（固定・スクロールしない）を表示し、
+    // 棒グラフ部分だけを横スクロールできるようにする
+    const dTotalW = daysInMonth*22;
+    const dDrawH = 55, dBaselineY = 62;
+    const dTicks = buildAmountAxis(maxD);
+    const dDisplayMax = dTicks[0] ? dTicks[0].displayMax : maxD;
+    const dAxisHtml = dTicks.map(t=>`<div style="position:absolute;right:3px;top:${dBaselineY - t.frac*dDrawH - 6}px;font-size:7px;color:#9ca3af;white-space:nowrap">${t.label}</div>`).join('');
+    const dGridSvg = dTicks.map(t=>`<line x1="0" y1="${dBaselineY - t.frac*dDrawH}" x2="${dTotalW}" y2="${dBaselineY - t.frac*dDrawH}" stroke="#e5e7eb" stroke-width="0.8"/>`).join('');
+    // 棒の上に金額を書くと、値が大きい日はグラフ枠の上端で見切れてしまうため、
+    // 金額は一覧グラフと同じように棒の下（リスト形式）にまとめて表示する
+    const dSummaryRows = dailyData.map((v,i)=>{
+      const isToday = i+1===today;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;font-size:12px;border-bottom:1px solid var(--border)">
+        <span style="font-weight:600;color:${isToday?'#f43f5e':'var(--text)'}">${i+1}日${isToday?'（今日）':''}</span>
+        <span style="font-weight:700;color:#4a4a4a">${yen(v)}</span>
+      </div>`;
+    }).join('');
+    const dSummaryTable = `<div style="background:var(--white);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;margin-top:10px">
+      <div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--surface);font-size:11px;font-weight:700;color:var(--text-muted);border-bottom:1px solid var(--border)"><span>日付</span><span>金額</span></div>
+      <div style="max-height:240px;overflow-y:auto">${dSummaryRows}</div>
+    </div>`;
     // 今日：明るい水色、他：淡いラベンダー
-    dailyEl.innerHTML = `<div style="overflow-x:auto"><svg viewBox="0 0 ${daysInMonth*22} 85" width="${daysInMonth*22}" style="min-width:${daysInMonth*22}px;display:block">
-      ${dailyData.map((v,i)=>{
-        const h = Math.max(Math.round((v/maxD)*55), v>0?3:0);
-        const x = i*22+2;
-        const isToday = i+1===today;
-        return `<g>
-          <rect x="${x}" y="${62-h}" width="18" height="${h}" fill="${isToday?'#fda4af':'#c4b5fd'}" rx="3"/>
-          ${v>0?`<text x="${x+9}" y="${57-h}" font-size="7" text-anchor="middle" fill="#6b7280">${v>=1000?Math.round(v/1000)+'k':v}</text>`:''}
-          <text x="${x+9}" y="75" font-size="7" text-anchor="middle" fill="${isToday?'#f43f5e':'#9ca3af'}">${i+1}</text>
-        </g>`;
-      }).join('')}
-    </svg></div>
+    dailyEl.innerHTML = `<div style="display:flex;gap:0">
+      <div style="position:relative;width:26px;flex-shrink:0;height:85px">${dAxisHtml}</div>
+      <div style="flex:1;min-width:0;overflow-x:auto;position:relative">
+        <svg viewBox="0 0 ${dTotalW} 85" width="${dTotalW}" style="min-width:${dTotalW}px;display:block">
+          ${dGridSvg}
+          ${dailyData.map((v,i)=>{
+            const h = Math.max(Math.round((v/dDisplayMax)*dDrawH), v>0?3:0);
+            const x = i*22+2;
+            const isToday = i+1===today;
+            return `<g>
+              <rect x="${x}" y="${dBaselineY-h}" width="18" height="${h}" fill="${isToday?'#fda4af':'#c4b5fd'}" rx="3"/>
+              <text x="${x+9}" y="75" font-size="7" text-anchor="middle" fill="${isToday?'#f43f5e':'#9ca3af'}">${i+1}</text>
+            </g>`;
+          }).join('')}
+        </svg>
+      </div>
+    </div>
     <div style="display:flex;gap:12px;margin-top:4px;font-size:10px;color:#9ca3af">
       <span><span style="display:inline-block;width:10px;height:10px;background:#fda4af;border-radius:2px;margin-right:3px"></span>今日</span>
       <span><span style="display:inline-block;width:10px;height:10px;background:#c4b5fd;border-radius:2px;margin-right:3px"></span>他の日</span>
-    </div>`;
+    </div>
+    ${dSummaryTable}`;
   }
 
   // 月別グラフ（1年間）：3月始まりの会計年度。1〜2月に見ている場合は前年3月始まりの今期を使う
@@ -5602,24 +5647,50 @@ function renderECListSP() {
     }));
     const maxM = Math.max(...monthlyData.map(m=>m.amazon+m.jisha), 1);
     const W = 30; const GAP = 10;
-    monthlyEl.innerHTML = `<div style="overflow-x:auto"><svg viewBox="0 0 ${12*(W+GAP)+4} 95" width="${12*(W+GAP)+4}" style="min-width:${12*(W+GAP)+4}px;display:block">
-      ${monthlyData.map((m,i)=>{
-        const total = m.amazon+m.jisha;
-        const hA = Math.max(Math.round((m.amazon/maxM)*60), m.amazon>0?2:0);
-        const hJ = Math.max(Math.round((m.jisha/maxM)*60), m.jisha>0?2:0);
-        const x = i*(W+GAP)+2;
-        return `<g>
-          <rect x="${x}" y="${65-hA-hJ}" width="${W}" height="${hJ}" fill="#bae6fd" rx="2"/>
-          <rect x="${x}" y="${65-hA}" width="${W}" height="${hA}" fill="#bbf7d0" rx="2"/>
-          ${total>0?`<text x="${x+W/2}" y="${60-hA-hJ}" font-size="7" text-anchor="middle" fill="#6b7280">${total>=1000?Math.round(total/1000)+'k':total}</text>`:''}
-          <text x="${x+W/2}" y="78" font-size="7" text-anchor="middle" fill="#9ca3af">${m.label}</text>
-        </g>`;
-      }).join('')}
-    </svg></div>
+    const mTotalW = 12*(W+GAP)+4;
+    const mDrawH = 60, mBaselineY = 65;
+    const mTicks = buildAmountAxis(maxM);
+    const mDisplayMax = mTicks[0] ? mTicks[0].displayMax : maxM;
+    const mAxisHtml = mTicks.map(t=>`<div style="position:absolute;right:4px;top:${mBaselineY - t.frac*mDrawH - 6}px;font-size:8px;color:#9ca3af;white-space:nowrap">${t.label}</div>`).join('');
+    const mGridSvg = mTicks.map(t=>`<line x1="0" y1="${mBaselineY - t.frac*mDrawH}" x2="${mTotalW}" y2="${mBaselineY - t.frac*mDrawH}" stroke="#e5e7eb" stroke-width="0.8"/>`).join('');
+    // 棒の上に金額を書くと、値が大きい月はグラフ枠の上端で見切れてしまうため、
+    // 金額は一覧グラフの月次サマリーと同じように棒の下（リスト形式）にまとめて表示する
+    const mSummaryRows = monthlyData.map(m=>{
+      const total = m.amazon+m.jisha;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;font-size:12px;border-bottom:1px solid var(--border)">
+        <span style="font-weight:600;color:var(--text)">${m.label}</span>
+        <span style="color:#16a34a">${yen(m.amazon)}</span>
+        <span style="color:#0ea5e9">${yen(m.jisha)}</span>
+        <span style="font-weight:700;color:#4a4a4a">${yen(total)}</span>
+      </div>`;
+    }).join('');
+    const mSummaryTable = `<div style="background:var(--white);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;margin-top:10px">
+      <div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--surface);font-size:11px;font-weight:700;color:var(--text-muted);border-bottom:1px solid var(--border)"><span>月</span><span style="color:#16a34a">Amazon</span><span style="color:#0ea5e9">自社EC</span><span>合計</span></div>
+      ${mSummaryRows}
+    </div>`;
+    monthlyEl.innerHTML = `<div style="display:flex;gap:0">
+      <div style="position:relative;width:30px;flex-shrink:0;height:95px">${mAxisHtml}</div>
+      <div style="flex:1;min-width:0;overflow-x:auto;position:relative">
+        <svg viewBox="0 0 ${mTotalW} 95" width="${mTotalW}" style="min-width:${mTotalW}px;display:block">
+          ${mGridSvg}
+          ${monthlyData.map((m,i)=>{
+            const hA = Math.max(Math.round((m.amazon/mDisplayMax)*mDrawH), m.amazon>0?2:0);
+            const hJ = Math.max(Math.round((m.jisha/mDisplayMax)*mDrawH), m.jisha>0?2:0);
+            const x = i*(W+GAP)+2;
+            return `<g>
+              <rect x="${x}" y="${mBaselineY-hA-hJ}" width="${W}" height="${hJ}" fill="#bae6fd" rx="2"/>
+              <rect x="${x}" y="${mBaselineY-hA}" width="${W}" height="${hA}" fill="#bbf7d0" rx="2"/>
+              <text x="${x+W/2}" y="78" font-size="7" text-anchor="middle" fill="#9ca3af">${m.label}</text>
+            </g>`;
+          }).join('')}
+        </svg>
+      </div>
+    </div>
     <div style="display:flex;gap:12px;margin-top:4px;font-size:10px;color:#9ca3af">
       <span><span style="display:inline-block;width:10px;height:10px;background:#bbf7d0;border-radius:2px;margin-right:3px"></span>Amazon</span>
       <span><span style="display:inline-block;width:10px;height:10px;background:#bae6fd;border-radius:2px;margin-right:3px"></span>自社EC</span>
-    </div>`;
+    </div>
+    ${mSummaryTable}`;
   }
 
   if (!_ecItems.length) { listEl.innerHTML=''; if(emptyEl) emptyEl.style.display='block'; return; }
@@ -5733,7 +5804,7 @@ function buildHomeTrendChart(purchases, sales, ecSales) {
       </div>
       <div style="font-size:9px;color:var(--text-muted)">${parseInt(m.slice(5,7))}月</div>
     </div>`).join('');
-  return `<div class="card home-stat-card" onclick="showScreen('list')">
+  return `<div class="card home-stat-card" style="cursor:pointer" onclick="showScreen('list'); switchListTab('chart');">
     <div class="card-title">仕入・売上の推移（今期）</div>
     <div style="display:flex;gap:10px;padding:0 16px 12px;align-items:flex-end">${cols}</div>
     <div style="display:flex;gap:12px;padding:0 16px 14px;font-size:10px;color:#9ca3af">
@@ -5979,11 +6050,17 @@ function renderChart(container) {
     return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5" ${dashed?'stroke-dasharray="4 3"':''} stroke-linejoin="round" stroke-linecap="round"/>`;
   }
   function makeDotsWithLabel(values,color,maxV,w,h,xFracs) {
+    // ラベルの位置：最初と最後の列だけは画面外にはみ出さないよう左右にずらし、それ以外の列は
+    // すべて点の真上（中央揃え）に統一する。以前は「10列目以降だけ左にずらす」という固定的な
+    // インデックス判定だったため、データが1月まで入るケースで1月だけ見た目が異なってしまっていた。
+    const lastI = values.length - 1;
     return values.map((v,i)=>{
       if(v===0) return '';
       const x=xFracs[i]*w; const y=h-(v/maxV)*h;
-      const lx=i>9?x-62:x+6; const ly=y>20?y-18:y+14;
-      return `<g style="cursor:pointer" onclick="this.querySelector('.tip').style.display=this.querySelector('.tip').style.display==='none'?'block':'none'"><circle cx="${x}" cy="${y}" r="4" fill="${color}" stroke="white" stroke-width="1.5"/><text class="tip" x="${lx}" y="${ly}" font-size="9" fill="${color}" font-weight="700" style="display:none">${yen(v)}</text></g>`;
+      const anchor = i===0 ? 'start' : (i===lastI ? 'end' : 'middle');
+      const lx = i===0 ? x+6 : (i===lastI ? x-6 : x);
+      const ly=y>20?y-18:y+14;
+      return `<g style="cursor:pointer" onclick="this.querySelector('.tip').style.display=this.querySelector('.tip').style.display==='none'?'block':'none'"><circle cx="${x}" cy="${y}" r="4" fill="${color}" stroke="white" stroke-width="1.5"/><text class="tip" x="${lx}" y="${ly}" text-anchor="${anchor}" font-size="9" fill="${color}" font-weight="700" style="display:none">${yen(v)}</text></g>`;
     }).join('');
   }
 
@@ -5997,7 +6074,16 @@ function renderChart(container) {
   const maxProfit=Math.ceil(maxProfitRaw*1.4/10000)*10000||10000;
   const midY=svgH/2;
   function computeProfitPts(xFracs) { return profit.map((v,i)=>`${xFracs[i]*svgW},${midY-(v/maxProfit)*(svgH/2)}`).join(' '); }
-  function computeProfitDots(xFracs) { return profit.map((v,i)=>{ const x=xFracs[i]*svgW; const y=midY-(v/maxProfit)*(svgH/2); const col=v>=0?'#16a34a':'#dc2626'; const lx=i>9?x-62:x+6; const ly=y>20?y-18:y+14; return `<g style="cursor:pointer" onclick="this.querySelector('.tip').style.display=this.querySelector('.tip').style.display==='none'?'block':'none'"><circle cx="${x}" cy="${y}" r="4" fill="${col}" stroke="white" stroke-width="1.5"/><text class="tip" x="${lx}" y="${ly}" font-size="9" fill="${col}" font-weight="700" style="display:none">${yen(v)}</text></g>`; }).join(''); }
+  function computeProfitDots(xFracs) {
+    const lastI = profit.length - 1;
+    return profit.map((v,i)=>{
+      const x=xFracs[i]*svgW; const y=midY-(v/maxProfit)*(svgH/2); const col=v>=0?'#16a34a':'#dc2626';
+      const anchor = i===0 ? 'start' : (i===lastI ? 'end' : 'middle');
+      const lx = i===0 ? x+6 : (i===lastI ? x-6 : x);
+      const ly=y>20?y-18:y+14;
+      return `<g style="cursor:pointer" onclick="this.querySelector('.tip').style.display=this.querySelector('.tip').style.display==='none'?'block':'none'"><circle cx="${x}" cy="${y}" r="4" fill="${col}" stroke="white" stroke-width="1.5"/><text class="tip" x="${lx}" y="${ly}" text-anchor="${anchor}" font-size="9" fill="${col}" font-weight="700" style="display:none">${yen(v)}</text></g>`;
+    }).join('');
+  }
 
   // g3：累計もdisplayMaxの1.3倍に余裕を持たせる
   const maxCumulRaw=Math.max(...salCumul,...salCumulP,1);
