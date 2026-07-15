@@ -1177,6 +1177,32 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         </div>
         <input type="text" id="wh-item-jan" placeholder="または手入力" oninput="lookupWhItem()">
         <div id="wh-item-status" style="font-size:12px;margin-top:6px;color:var(--text-muted)"></div>
+        <div id="wh-quick-register" style="display:none;margin-top:10px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
+          <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px">この商品はまだ登録されていません。型番で検索して、その場で登録できます</div>
+          <div style="display:flex;gap:6px;margin-bottom:8px">
+            <input type="text" id="wh-qr-model" placeholder="型番を入力（任意）" style="flex:1">
+            <button onclick="searchWhQuickRegister()" style="padding:8px 12px;background:var(--gold);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">検索</button>
+          </div>
+          <div id="wh-qr-status" style="font-size:11px;color:var(--text-muted);margin-bottom:8px"></div>
+          <div class="field" style="margin-bottom:8px">
+            <div class="field-label" style="font-size:11px">商品名 <span class="req">*</span></div>
+            <input type="text" id="wh-qr-name" placeholder="商品名">
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <div class="field" style="flex:1">
+              <div class="field-label" style="font-size:11px">メーカー</div>
+              <input type="text" id="wh-qr-maker" placeholder="メーカー">
+            </div>
+            <div class="field" style="flex:1">
+              <div class="field-label" style="font-size:11px">現在庫数 <span class="req">*</span></div>
+              <input type="number" id="wh-qr-stock" placeholder="0">
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button onclick="submitWhQuickRegister()" style="flex:1;padding:9px;background:var(--gold);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">登録して追加</button>
+            <button onclick="cancelWhQuickRegister()" style="flex:1;padding:9px;background:var(--white);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:13px;cursor:pointer">キャンセル</button>
+          </div>
+        </div>
       </div>
     </div>
     <div id="wh-deliv-edit-banner" style="display:none;background:#fff4e0;border:1px solid #f0c674;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#7a5a00;align-items:center;justify-content:space-between">
@@ -1817,21 +1843,148 @@ function suggestUnitPrice(client, productKey) {
 }
 
 // JANが商品と一致した瞬間だけ（部分入力中は何もしない）明細に自動追加する。すでに同じ商品があれば数量を+1する
+let _whQuickRegisterJan = '';
 function lookupWhItem() {
   const input = document.getElementById('wh-item-jan');
   const status = document.getElementById('wh-item-status');
   const jan = input.value.trim();
-  if (!jan) { if (status) status.textContent = ''; return; }
+  if (!jan) { if (status) status.textContent = ''; hideWhQuickRegister(); return; }
   const found = products.find(p => p.jan === jan);
   if (found) {
     addWhItemRow(found);
     input.value = '';
     if (status) status.textContent = '';
+    hideWhQuickRegister();
     return;
   }
   if (status) {
-    status.textContent = jan.length >= 8 ? '登録されていない商品です。JANコードをご確認ください' : '';
+    status.textContent = jan.length >= 8 ? '登録されていない商品です。下で型番検索・その場で登録ができます' : '';
     status.style.color = 'var(--text-muted)';
+  }
+  if (jan.length >= 8) {
+    showWhQuickRegister(jan);
+  } else {
+    hideWhQuickRegister();
+  }
+}
+
+// 未登録の商品をスキャンした際、その場で型番検索→登録→納品明細への追加まで行えるようにする。
+// （まだ全商品を登録できていない段階でも、納品書作成の流れを止めずに使えるようにするため）
+function showWhQuickRegister(jan) {
+  _whQuickRegisterJan = jan;
+  const panel = document.getElementById('wh-quick-register');
+  if (panel) panel.style.display = 'block';
+}
+function hideWhQuickRegister() {
+  _whQuickRegisterJan = '';
+  const panel = document.getElementById('wh-quick-register');
+  if (panel) panel.style.display = 'none';
+  ['wh-qr-model','wh-qr-name','wh-qr-maker','wh-qr-stock'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const st = document.getElementById('wh-qr-status'); if (st) st.textContent = '';
+}
+function cancelWhQuickRegister() {
+  hideWhQuickRegister();
+  const input = document.getElementById('wh-item-jan');
+  if (input) input.value = '';
+  const status = document.getElementById('wh-item-status');
+  if (status) status.textContent = '';
+}
+
+// 型番で価格.comを検索し、商品名・メーカー・型番を推定して埋める（lookupJanのJAN検索版と同じ仕組み）
+async function searchWhQuickRegister() {
+  const model = document.getElementById('wh-qr-model').value.trim();
+  const status = document.getElementById('wh-qr-status');
+  if (!model) { if (status) status.textContent = '型番を入力してから検索してください'; return; }
+  if (status) { status.textContent = '🔍 価格.comで商品情報を検索中...'; status.style.color = 'var(--text-muted)'; }
+
+  try {
+    const query = encodeURIComponent(model + ' 価格.com');
+    const url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${SEARCH_ENGINE_ID}&q=${query}&num=1`;
+    const r = await fetch(url);
+    const d = await r.json();
+
+    if (!r.ok || d.error) {
+      console.error('価格.com検索APIエラー:', r.status, d.error);
+      if (status) { status.innerHTML = '検索でエラーが発生しました。お手数ですが商品名は手入力をお願いします。'; status.style.color = 'var(--danger)'; }
+      return;
+    }
+
+    if (d.items && d.items.length > 0) {
+      const item = d.items[0];
+      const title = item.title || '';
+      const snippet = item.snippet || '';
+      let productName = title
+        .replace(/\s*[-|｜]\s*価格\.com.*$/gi, '')
+        .replace(/の\s*価格比較.*$/gi, '')
+        .replace(/の最安値.*$/gi, '')
+        .replace(/\s*[-|｜]\s*$/, '')
+        .trim();
+
+      if (productName) {
+        const nameField = document.getElementById('wh-qr-name');
+        if (nameField && !nameField.value) nameField.value = productName;
+        const guessedMaker = guessMaker(productName);
+        const makerField = document.getElementById('wh-qr-maker');
+        if (guessedMaker && makerField && !makerField.value) makerField.value = guessedMaker;
+        if (status) { status.innerHTML = '✅ 商品名を取得しました。確認・修正してから登録してください'; status.style.color = 'var(--success)'; }
+      } else {
+        if (status) { status.textContent = '商品が見つかりませんでした。商品名を手入力してください'; status.style.color = 'var(--text-muted)'; }
+      }
+    } else {
+      if (status) { status.textContent = '商品が見つかりませんでした。商品名を手入力してください'; status.style.color = 'var(--text-muted)'; }
+    }
+  } catch(e) {
+    console.error('価格.com検索リクエスト失敗:', e);
+    if (status) { status.textContent = '検索に失敗しました（通信エラーの可能性）。商品名を手入力してください'; status.style.color = 'var(--danger)'; }
+  }
+}
+
+// 商品名・現在庫数を必須として新規登録し、そのまま納品明細に追加する
+async function submitWhQuickRegister() {
+  const name = document.getElementById('wh-qr-name').value.trim();
+  const stockVal = document.getElementById('wh-qr-stock').value;
+  const status = document.getElementById('wh-qr-status');
+  if (!name || stockVal === '') {
+    if (status) { status.textContent = '商品名と現在庫数は必須です'; status.style.color = 'var(--danger)'; }
+    return;
+  }
+  const stock = parseInt(stockVal) || 0;
+  const data = {
+    maker: document.getElementById('wh-qr-maker').value.trim(),
+    name,
+    model: document.getElementById('wh-qr-model').value.trim(),
+    jan: _whQuickRegisterJan,
+    stock,
+    lowStock: null,
+    cost: 0,
+    category: '家電',
+    location: '',
+    memo: '納品書作成画面から新規登録',
+    image: '',
+    createdAt: Date.now()
+  };
+  try {
+    const res = await fetch(authedUrl('/products.json'), { method: 'POST', body: JSON.stringify(data) });
+    const resData = await res.json().catch(() => null);
+    const newKey = resData && resData.name;
+    if (newKey && stock > 0) {
+      await fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
+        productKey: newKey, productName: data.name, jan: data.jan,
+        type: 'in', qty: stock, date: todayStr(), memo: '新規登録（納品書作成画面）',
+        stockBefore: 0, stockAfter: stock, createdAt: Date.now()
+      })});
+    }
+    await loadInventory();
+    const newProd = products.find(p => p._key === newKey) || products.find(p => p.jan === data.jan);
+    if (newProd) addWhItemRow(newProd);
+    hideWhQuickRegister();
+    const input = document.getElementById('wh-item-jan');
+    if (input) input.value = '';
+    const itemStatus = document.getElementById('wh-item-status');
+    if (itemStatus) itemStatus.textContent = '';
+    showToast('商品を登録し、明細に追加しました');
+  } catch(e) {
+    if (status) { status.textContent = '登録に失敗しました'; status.style.color = 'var(--danger)'; }
   }
 }
 
