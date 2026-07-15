@@ -6725,7 +6725,7 @@ function renderReceivable(restoreState) {
         <div class="trip-footer">
           <div class="trip-amount" style="color:${s.payStatus==='入金済み'?'var(--success)':'var(--danger)'}">¥${s.amount.toLocaleString('ja-JP')}</div>
           ${s.payStatus !== '入金済み'
-            ? `<button class="btn btn-green" style="flex:none;padding:7px 12px;font-size:13px" onclick="markPaid('${s._key}')">入金確認</button>`
+            ? `<div style="display:flex;gap:6px"><button class="btn btn-green" style="flex:none;padding:7px 12px;font-size:13px" onclick="markPaid('${s._key}')">入金確認</button><button class="delete-btn" onclick="deleteSales('${s._key}')">削除</button></div>`
             : `<button class="delete-btn" onclick="deleteSales('${s._key}')">削除</button>`
           }
         </div>
