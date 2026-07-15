@@ -1178,10 +1178,10 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <input type="text" id="wh-item-jan" placeholder="または手入力" oninput="lookupWhItem()">
         <div id="wh-item-status" style="font-size:12px;margin-top:6px;color:var(--text-muted)"></div>
         <div id="wh-quick-register" style="display:none;margin-top:10px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
-          <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px">この商品はまだ登録されていません。型番で検索して、その場で登録できます</div>
+          <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px">この商品はまだ登録されていません。JANコードから商品情報を自動検索します</div>
           <div style="display:flex;gap:6px;margin-bottom:8px">
-            <input type="text" id="wh-qr-model" placeholder="型番を入力（任意）" style="flex:1">
-            <button onclick="searchWhQuickRegister()" style="padding:8px 12px;background:var(--gold);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">検索</button>
+            <input type="text" id="wh-qr-model" placeholder="見つからない場合は型番を入力して再検索" style="flex:1">
+            <button onclick="searchWhQuickRegister()" style="padding:8px 12px;background:var(--gold);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">型番で再検索</button>
           </div>
           <div id="wh-qr-status" style="font-size:11px;color:var(--text-muted);margin-bottom:8px"></div>
           <div class="field" style="margin-bottom:8px">
@@ -1844,10 +1844,12 @@ function suggestUnitPrice(client, productKey) {
 
 // JANが商品と一致した瞬間だけ（部分入力中は何もしない）明細に自動追加する。すでに同じ商品があれば数量を+1する
 let _whQuickRegisterJan = '';
+let _whAutoSearchTimer = null;
 function lookupWhItem() {
   const input = document.getElementById('wh-item-jan');
   const status = document.getElementById('wh-item-status');
   const jan = input.value.trim();
+  if (_whAutoSearchTimer) { clearTimeout(_whAutoSearchTimer); _whAutoSearchTimer = null; }
   if (!jan) { if (status) status.textContent = ''; hideWhQuickRegister(); return; }
   const found = products.find(p => p.jan === jan);
   if (found) {
@@ -1858,17 +1860,23 @@ function lookupWhItem() {
     return;
   }
   if (status) {
-    status.textContent = jan.length >= 8 ? '登録されていない商品です。下で型番検索・その場で登録ができます' : '';
+    status.textContent = jan.length >= 8 ? '登録されていない商品です。JANコードから商品情報を自動検索します' : '';
     status.style.color = 'var(--text-muted)';
   }
   if (jan.length >= 8) {
     showWhQuickRegister(jan);
+    // スキャンした場合は値が一度にセットされるため実質すぐに検索が走る。
+    // 手入力で1桁ずつ変化している間に何度も検索しないよう、入力が落ち着いてから自動検索する。
+    _whAutoSearchTimer = setTimeout(() => {
+      const current = document.getElementById('wh-item-jan');
+      if (current && current.value.trim() === jan) autoSearchWhQuickRegisterByJan(jan);
+    }, 400);
   } else {
     hideWhQuickRegister();
   }
 }
 
-// 未登録の商品をスキャンした際、その場で型番検索→登録→納品明細への追加まで行えるようにする。
+// 未登録の商品をスキャンした際、その場で（JANから自動検索して）登録→納品明細への追加まで行えるようにする。
 // （まだ全商品を登録できていない段階でも、納品書作成の流れを止めずに使えるようにするため）
 function showWhQuickRegister(jan) {
   _whQuickRegisterJan = jan;
@@ -1877,6 +1885,7 @@ function showWhQuickRegister(jan) {
 }
 function hideWhQuickRegister() {
   _whQuickRegisterJan = '';
+  if (_whAutoSearchTimer) { clearTimeout(_whAutoSearchTimer); _whAutoSearchTimer = null; }
   const panel = document.getElementById('wh-quick-register');
   if (panel) panel.style.display = 'none';
   ['wh-qr-model','wh-qr-name','wh-qr-maker','wh-qr-stock'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
@@ -1890,7 +1899,60 @@ function cancelWhQuickRegister() {
   if (status) status.textContent = '';
 }
 
-// 型番で価格.comを検索し、商品名・メーカー・型番を推定して埋める（lookupJanのJAN検索版と同じ仕組み）
+// スキャン（または入力）されたJANコードから価格.comを自動検索し、商品名・型番・メーカーを推定して埋める。
+// バーコード自体には型番の文字列は入っていない（JAN番号のみ）ため、「型番が自動入力される」を実現する方法として、
+// スキャンで取得済みのJANをそのまま検索キーに使い、その検索結果から型番を推定するというlookupJan()と同じ仕組みを使う。
+async function autoSearchWhQuickRegisterByJan(jan) {
+  const status = document.getElementById('wh-qr-status');
+  if (status) { status.innerHTML = '🔍 JANコードから商品情報を自動検索中...'; status.style.color = 'var(--text-muted)'; }
+
+  try {
+    const query = encodeURIComponent(jan + ' 価格.com');
+    const url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${SEARCH_ENGINE_ID}&q=${query}&num=1`;
+    const r = await fetch(url);
+    const d = await r.json();
+
+    if (!r.ok || d.error) {
+      console.error('価格.com検索APIエラー:', r.status, d.error);
+      if (status) { status.innerHTML = '自動検索でエラーが発生しました。上の欄に型番を入力して再検索するか、商品名を直接入力してください'; status.style.color = 'var(--danger)'; }
+      return;
+    }
+
+    if (d.items && d.items.length > 0) {
+      const item = d.items[0];
+      const title = item.title || '';
+      const snippet = item.snippet || '';
+      let productName = title
+        .replace(/\s*[-|｜]\s*価格\.com.*$/gi, '')
+        .replace(/の\s*価格比較.*$/gi, '')
+        .replace(/の最安値.*$/gi, '')
+        .replace(/\s*[-|｜]\s*$/, '')
+        .trim();
+
+      if (productName) {
+        const nameField = document.getElementById('wh-qr-name');
+        if (nameField && !nameField.value) nameField.value = productName;
+        const guessedModel = guessModelNumber(title) || guessModelNumber(snippet);
+        const modelField = document.getElementById('wh-qr-model');
+        if (guessedModel && modelField && !modelField.value) modelField.value = guessedModel;
+        const guessedMaker = guessMaker(productName);
+        const makerField = document.getElementById('wh-qr-maker');
+        if (guessedMaker && makerField && !makerField.value) makerField.value = guessedMaker;
+        const guessNote = guessedModel ? '（型番は自動推定のため必ずご確認ください）' : '';
+        if (status) { status.innerHTML = `✅ JANコードから商品名を自動取得しました。確認・修正してから登録してください${guessNote}`; status.style.color = 'var(--success)'; }
+      } else {
+        if (status) { status.innerHTML = '商品が見つかりませんでした。上の欄に型番を入力して再検索するか、商品名を直接入力してください'; status.style.color = 'var(--text-muted)'; }
+      }
+    } else {
+      if (status) { status.innerHTML = '商品が見つかりませんでした。上の欄に型番を入力して再検索するか、商品名を直接入力してください'; status.style.color = 'var(--text-muted)'; }
+    }
+  } catch(e) {
+    console.error('価格.com検索リクエスト失敗:', e);
+    if (status) { status.innerHTML = '自動検索に失敗しました（通信エラーの可能性）。上の欄に型番を入力して再検索することもできます'; status.style.color = 'var(--danger)'; }
+  }
+}
+
+// 型番を手入力しての再検索（自動検索で見つからなかった場合のフォールバック）。lookupJanのJAN検索版と同じ仕組み。
 async function searchWhQuickRegister() {
   const model = document.getElementById('wh-qr-model').value.trim();
   const status = document.getElementById('wh-qr-status');
@@ -1921,11 +1983,12 @@ async function searchWhQuickRegister() {
         .trim();
 
       if (productName) {
+        // 型番での再検索は「自動検索の結果が違った」場合の明示的なやり直しなので、既に入っている値も上書きする
         const nameField = document.getElementById('wh-qr-name');
-        if (nameField && !nameField.value) nameField.value = productName;
+        if (nameField) nameField.value = productName;
         const guessedMaker = guessMaker(productName);
         const makerField = document.getElementById('wh-qr-maker');
-        if (guessedMaker && makerField && !makerField.value) makerField.value = guessedMaker;
+        if (guessedMaker && makerField) makerField.value = guessedMaker;
         if (status) { status.innerHTML = '✅ 商品名を取得しました。確認・修正してから登録してください'; status.style.color = 'var(--success)'; }
       } else {
         if (status) { status.textContent = '商品が見つかりませんでした。商品名を手入力してください'; status.style.color = 'var(--text-muted)'; }
