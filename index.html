@@ -213,6 +213,8 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 .ptr-spinner.spinning { animation: spin 0.8s linear infinite; }
 .toast { position: fixed; bottom: calc(env(safe-area-inset-bottom, 0px) + 76px); left: 16px; right: 16px; background: linear-gradient(135deg, #c8c8c8, #b0b0b0); color: #1a1a1a; padding: 14px 16px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; text-align: center; z-index: 200; opacity: 0; transform: translateY(10px); transition: opacity 0.2s, transform 0.2s; pointer-events: none; border: 1px solid #a0a0a0; box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
 .toast.show { opacity: 1; transform: translateY(0); }
+.ds-preview-scale-wrap { width: 100%; overflow: hidden; background: #e5e5e5; border-radius: 8px; padding: 12px 0; display: flex; justify-content: center; }
+.ds-preview-page { width: 794px; background: #fff; padding: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.15); transform-origin: top center; flex-shrink: 0; position: relative; overflow: hidden; }
 </style>
 </head>
 <body>
@@ -1374,19 +1376,19 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
   </div>
 </div>
 
-<!-- 発行済み納品書の内容確認（編集・印刷はせず、明細を見るだけ） -->
-<div id="wh-deliv-detail-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:16px">
-  <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:380px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
-    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:2px">納品書の内容</div>
-    <div id="wh-deliv-detail-title" style="font-size:12px;color:var(--text-muted);margin-bottom:12px"></div>
-    <div id="wh-deliv-detail-items"></div>
-    <div id="wh-deliv-detail-total" style="text-align:right;font-size:14px;font-weight:700;color:var(--text);margin-top:10px;padding-top:10px;border-top:1.5px solid var(--border)"></div>
-    <div id="wh-deliv-detail-status" style="display:none;font-size:12px;padding:8px 10px;border-radius:8px;margin-top:10px"></div>
-    <div style="display:flex;gap:10px;margin-top:18px">
-      <button id="wh-deliv-detail-pdf-btn" onclick="pdfWhDelivDetailFromModal()" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8d8d8,#a8a8a8);color:#1a1a1a;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">📄 PDFを保存・共有する</button>
-      <button onclick="closeWhDelivDetailModal()" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">閉じる</button>
+<!-- 実際にPDF・印刷される見た目そのままの印刷プレビュー（納品書作成の「内容を見る」「PDF保存」から表示） -->
+<div id="wh-deliv-preview-modal" style="display:none;position:fixed;inset:0;z-index:610;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--white);border-radius:16px;padding:16px;width:100%;max-width:480px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:10px;flex-shrink:0">印刷プレビュー</div>
+    <div id="ds-preview-scale-wrap" class="ds-preview-scale-wrap" style="flex:1;min-height:0;overflow-y:auto">
+      <div id="ds-preview-page" class="ds-preview-page"></div>
     </div>
-    <button onclick="printWhDelivDetailFromModal()" style="display:block;width:100%;margin-top:8px;background:none;border:none;color:var(--text-muted);font-size:11px;text-decoration:underline;cursor:pointer;padding:4px">従来の印刷機能を使う（ブラウザの印刷ダイアログ）</button>
+    <div id="wh-deliv-preview-status" style="display:none;font-size:12px;padding:8px 10px;border-radius:8px;margin-top:10px;flex-shrink:0"></div>
+    <div style="display:flex;gap:10px;margin-top:14px;flex-shrink:0">
+      <button id="wh-deliv-preview-pdf-btn" onclick="pdfFromDeliverySlipPreview()" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8d8d8,#a8a8a8);color:#1a1a1a;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">📄 PDFを保存・共有する</button>
+      <button onclick="closeDeliverySlipPreview()" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">閉じる</button>
+    </div>
+    <button onclick="printFromDeliverySlipPreview()" style="display:block;width:100%;margin-top:8px;background:none;border:none;color:var(--text-muted);font-size:11px;text-decoration:underline;cursor:pointer;padding:4px;flex-shrink:0">従来の印刷機能を使う（ブラウザの印刷ダイアログ）</button>
   </div>
 </div>
 
@@ -2651,9 +2653,11 @@ const DS_STYLE = `
       .ds-note { font-size:9px; color:#555; padding-left:2px; margin-top:-2px; }
       .ds-model { flex:2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
       .ds-qty { flex:0.6; text-align:right; }
-      .ds-price { flex:0.9; text-align:right; }`;
+      .ds-price { flex:0.9; text-align:right; }
+      .ds-qty-total { display:flex; justify-content:flex-end; margin-top:10px; padding-top:6px; border-top:1.5px solid #999; font-size:11.5px; font-weight:700; }`;
 
-// 単価は商談しながら決めるため、納品書には金額・小計・消費税・合計金額は表示しない（型番・数量・単価のみ）
+// 単価は商談しながら決めるため、納品書には金額・小計・消費税・合計金額は表示しない（型番・数量・単価のみ）。
+// ただし合計数量は品数の確認に必要なため、明細の下に表示する。
 function dsSlipBodyHtml(client, date) {
   return `
     <style>${DS_STYLE}</style>
@@ -2685,8 +2689,11 @@ function dsSlipBodyHtml(client, date) {
 // 商品数が多い（30〜50件程度）場合にも対応できるよう、1列目が用紙の縦半分あたりまで埋まったら
 // 自動的に2列目へ続きが入るようにする（件数ではなく実際の高さで判定するため、一度隠して高さを
 // 測ってから、収まる分だけ1列目に、はみ出す分を2列目に振り分けている）。
-// 印刷用ポップアップ・オフスクリーン描画のどちらのdocumentに対しても使えるよう、対象のdocumentを引数で受け取る。
-function renderDeliverySlipColumns(doc, items) {
+// root は、dsSlipBodyHtmlの内容を差し込んだコンテナ（Documentそのもの、またはその内側の要素）を渡す。
+// 印刷プレビューのモーダルなど、同じページ内に複数の納品書描画が同時に存在しうる場面でも
+// id（#ds-final・#ds-measure）や.ds-wrapの取り違えが起きないよう、root配下だけを検索する。
+function renderDeliverySlipColumns(root, items) {
+  const doc = root.ownerDocument || root; // rootがDocumentの場合はownerDocumentがないので自分自身を使う
   const headerHtml = '<div class="ds-row ds-headrow ds-measurable"><span class="ds-model">型番</span><span class="ds-qty">数量</span><span class="ds-price">単価</span></div>';
   const rowHtml = function(it) {
     const priceDisp = it.unitPrice ? ('¥' + it.unitPrice.toLocaleString('ja-JP')) : '';
@@ -2694,8 +2701,8 @@ function renderDeliverySlipColumns(doc, items) {
     const noteHtml = it.damageDetail ? '<div class="ds-note">※' + it.damageDetail + '</div>' : '';
     return '<div class="ds-row-wrap ds-measurable"><div class="ds-row"><span class="ds-model">' + (it.model||'') + '</span><span class="ds-qty">' + it.qty + '</span><span class="ds-price">' + priceDisp + '</span></div>' + noteHtml + '</div>';
   };
-  const finalEl = doc.getElementById('ds-final');
-  const measureEl = doc.getElementById('ds-measure');
+  const finalEl = root.querySelector('#ds-final');
+  const measureEl = root.querySelector('#ds-measure');
 
   // 用紙の縦半分（A4想定）に収まる高さをmm→px換算で測り、そこから取引先名・日付などの見出し部分を
   // 差し引いた「残り」を、明細1列目に割り当てられる高さとする
@@ -2705,7 +2712,7 @@ function renderDeliverySlipColumns(doc, items) {
   const pxPerMm = ruler.getBoundingClientRect().height / 100;
   doc.body.removeChild(ruler);
   const HALF_PAGE_MM = 148; // A4（297mm）の約半分
-  const wrapTop = doc.querySelector('.ds-wrap').getBoundingClientRect().top;
+  const wrapTop = root.querySelector('.ds-wrap').getBoundingClientRect().top;
   const usedBeforeItems = finalEl.getBoundingClientRect().top - wrapTop; // 見出し部分の高さ
 
   measureEl.innerHTML = headerHtml + items.map(rowHtml).join('');
@@ -2735,7 +2742,9 @@ function renderDeliverySlipColumns(doc, items) {
   const col2 = items.slice(splitIdx);
   let colsHtml = '<div class="ds-col">' + headerHtml + col1.map(rowHtml).join('') + '</div>';
   if (col2.length) colsHtml += '<div class="ds-col">' + headerHtml + col2.map(rowHtml).join('') + '</div>';
-  finalEl.innerHTML = '<div class="ds-cols-wrap">' + colsHtml + '</div>';
+  const totalQty = items.reduce(function(s, it) { return s + (it.qty || 0); }, 0);
+  finalEl.innerHTML = '<div class="ds-cols-wrap">' + colsHtml + '</div>'
+    + '<div class="ds-qty-total">合計数量　' + totalQty + '個</div>';
 }
 
 // 納品書の印刷用ドキュメントを開く（従来のブラウザ印刷機能を使う場合。実際に紙のプリンターに
@@ -2765,7 +2774,7 @@ async function exportDeliverySlipPdf(client, date, items, statusCb) {
   document.body.appendChild(container);
   setStatus('PDFを作成しています…');
   try {
-    renderDeliverySlipColumns(document, items);
+    renderDeliverySlipColumns(container, items);
     const canvas = await html2canvas(container, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
     const jsPDF = window.jspdf.jsPDF;
     const pageWmm = 210, pageHmm = 297, marginMm = 6;
@@ -2845,6 +2854,69 @@ async function exportDeliverySlipPdfBySlipId(slipId, statusCb) {
   const data = buildDeliverySlipDataFromSlipId(slipId);
   if (!data) { showToast('対象の納品書が見つかりません'); return; }
   await exportDeliverySlipPdf(data.client, data.date, data.items, statusCb);
+}
+
+// 実際にPDF・印刷される見た目そのままの印刷プレビューを表示する（「内容を見る」「PDF保存」の
+// どちらからもこのプレビューを経由し、保存・共有する前に必ず仕上がりを確認できるようにする）
+let _dsPreviewSlipId = null;
+function showDeliverySlipPreview(slipId) {
+  const data = buildDeliverySlipDataFromSlipId(slipId);
+  if (!data) { showToast('対象の納品書が見つかりません'); return; }
+  _dsPreviewSlipId = slipId;
+  const pageEl = document.getElementById('ds-preview-page');
+  if (pageEl) {
+    pageEl.innerHTML = dsSlipBodyHtml(data.client, data.date);
+    renderDeliverySlipColumns(pageEl, data.items);
+  }
+  const statusEl = document.getElementById('wh-deliv-preview-status');
+  if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
+  const modal = document.getElementById('wh-deliv-preview-modal');
+  if (modal) modal.style.display = 'flex';
+  fitDeliverySlipPreviewScale();
+}
+
+// A4想定（794px幅）で組んだプレビューを、実際のモーダル幅に収まるよう縮小表示する
+function fitDeliverySlipPreviewScale() {
+  const wrap = document.getElementById('ds-preview-scale-wrap');
+  const page = document.getElementById('ds-preview-page');
+  if (!wrap || !page) return;
+  requestAnimationFrame(() => {
+    const availW = wrap.clientWidth - 16;
+    const scale = Math.min(1, Math.max(0.1, availW / 794));
+    page.style.transform = 'scale(' + scale + ')';
+    const h = page.getBoundingClientRect().height / scale;
+    wrap.style.minHeight = Math.round(h * scale + 16) + 'px';
+  });
+}
+
+function closeDeliverySlipPreview() {
+  const modal = document.getElementById('wh-deliv-preview-modal');
+  if (modal) modal.style.display = 'none';
+  const pageEl = document.getElementById('ds-preview-page');
+  if (pageEl) pageEl.innerHTML = '';
+  _dsPreviewSlipId = null;
+}
+
+// プレビューを見ながら、そのままPDFとして保存・共有する
+async function pdfFromDeliverySlipPreview() {
+  if (!_dsPreviewSlipId) return;
+  const slipId = _dsPreviewSlipId;
+  const btn = document.getElementById('wh-deliv-preview-pdf-btn');
+  const statusEl = document.getElementById('wh-deliv-preview-status');
+  const origLabel = btn ? btn.textContent : '';
+  function setStatus(msg, isError) {
+    if (!statusEl) return;
+    statusEl.textContent = msg || '';
+    statusEl.style.display = msg ? 'block' : 'none';
+    statusEl.style.background = isError ? '#fdecea' : '#fff8e1';
+    statusEl.style.color = isError ? '#b3261e' : '#8a6d00';
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'PDFを作成しています…'; }
+  try {
+    await exportDeliverySlipPdfBySlipId(slipId, setStatus);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = origLabel; }
+  }
 }
 
 // slipIdに紐づく出庫記録を取り消して在庫を戻し、対応する売上記録も削除する（編集・取消の両方から呼ばれる共通処理）
@@ -2962,83 +3034,17 @@ function renderWhDelivHistory() {
       <div style="color:var(--text);font-weight:600">${s.client || ''}／${fmtDateJP(s.date)}</div>
       <div style="color:var(--text-muted);font-size:11px;margin-top:2px">数量合計 ${s.itemQty}個／合計 ¥${s.total.toLocaleString('ja-JP')}</div>
       <div style="display:flex;gap:8px;margin-top:8px">
-        <button onclick="viewDeliverySlipDetail('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">📄 内容を見る</button>
-        <button onclick="pdfDeliverySlipFromHistory('${s.slipId}', this)" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">📄 PDF保存</button>
+        <button onclick="showDeliverySlipPreview('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">📄 内容を見る</button>
+        <button onclick="showDeliverySlipPreview('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">📄 PDF保存</button>
         <button onclick="editDeliverySlip('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">編集する</button>
         <button onclick="confirmCancelDeliverySlip('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--danger);cursor:pointer">取り消す</button>
       </div>
     </div>`).join('');
 }
 
-// 発行済みの納品書を、編集モードに入らず内容（型番・数量・単価・金額）だけ確認できるようにするモーダル
-let _whDelivDetailSlipId = null;
-function viewDeliverySlipDetail(slipId) {
-  const moves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'out')
-    .sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
-  if (!moves.length) { showToast('対象の納品書が見つかりません'); return; }
-  const client = moves[0].client || '';
-  const date = moves[0].date || '';
-  const total = moves.reduce((s,m) => s + (m.amount || 0), 0);
-  const titleEl = document.getElementById('wh-deliv-detail-title');
-  if (titleEl) titleEl.textContent = `${client}／${fmtDateJP(date)}`;
-  const itemsEl = document.getElementById('wh-deliv-detail-items');
-  if (itemsEl) {
-    itemsEl.innerHTML = moves.map(m => {
-      const model = m.model || (products.find(p => p._key === m.productKey) || {}).model || '';
-      return `
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
-        <div style="min-width:0">
-          <div style="color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${model || m.productName || ''}</div>
-          <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.productName || ''}</div>
-        </div>
-        <div style="flex-shrink:0;text-align:right">
-          <div style="font-size:12px;color:var(--text-muted)">${m.qty}個 × ¥${(m.unitPrice||0).toLocaleString('ja-JP')}</div>
-          <div style="font-size:13px;color:var(--text);font-weight:700">¥${(m.amount||0).toLocaleString('ja-JP')}</div>
-        </div>
-      </div>`;
-    }).join('');
-  }
-  const totalEl = document.getElementById('wh-deliv-detail-total');
-  if (totalEl) totalEl.textContent = `合計 ¥${total.toLocaleString('ja-JP')}`;
-  _whDelivDetailSlipId = slipId;
-  const modal = document.getElementById('wh-deliv-detail-modal');
-  if (modal) modal.style.display = 'flex';
-}
-function closeWhDelivDetailModal() {
-  const modal = document.getElementById('wh-deliv-detail-modal');
-  if (modal) modal.style.display = 'none';
-  _whDelivDetailSlipId = null;
-}
-function printWhDelivDetailFromModal() {
-  if (_whDelivDetailSlipId) printDeliverySlip(_whDelivDetailSlipId);
-}
-// 履歴一覧から直接PDF保存する場合は、専用の表示欄がないためボタン自体のラベルで進捗を伝える
-async function pdfDeliverySlipFromHistory(slipId, btnEl) {
-  const origLabel = btnEl ? btnEl.textContent : '';
-  if (btnEl) { btnEl.disabled = true; btnEl.textContent = '作成中…'; }
-  await exportDeliverySlipPdfBySlipId(slipId, (msg, isError) => {
-    if (msg) showToast(msg);
-  });
-  if (btnEl) { btnEl.disabled = false; btnEl.textContent = origLabel; }
-}
-async function pdfWhDelivDetailFromModal() {
-  if (!_whDelivDetailSlipId) return;
-  const btn = document.getElementById('wh-deliv-detail-pdf-btn');
-  const statusEl = document.getElementById('wh-deliv-detail-status');
-  const origLabel = btn ? btn.textContent : '';
-  function setStatus(msg, isError) {
-    if (!statusEl) return;
-    statusEl.textContent = msg || '';
-    statusEl.style.display = msg ? 'block' : 'none';
-    statusEl.style.background = isError ? '#fdecea' : '#fff8e1';
-    statusEl.style.color = isError ? '#b3261e' : '#8a6d00';
-  }
-  if (btn) { btn.disabled = true; btn.textContent = 'PDFを作成しています…'; }
-  try {
-    await exportDeliverySlipPdfBySlipId(_whDelivDetailSlipId, setStatus);
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = origLabel; }
-  }
+// 従来のブラウザ印刷機能を、印刷プレビューを見ながらでも使えるようにする（紙のプリンターに直接送りたい場合など）
+function printFromDeliverySlipPreview() {
+  if (_dsPreviewSlipId) printDeliverySlip(_dsPreviewSlipId);
 }
 
 let _whConsignItems = [];
