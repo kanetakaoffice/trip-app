@@ -1160,12 +1160,12 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       <div class="card-title">納品書を作成</div>
       <div class="field">
         <div class="field-label">取引先 <span class="req">*</span></div>
-        <input type="text" id="wh-deliv-client" list="wh-client-datalist" placeholder="取引先名を入力または選択">
+        <input type="text" id="wh-deliv-client" list="wh-client-datalist" placeholder="取引先名を入力または選択" oninput="saveWhDelivDraftDebounced()">
       </div>
       <div class="field-divider"></div>
       <div class="field" style="padding-top:16px">
         <div class="field-label">日付 <span class="req">*</span></div>
-        <input type="date" id="wh-deliv-date">
+        <input type="date" id="wh-deliv-date" oninput="saveWhDelivDraft()">
       </div>
     </div>
     <div class="card">
@@ -1819,6 +1819,8 @@ async function ensureWholesaleClient(name) {
 // ── 卸売管理（納品書作成・預かりリスト） ──
 let _whDelivItems = [];
 let _editingSlipId = null; // 発行済みの納品書を編集中の場合、そのslipIdが入る（新規作成時はnull）
+let _whDelivItemUidSeq = 1; // 明細行を一意に識別するID（配列の並びが変わっても「傷・潰れ分割」の元行を追跡できるようにする）
+const WH_DELIV_DRAFT_KEY = 'kanetaka_wh_deliv_draft';
 
 function switchWhTab(tab) {
   ['deliv','consign'].forEach(t => {
@@ -1835,6 +1837,7 @@ function switchWhTab(tab) {
   if (tab === 'deliv') {
     const dateEl = document.getElementById('wh-deliv-date');
     if (dateEl && !dateEl.value) dateEl.value = todayStr();
+    loadWhDelivDraft();
     renderWhDelivHistory();
   }
 }
@@ -2072,25 +2075,40 @@ function addWhItemRow(prod) {
     existing.qty += 1;
     existing.amount = existing.qty * existing.unitPrice;
   } else {
-    _whDelivItems.push({ productKey: prod._key, jan: prod.jan, name: prod.name, model: prod.model || '', qty: 1, unitPrice: defaultPrice, amount: defaultPrice });
+    _whDelivItems.push({ productKey: prod._key, jan: prod.jan, name: prod.name, model: prod.model || '', qty: 1, unitPrice: defaultPrice, amount: defaultPrice, _uid: _whDelivItemUidSeq++ });
   }
   renderWhDelivItems();
+  saveWhDelivDraft();
   showToast(`${prod.name} を追加しました（${existing ? existing.qty : 1}個）`);
 }
 
+// 「傷・潰れなどで1個だけ単価を変える」で切り分けた行を削除（取り消す）した場合は、
+// 切り分け元の行の数量に戻す（そうしないと1個分の数量がどこにも残らず消えてしまうため）
 function removeWhDelivItem(idx) {
+  const it = _whDelivItems[idx];
+  if (it && it._splitFrom != null) {
+    const origin = _whDelivItems.find(x => x._uid === it._splitFrom);
+    if (origin) {
+      origin.qty += it.qty;
+      origin.amount = origin.qty * origin.unitPrice;
+    }
+  }
   _whDelivItems.splice(idx, 1);
   renderWhDelivItems();
+  saveWhDelivDraft();
 }
 
 // 傷・潰れなどで単価が異なる分だけ、その行から1個だけ切り分けて別行にする（単価はそのままコピーされるので、切り分けた後に金額を修正する）
+// 切り分けた行がどの行から分かれたかを_splitFromで記録しておき、その行を削除（取り消し）した時に元の行の数量へ戻せるようにする
 function splitWhDelivItem(idx) {
   const it = _whDelivItems[idx];
   if (!it || it.qty <= 1) return;
+  if (it._uid == null) it._uid = _whDelivItemUidSeq++;
   it.qty -= 1;
   it.amount = it.qty * it.unitPrice;
-  _whDelivItems.splice(idx + 1, 0, { productKey: it.productKey, jan: it.jan, name: it.name, model: it.model, qty: 1, unitPrice: it.unitPrice, amount: it.unitPrice });
+  _whDelivItems.splice(idx + 1, 0, { productKey: it.productKey, jan: it.jan, name: it.name, model: it.model, qty: 1, unitPrice: it.unitPrice, amount: it.unitPrice, _uid: _whDelivItemUidSeq++, _splitFrom: it._uid });
   renderWhDelivItems();
+  saveWhDelivDraft();
 }
 
 // 数量・単価は明細に追加された後、行の中で直接編集できる（編集のたびに金額欄と合計だけをその場で更新し、リスト全体は再描画しない）
@@ -2103,6 +2121,7 @@ function updateWhItemField(idx, field, value) {
   const amountEl = document.getElementById('wh-item-amount-' + idx);
   if (amountEl) amountEl.textContent = '¥' + it.amount.toLocaleString('ja-JP');
   updateWhDelivTotalDisplay();
+  saveWhDelivDraftDebounced();
 }
 
 // 商品名・型番は、スキャン間違いなどでこの納品書の明細だけ修正したい場合のためのその場編集。
@@ -2111,6 +2130,7 @@ function updateWhItemTextField(idx, field, value) {
   const it = _whDelivItems[idx];
   if (!it) return;
   it[field] = value;
+  saveWhDelivDraftDebounced();
 }
 
 function updateWhDelivTotalDisplay() {
@@ -2120,6 +2140,50 @@ function updateWhDelivTotalDisplay() {
   const total = _whDelivItems.reduce((s,it) => s + it.amount, 0);
   totalEl.style.display = 'flex';
   totalEl.innerHTML = `<span>合計</span><span>¥${total.toLocaleString('ja-JP')}</span>`;
+}
+
+// ── 納品書作成の下書き自動保存 ──
+// 作業を中断してもデータが消えないよう、取引先・日付・明細をlocalStorageに保存しておき、
+// この画面に戻ってきた時に自動で復元する。発行済み納品書の編集中（_editingSlipId）は
+// 別物として扱い、下書きの保存・復元は行わない
+let _whDelivDraftSaveTimer = null;
+function saveWhDelivDraft() {
+  if (_editingSlipId) return;
+  try {
+    const client = document.getElementById('wh-deliv-client')?.value || '';
+    const date = document.getElementById('wh-deliv-date')?.value || '';
+    if (!_whDelivItems.length && !client && !date) { localStorage.removeItem(WH_DELIV_DRAFT_KEY); return; }
+    localStorage.setItem(WH_DELIV_DRAFT_KEY, JSON.stringify({ client, date, items: _whDelivItems, savedAt: Date.now() }));
+  } catch(e) {}
+}
+// 入力のたびに毎回書き込むと頻度が高すぎるため、数量・単価・商品名・型番の編集時は少し間を置いてまとめて保存する
+function saveWhDelivDraftDebounced() {
+  if (_whDelivDraftSaveTimer) clearTimeout(_whDelivDraftSaveTimer);
+  _whDelivDraftSaveTimer = setTimeout(saveWhDelivDraft, 400);
+}
+function loadWhDelivDraft() {
+  if (_editingSlipId || _whDelivItems.length) return;
+  try {
+    const raw = localStorage.getItem(WH_DELIV_DRAFT_KEY);
+    if (!raw) return;
+    const draft = JSON.parse(raw);
+    if (!draft) return;
+    const hasContent = (draft.items && draft.items.length) || draft.client || draft.date;
+    if (!hasContent) return;
+    _whDelivItems = draft.items || [];
+    // 保存されていた行のうち_uidを持たない古い下書きにも念のため採番しておく。
+    // また、以降に新しく採番するIDが復元したIDと重複しないよう、採番カウンタを復元済みの最大値より先に進めておく
+    _whDelivItems.forEach(it => { if (it._uid == null) it._uid = _whDelivItemUidSeq++; });
+    const maxUid = _whDelivItems.reduce((m, it) => Math.max(m, it._uid || 0), 0);
+    if (maxUid >= _whDelivItemUidSeq) _whDelivItemUidSeq = maxUid + 1;
+    const clientEl = document.getElementById('wh-deliv-client');
+    const dateEl = document.getElementById('wh-deliv-date');
+    if (clientEl && draft.client) clientEl.value = draft.client;
+    if (dateEl && draft.date) dateEl.value = draft.date;
+    renderWhDelivItems();
+    updateWhDelivSubmitButtonLabel();
+    if (_whDelivItems.length) showToast('入力中だった納品書のデータを復元しました');
+  } catch(e) {}
 }
 
 function renderWhDelivItems() {
@@ -2225,6 +2289,9 @@ async function submitWhDeliverySlip() {
 
     _whDelivItems = [];
     _editingSlipId = null;
+    // 直前の入力で仕込まれた保存タイマーが後から発火して空の下書きを復活させてしまわないよう、ここで確実に止めておく
+    if (_whDelivDraftSaveTimer) { clearTimeout(_whDelivDraftSaveTimer); _whDelivDraftSaveTimer = null; }
+    try { localStorage.removeItem(WH_DELIV_DRAFT_KEY); } catch(e) {}
     renderWhDelivItems();
     updateWhDelivSubmitButtonLabel();
     const banner = document.getElementById('wh-deliv-edit-banner');
@@ -2253,10 +2320,7 @@ function openWhDelivHistoryAccordion() {
 // 自動的に2列目へ続きが入るようにする（件数ではなく実際の高さで判定するため、印刷用ウィンドウ側で
 // 一度隠して高さを測ってから、収まる分だけ1列目に、はみ出す分を2列目に振り分けている）
 function openDeliverySlipPrint(client, date, items) {
-  const total = items.reduce((s,it) => s + it.amount, 0);
-  // 単価は税込みのため、合計金額はそのまま変えず、内訳として税抜金額と消費税相当額を割り戻して表示する
-  const taxAmount = Math.round(total * 10 / 110);
-  const subtotal = total - taxAmount;
+  // 単価は商談しながら決めるため、納品書には金額・小計・消費税・合計金額は表示しない（型番・数量・単価のみ）
   const html = `
     <style>
       .ds-wrap { font-size:11px; }
@@ -2275,13 +2339,9 @@ function openDeliverySlipPrint(client, date, items) {
       .ds-col { flex:1; min-width:0; }
       .ds-row { display:flex; align-items:baseline; gap:6px; padding:4px 0; margin-bottom:3px; border-bottom:1px solid #ccc; font-size:10.5px; }
       .ds-row.ds-headrow { font-weight:700; border-bottom:1.5px solid #999; margin-bottom:5px; }
-      .ds-model { flex:1.6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .ds-model { flex:2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
       .ds-qty { flex:0.6; text-align:right; }
-      .ds-price { flex:0.85; text-align:right; }
-      .ds-amount { flex:0.85; text-align:right; }
-      .ds-tax-summary { margin-top:10px; }
-      .ds-tax-row { display:flex; justify-content:flex-end; gap:10px; font-size:10.5px; color:#555; }
-      .ds-total { margin-top:4px; padding-top:6px; border-top:1.5px solid #333; font-weight:700; font-size:13px; text-align:right; }
+      .ds-price { flex:0.9; text-align:right; }
     </style>
     <div class="ds-wrap">
       <div class="ds-title-row">
@@ -2305,24 +2365,20 @@ function openDeliverySlipPrint(client, date, items) {
       </div>
       <div id="ds-measure" style="position:absolute;visibility:hidden;left:-9999px;top:0;width:50%"></div>
       <div id="ds-final"></div>
-      <div class="ds-tax-summary">
-        <div class="ds-tax-row"><span>小計（税抜）</span><span>¥${subtotal.toLocaleString('ja-JP')}</span></div>
-        <div class="ds-tax-row"><span>消費税（10%）</span><span>¥${taxAmount.toLocaleString('ja-JP')}</span></div>
-      </div>
-      <div class="ds-total">合計金額（税込）　¥${total.toLocaleString('ja-JP')}</div>
     </div>
     <script>
     (function() {
       const items = ${JSON.stringify(items)};
-      const headerHtml = '<div class="ds-row ds-headrow"><span class="ds-model">型番</span><span class="ds-qty">数量</span><span class="ds-price">単価</span><span class="ds-amount">金額</span></div>';
+      const headerHtml = '<div class="ds-row ds-headrow"><span class="ds-model">型番</span><span class="ds-qty">数量</span><span class="ds-price">単価</span></div>';
       const rowHtml = function(it) {
-        return '<div class="ds-row"><span class="ds-model">' + (it.model||'') + '</span><span class="ds-qty">' + it.qty + '</span><span class="ds-price">¥' + it.unitPrice.toLocaleString('ja-JP') + '</span><span class="ds-amount">¥' + it.amount.toLocaleString('ja-JP') + '</span></div>';
+        const priceDisp = it.unitPrice ? ('¥' + it.unitPrice.toLocaleString('ja-JP')) : '';
+        return '<div class="ds-row"><span class="ds-model">' + (it.model||'') + '</span><span class="ds-qty">' + it.qty + '</span><span class="ds-price">' + priceDisp + '</span></div>';
       };
       const finalEl = document.getElementById('ds-final');
       const measureEl = document.getElementById('ds-measure');
 
-      // 用紙の縦半分（A4想定）に収まる高さをmm→px換算で測り、そこから取引先名・日付などの見出しと
-      // 一番下の合計金額の分を差し引いた「残り」を、明細1列目に割り当てられる高さとする
+      // 用紙の縦半分（A4想定）に収まる高さをmm→px換算で測り、そこから取引先名・日付などの見出し部分を
+      // 差し引いた「残り」を、明細1列目に割り当てられる高さとする
       const ruler = document.createElement('div');
       ruler.style.cssText = 'position:absolute;visibility:hidden;height:100mm;width:1px;';
       document.body.appendChild(ruler);
@@ -2331,8 +2387,6 @@ function openDeliverySlipPrint(client, date, items) {
       const HALF_PAGE_MM = 148; // A4（297mm）の約半分
       const wrapTop = document.querySelector('.ds-wrap').getBoundingClientRect().top;
       const usedBeforeItems = document.getElementById('ds-final').getBoundingClientRect().top - wrapTop; // 見出し部分の高さ
-      const taxSummaryH = document.querySelector('.ds-tax-summary').getBoundingClientRect().height;
-      const totalH = document.querySelector('.ds-total').getBoundingClientRect().height + taxSummaryH;
 
       measureEl.innerHTML = headerHtml + items.map(rowHtml).join('');
       const allRowEls = measureEl.querySelectorAll('.ds-row');
@@ -2341,7 +2395,7 @@ function openDeliverySlipPrint(client, date, items) {
       for (let i = 1; i < allRowEls.length; i++) rowHeights.push(allRowEls[i].getBoundingClientRect().height);
       const oneColumnHeight = headerH + rowHeights.reduce(function(s,h){ return s+h; }, 0);
       // 万一マイナスなどの異常値になっても最低限の行数は1列に残るようフロアを設ける
-      const targetHeightPx = Math.max((pxPerMm * HALF_PAGE_MM) - usedBeforeItems - totalH - 12, headerH * 5);
+      const targetHeightPx = Math.max((pxPerMm * HALF_PAGE_MM) - usedBeforeItems - 12, headerH * 5);
 
       let splitIdx = items.length; // 既定は1列のまま（全部が目安の高さに収まる場合）
       if (oneColumnHeight > targetHeightPx) {
@@ -2445,6 +2499,8 @@ function cancelEditDeliverySlip() {
   _editingSlipId = null;
   _whDelivItems = [];
   document.getElementById('wh-deliv-client').value = '';
+  // 編集を始める前に新規の納品書を作成中だった場合は、その下書きをここで復元する
+  loadWhDelivDraft();
   renderWhDelivItems();
   updateWhDelivSubmitButtonLabel();
   const banner = document.getElementById('wh-deliv-edit-banner');
