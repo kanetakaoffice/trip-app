@@ -1914,7 +1914,7 @@ async function autoSearchWhQuickRegisterByJan(jan) {
 
     if (!r.ok || d.error) {
       console.error('価格.com検索APIエラー:', r.status, d.error);
-      if (status) { status.innerHTML = '自動検索でエラーが発生しました。上の欄に型番を入力して再検索するか、商品名を直接入力してください'; status.style.color = 'var(--danger)'; }
+      if (status) { status.innerHTML = `自動検索でエラーが発生しました${formatSearchApiError(r, d)}。上の欄に型番を入力して再検索するか、商品名を直接入力してください`; status.style.color = 'var(--danger)'; }
       return;
     }
 
@@ -1967,7 +1967,7 @@ async function searchWhQuickRegister() {
 
     if (!r.ok || d.error) {
       console.error('価格.com検索APIエラー:', r.status, d.error);
-      if (status) { status.innerHTML = '検索でエラーが発生しました。お手数ですが商品名は手入力をお願いします。'; status.style.color = 'var(--danger)'; }
+      if (status) { status.innerHTML = `検索でエラーが発生しました${formatSearchApiError(r, d)}。お手数ですが商品名は手入力をお願いします。`; status.style.color = 'var(--danger)'; }
       return;
     }
 
@@ -2743,6 +2743,18 @@ const YAHOO_CLIENT_ID = "dmVyPTIwMjUwNyZpZD1oZWl6dUs1MUZSJmhhc2g9TXpOak5qSTNNREk
 const GOOGLE_API_KEY = "AIzaSyBQ3fIrqjgVV-fgfVF3DvDsowLsQASYLUk";
 const SEARCH_ENGINE_ID = "f4008bcf1a11f4fbd";
 
+// 価格.com検索（Google Custom Search）がエラーを返した際、原因を画面上にも表示できるようにする補助関数。
+// これまでは console.error にしか詳細が出ておらず、利用者側からは原因（クォータ超過／キー制限など）が分からなかったため追加。
+function formatSearchApiError(r, d) {
+  const parts = [];
+  if (r && r.status) parts.push('HTTP ' + r.status);
+  const reason = d && d.error && d.error.errors && d.error.errors[0] && d.error.errors[0].reason;
+  if (reason) parts.push(reason);
+  const msg = d && d.error && d.error.message;
+  if (msg) parts.push(msg);
+  return parts.length ? `（詳細: ${parts.join(' / ')}）` : '';
+}
+
 // JANが既存商品と一致した場合、商品登録フォームを「入荷（在庫追加）」モードに切り替える
 function setInvAddExistingMode(found) {
   document.getElementById('inv-existing-key').value = found._key;
@@ -2848,7 +2860,7 @@ async function lookupJan() {
     // 「見つからなかった」と区別してその旨を表示する（原因の切り分けをしやすくするため）
     if (!r.ok || d.error) {
       console.error('価格.com検索APIエラー:', r.status, d.error);
-      status.innerHTML = `商品情報の検索でエラーが発生しました（検索機能自体が一時的に利用できない可能性があります）。お手数ですが商品名・型番・メーカーは手入力をお願いします。<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-size:12px">📦 価格.comで手動検索する</a>`;
+      status.innerHTML = `商品情報の検索でエラーが発生しました${formatSearchApiError(r, d)}（検索機能自体が一時的に利用できない可能性があります）。お手数ですが商品名・型番・メーカーは手入力をお願いします。<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-size:12px">📦 価格.comで手動検索する</a>`;
       status.style.color = 'var(--danger)';
       return;
     }
