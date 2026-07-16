@@ -1662,10 +1662,11 @@ window._getSelectedMonth = () => selectedMonth;
 window._setSelectedMonth = v => { selectedMonth = v; };
 window._getProducts   = () => products;
 window._getWholesaleClients = () => wholesaleClients;
+window._getOverseasClients = () => overseasClients;
 window._getStockMoves = () => stockMoves;
 
 // ── 在庫管理 ──
-let products = [], stockMoves = [], wholesaleClients = [];
+let products = [], stockMoves = [], wholesaleClients = [], overseasClients = [];
 // 納品書などの印刷書類に載せる自社情報。角印画像は用意でき次第 COMPANY_SEAL_DATA_URI に base64 data URI を設定する。
 const COMPANY_INFO = { name: '株式会社KANETAKA', zip: '453-0811', address1: '愛知県名古屋市中村区太閤通3-25-1', address2: 'AROME DE JOIE 908', tel: '080-2414-8907' };
 let COMPANY_SEAL_DATA_URI = 'data:image/png;base64,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';
@@ -1789,14 +1790,16 @@ function showInvScreen(name) {
 
 async function loadInventory() {
   try {
-    const [p, m, c] = await Promise.all([
+    const [p, m, c, oc] = await Promise.all([
       fetch(authedUrl('/products.json')).then(r => r.json()),
       fetch(authedUrl('/stockMoves.json')).then(r => r.json()),
-      fetch(authedUrl('/wholesaleClients.json')).then(r => r.json())
+      fetch(authedUrl('/wholesaleClients.json')).then(r => r.json()),
+      fetch(authedUrl('/overseasClients.json')).then(r => r.json())
     ]);
     products   = objToArr(p);
     stockMoves = objToArr(m);
     wholesaleClients = objToArr(c);
+    overseasClients = objToArr(oc);
     renderWhClientDatalist();
     if (document.getElementById('screen-inv-list')?.classList.contains('active')) {
       renderInventoryList();
@@ -1819,10 +1822,10 @@ function renderClientSelectUI(prefix) {
   const current = hidden.value || '';
   // 業務の売上（国内）で使っている卸先の一覧も、そのままここの取引先候補に含める
   const seedClients = window._domesticClientsSeed || [];
-  const names = Array.from(new Set([
+  const names = sortJa(Array.from(new Set([
     ...(wholesaleClients || []).map(c => c.name).filter(Boolean),
     ...seedClients
-  ])).sort((a,b) => a.localeCompare(b, 'ja'));
+  ])));
   const isOther = !!current && !names.includes(current);
   let html = '<option value="">選択してください</option>';
   html += names.map(n => `<option value="${n.replace(/"/g,'&quot;')}"${n === current ? ' selected' : ''}>${n}</option>`).join('');
@@ -1866,11 +1869,16 @@ function renderWhClientDatalist() {
 // メーカー専用の一覧は持たず、登録済み商品（products）に入っているメーカー名から候補を作る。
 // 「＋ 新しいメーカーを追加」を選ぶとその場で入力欄が出て、登録すればそのメーカーも次回から選択できるようになる。
 let _extraMakers = []; // 今回の登録がまだproductsに反映される前でも、同じセッション内では続けて選べるようにするための一時リスト
+// メーカー名・取引先名など、日本語と英字が混ざる一覧を一貫した基準でアルファベット順（大文字小文字は区別しない）に並べる共通関数。
+// 全角/半角・大文字小文字の違いを吸収するsensitivity:'base'を指定し、どの一覧でも同じ並び順になるようにする。
+function sortJa(arr) {
+  return (arr || []).slice().sort((a, b) => String(a).localeCompare(String(b), 'ja', { sensitivity: 'base', numeric: true }));
+}
 function getKnownMakers() {
   const set = new Set();
   (products || []).forEach(p => { if (p.maker) set.add(p.maker); });
   _extraMakers.forEach(m => set.add(m));
-  return Array.from(set).sort((a, b) => a.localeCompare(b, 'ja'));
+  return sortJa(Array.from(set));
 }
 function rememberMakerIfNew(maker) {
   if (maker && !getKnownMakers().includes(maker)) _extraMakers.push(maker);
@@ -1922,6 +1930,17 @@ async function ensureWholesaleClient(name) {
     wholesaleClients.push({ name });
     renderWhClientDatalist();
   } catch(e) { console.error('wholesale client add error', e); }
+}
+
+// 国外の卸先名が既存リストになければ新規登録する（あれば何もしない）。業務の売上「国外（インボイス）」の
+// 「その他」で新しく入力された取引先を、次回から選択できるようにするための保存先。
+async function ensureOverseasClient(name) {
+  if (!name) return;
+  if (overseasClients.some(c => c.name === name)) return;
+  try {
+    await fetch(authedUrl('/overseasClients.json'), { method: 'POST', body: JSON.stringify({ name, createdAt: Date.now() }) });
+    overseasClients.push({ name });
+  } catch(e) { console.error('overseas client add error', e); }
 }
 
 // ── 卸売管理（納品書作成・預かりリスト） ──
@@ -4671,7 +4690,7 @@ function handleSalType() {
   const type = document.getElementById('sal-type').value;
   const sel = document.getElementById('sal-client');
   sel.innerHTML = '<option value="">選択してください</option>';
-  const clients = type === 'domestic' ? getDomesticSalesClients() : type === 'overseas' ? OVS_CLIENTS : [];
+  const clients = type === 'domestic' ? getDomesticSalesClients() : type === 'overseas' ? getOverseasSalesClients() : [];
   clients.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; sel.appendChild(o); });
   if (clients.length > 0) {
     const other = document.createElement('option');
@@ -4723,8 +4742,9 @@ async function submitSales() {
   const data = getSalesData();
   if (!data) { showAlert('sal-alert-box','sal-alert-msg','必須項目をすべて入力してください','error'); return; }
   try {
-    // 国内の卸先を「その他」で新しく入力した場合、次回から選択できるよう取引先リストに保存しておく
+    // 国内・国外どちらの卸先も「その他」で新しく入力した場合、次回から選択できるよう取引先リストに保存しておく
     if (data.salesType === '国内（請求書）') await ensureWholesaleClient(data.client);
+    else if (data.salesType === '国外（インボイス）') await ensureOverseasClient(data.client);
     await window._fbPushSales(data);
     _salDayCount++;
     _salDayTotal += data.amount;
@@ -4866,7 +4886,14 @@ function getDomesticSalesClients() {
   const set = new Set(DOM_CLIENTS);
   const wc = (window._getWholesaleClients && window._getWholesaleClients()) || [];
   wc.forEach(c => { if (c && c.name) set.add(c.name); });
-  return Array.from(set).sort((a,b) => a.localeCompare(b, 'ja'));
+  return sortJa(Array.from(set));
+}
+// 国外の卸先も国内と同様に、あらかじめ用意した一覧に加えて「その他」で新しく追加された取引先を候補に含める
+function getOverseasSalesClients() {
+  const set = new Set(OVS_CLIENTS);
+  const oc = (window._getOverseasClients && window._getOverseasClients()) || [];
+  oc.forEach(c => { if (c && c.name) set.add(c.name); });
+  return sortJa(Array.from(set));
 }
 // 納品書作成・預かりリストの取引先選択でも、この国内卸先の一覧をあわせて候補に出せるようにしておく
 window._domesticClientsSeed = DOM_CLIENTS;
@@ -4988,7 +5015,7 @@ function updateSalesClientOptions(rowId) {
   const typeEl = document.getElementById('es_type_'+rowId);
   const clientEl = document.getElementById('es_client_'+rowId);
   if (!typeEl||!clientEl) return;
-  const clients = typeEl.value==='国内（請求書）' ? getDomesticSalesClients() : OVS_CLIENTS;
+  const clients = typeEl.value==='国内（請求書）' ? getDomesticSalesClients() : getOverseasSalesClients();
   clientEl.innerHTML = clients.map(c=>`<option value="${c}">${c}</option>`).join('');
 }
 
@@ -5236,7 +5263,7 @@ function renderList() {
     function salItemHtml(s) {
       const rid = 'sa_'+s._key;
       const isOvs = s.salesType==='国外（インボイス）';
-      const clients2 = isOvs ? OVS_CLIENTS : getDomesticSalesClients();
+      const clients2 = isOvs ? getOverseasSalesClients() : getDomesticSalesClients();
       return `<div style="border-top:1px solid var(--border)">
         <div id="view_${rid}" style="padding:10px 14px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start">
@@ -5414,7 +5441,7 @@ function renderMyHistory() {
     container.innerHTML = items.map(s => {
       const rid = 'sa_'+s._key;
       const isOvs = s.salesType==='国外（インボイス）';
-      const clients2 = isOvs ? OVS_CLIENTS : getDomesticSalesClients();
+      const clients2 = isOvs ? getOverseasSalesClients() : getDomesticSalesClients();
       return `<div style="background:var(--white);border-radius:var(--radius);border:1px solid var(--border);margin-bottom:10px;overflow:hidden">
         <div id="view_mh_${rid}" style="padding:12px 14px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start">
@@ -5709,7 +5736,7 @@ function pcUpdateClients() {
   const type = document.getElementById('pc-sal-type').value;
   const sel = document.getElementById('pc-sal-client');
   sel.innerHTML = '<option value="">選択してください</option>';
-  const clients = type==='domestic' ? getDomesticSalesClients() : type==='overseas' ? OVS_CLIENTS : [];
+  const clients = type==='domestic' ? getDomesticSalesClients() : type==='overseas' ? getOverseasSalesClients() : [];
   clients.forEach(c => { const o=document.createElement('option'); o.value=c; o.textContent=c; sel.appendChild(o); });
   if (clients.length) { const o=document.createElement('option'); o.value='other'; o.textContent='その他'; sel.appendChild(o); }
   const ow = document.getElementById('pc-sal-client-other-wrap');
@@ -5816,8 +5843,9 @@ async function pcSubmitSales() {
   if (!date||!typeVal||!clientFinal||!amount) { showToast('必須項目を入力してください'); return; }
   const typeLabel = typeVal==='domestic'?'国内（請求書）':'国外（インボイス）';
   try {
-    // 国内の卸先を「その他」で新しく入力した場合、次回から選択できるよう取引先リストに保存しておく
+    // 国内・国外どちらの卸先も「その他」で新しく入力した場合、次回から選択できるよう取引先リストに保存しておく
     if (typeLabel === '国内（請求書）') await ensureWholesaleClient(clientFinal);
+    else if (typeLabel === '国外（インボイス）') await ensureOverseasClient(clientFinal);
     await window._fbPushSales({ type:'sales', date, salesType:typeLabel, client:clientFinal, amount, due, note, payStatus:'未入金', submittedAt: new Date().toLocaleDateString('ja-JP') });
     document.getElementById('pc-sal-type').selectedIndex = 0;
     document.getElementById('pc-sal-client').innerHTML = '<option value="">先に区分を選択</option>';
@@ -5879,7 +5907,7 @@ function renderPCHistory() {
       </div>`;
     } else {
       const isOvs = item.salesType==='国外（インボイス）';
-      const clients2 = isOvs ? OVS_CLIENTS : getDomesticSalesClients();
+      const clients2 = isOvs ? getOverseasSalesClients() : getDomesticSalesClients();
       viewHtml = `<div style="font-size:13px;font-weight:600;color:var(--text)">${item.client}</div>
         <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${item.salesType||''}</div>`;
       editHtml = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
@@ -7787,7 +7815,10 @@ function buildPrintHtml(title, tableHtml) {
     tr:nth-child(even) td { background:#f9f9f9; }
     .total td { font-weight:700; background:#f0f0f0; }
     .subtitle { font-size:13px; font-weight:700; margin:16px 0 6px; }
-    @media print { .btn-bar { display:none; } .content { padding:10px; } }
+    /* ブラウザ標準の印刷ヘッダー・フッター（URL・日時・ページ番号）は@pageのmarginを0にすることで
+       表示されなくなるため、印刷時にそれを利用しつつ、内容が用紙端に寄りすぎないよう.contentの余白で調整する */
+    @page { size: auto; margin: 0; }
+    @media print { .btn-bar { display:none; } .content { padding:14mm 10mm; } }
   </style></head><body>
   <div class="btn-bar">
     <button class="btn-print" onclick="window.print()">🖨 印刷 / PDF保存</button>
