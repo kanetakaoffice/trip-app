@@ -1222,7 +1222,10 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     </div>
     <div style="margin-top:16px;background:var(--surface);border-radius:10px;padding:10px 12px">
       <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAccordion('wh-deliv-history')">
-        <span style="font-size:13px;font-weight:700;color:var(--text)">発行済みの納品書</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:13px;font-weight:700;color:var(--text)">発行済みの納品書</span>
+          <span id="wh-deliv-history-badge" style="display:none;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;background:var(--gold);color:#fff;font-size:11px;font-weight:700;border-radius:10px"></span>
+        </div>
         <span class="accordion-arrow" id="acc-arrow-wh-deliv-history" style="font-size:10px;color:var(--text-muted)">▼</span>
       </div>
       <div class="accordion-body" id="acc-body-wh-deliv-history" style="margin-top:8px">
@@ -2102,6 +2105,14 @@ function updateWhItemField(idx, field, value) {
   updateWhDelivTotalDisplay();
 }
 
+// 商品名・型番は、スキャン間違いなどでこの納品書の明細だけ修正したい場合のためのその場編集。
+// あくまでこの納品書の表記を直すだけで、商品マスタ（登録済み商品）側は変更しない
+function updateWhItemTextField(idx, field, value) {
+  const it = _whDelivItems[idx];
+  if (!it) return;
+  it[field] = value;
+}
+
 function updateWhDelivTotalDisplay() {
   const totalEl = document.getElementById('wh-deliv-total');
   if (!totalEl) return;
@@ -2124,8 +2135,15 @@ function renderWhDelivItems() {
   empty.style.display = 'none';
   container.innerHTML = _whDelivItems.map((it, idx) => `
     <div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <div style="min-width:0;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${it.name}${it.model ? '（' + it.model + '）' : ''}</div>
+      <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:6px">
+        <div style="flex:2;min-width:0">
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">商品名</div>
+          <input type="text" value="${(it.name||'').replace(/"/g,'&quot;')}" oninput="updateWhItemTextField(${idx},'name',this.value)" placeholder="商品名" style="width:100%;padding:6px 8px;font-size:13px;font-weight:600;border:1.5px solid var(--border);border-radius:6px">
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">型番</div>
+          <input type="text" value="${(it.model||'').replace(/"/g,'&quot;')}" oninput="updateWhItemTextField(${idx},'model',this.value)" placeholder="型番" style="width:100%;padding:6px 8px;font-size:13px;border:1.5px solid var(--border);border-radius:6px">
+        </div>
         <button onclick="removeWhDelivItem(${idx})" style="background:none;border:none;color:var(--danger);font-size:16px;cursor:pointer;padding:0 4px;flex-shrink:0">✕</button>
       </div>
       <div style="display:flex;gap:8px;align-items:flex-end">
@@ -2198,7 +2216,7 @@ async function submitWhDeliverySlip() {
     }));
 
     await Promise.all(_whDelivItems.map(it => fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
-      productKey: it.productKey, productName: it.name, jan: it.jan,
+      productKey: it.productKey, productName: it.name, model: it.model || '', jan: it.jan,
       type: 'out', channel: '卸売', client, qty: it.qty, unitPrice: it.unitPrice, amount: it.amount,
       slipId, date, memo: '', stockBefore: stockBeforeByProduct[it.productKey], stockAfter: stockBeforeByProduct[it.productKey] - newQtyByProduct[it.productKey], createdAt: Date.now()
     })})));
@@ -2357,7 +2375,9 @@ function printDeliverySlip(slipId) {
     .sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
   if (!moves.length) { showToast('対象の納品書が見つかりません'); return; }
   const items = moves.map(m => ({
-    model: (products.find(p => p._key === m.productKey) || {}).model || '',
+    // 型番は納品書の明細でその場修正できるようになったため、記録済みの値を優先する。
+    // それより前に発行された古い記録にはmodelが保存されていないため、その場合のみ商品マスタから補う
+    model: m.model || (products.find(p => p._key === m.productKey) || {}).model || '',
     qty: m.qty, unitPrice: m.unitPrice, amount: m.amount
   }));
   openDeliverySlipPrint(moves[0].client, moves[0].date, items);
@@ -2405,7 +2425,8 @@ function editDeliverySlip(slipId) {
   if (!moves.length) { showToast('対象の納品書が見つかりません'); return; }
   _whDelivItems = moves.map(m => ({
     productKey: m.productKey, jan: m.jan, name: m.productName,
-    model: (products.find(p => p._key === m.productKey) || {}).model || '',
+    // 型番はその納品書で修正済みの値があればそれを優先し、古い記録（保存前）のみ商品マスタから補う
+    model: m.model || (products.find(p => p._key === m.productKey) || {}).model || '',
     qty: m.qty, unitPrice: m.unitPrice, amount: m.amount
   }));
   document.getElementById('wh-deliv-client').value = moves[0].client || '';
@@ -2456,6 +2477,13 @@ function renderWhDelivHistory() {
       createdAt: Math.max(...items.map(m => m.createdAt || 0))
     };
   }).sort((a,b) => b.createdAt - a.createdAt);
+
+  // 件数バッジ：アコーディオンを開かなくても発行済みの納品書があることに気付けるようにする
+  const badge = document.getElementById('wh-deliv-history-badge');
+  if (badge) {
+    if (slips.length > 0) { badge.textContent = slips.length; badge.style.display = 'inline-flex'; }
+    else { badge.style.display = 'none'; }
+  }
 
   if (!slips.length) {
     listEl.innerHTML = `<div style="font-size:12px;color:var(--text-muted)">まだ発行した納品書はありません</div>`;
@@ -3315,7 +3343,7 @@ function renderInventoryList() {
   empty.style.display = 'none';
 
   const sorted = [...filtered].sort((a,b) => a.stock - b.stock);
-  container.innerHTML = sorted.map(buildInvCard).join('');
+  container.innerHTML = sorted.map(p => buildInvCard(p, {editable:true})).join('');
 }
 
 // 「発注目安」パネル：14日以内に在庫切れが見込まれる商品を予測日数の短い順に表示
