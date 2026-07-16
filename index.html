@@ -1817,7 +1817,12 @@ function renderClientSelectUI(prefix) {
   const otherInput = document.getElementById(prefix + '-client-other');
   if (!sel || !hidden) return;
   const current = hidden.value || '';
-  const names = Array.from(new Set((wholesaleClients || []).map(c => c.name).filter(Boolean))).sort((a,b) => a.localeCompare(b, 'ja'));
+  // 業務の売上（国内）で使っている卸先の一覧も、そのままここの取引先候補に含める
+  const seedClients = window._domesticClientsSeed || [];
+  const names = Array.from(new Set([
+    ...(wholesaleClients || []).map(c => c.name).filter(Boolean),
+    ...seedClients
+  ])).sort((a,b) => a.localeCompare(b, 'ja'));
   const isOther = !!current && !names.includes(current);
   let html = '<option value="">選択してください</option>';
   html += names.map(n => `<option value="${n.replace(/"/g,'&quot;')}"${n === current ? ' selected' : ''}>${n}</option>`).join('');
@@ -4863,6 +4868,8 @@ function getDomesticSalesClients() {
   wc.forEach(c => { if (c && c.name) set.add(c.name); });
   return Array.from(set).sort((a,b) => a.localeCompare(b, 'ja'));
 }
+// 納品書作成・預かりリストの取引先選択でも、この国内卸先の一覧をあわせて候補に出せるようにしておく
+window._domesticClientsSeed = DOM_CLIENTS;
 const NAMES_LIST = ['金髙孝紀','金髙裕亮'];
 const NAME_AMT = {'金髙孝紀':20000,'金髙裕亮':10000};
 
