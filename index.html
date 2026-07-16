@@ -845,6 +845,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
           </div>
           <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">連続スキャンで読み取れない場合は「写真で読み取る」をお試しください（ピントが合った状態で撮影されるため読み取りやすくなります）</div>
           <input type="text" id="move-jan" placeholder="または手入力" oninput="lookupProduct()">
+          <div id="move-jan-status" style="font-size:12px;margin-top:6px;color:var(--text-muted)"></div>
           <div id="move-product-info" style="margin-top:12px;padding:12px;background:var(--gold-bg);border-radius:8px;display:none">
             <div style="font-weight:700;font-size:15px" id="move-product-name"></div>
             <div style="font-size:13px;color:var(--text-sub);margin-top:4px">現在庫: <span id="move-current-stock" style="font-weight:700;color:var(--gold-dark)"></span>個</div>
@@ -1330,7 +1331,8 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 <div id="scan-overlay">
   <video id="scan-video" autoplay playsinline muted></video>
   <div class="scan-guide"></div>
-  <div class="scan-hint">バーコードを枠内に合わせてください</div>
+  <div class="scan-hint">バーコードを枠内に大きめに近づけてください</div>
+  <button id="scan-torch-btn" onclick="toggleScanTorch()" style="display:none;position:absolute;top:calc(env(safe-area-inset-top,0px) + 20px);right:20px;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.4);color:#fff;font-size:19px;align-items:center;justify-content:center;cursor:pointer;z-index:10;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)">💡</button>
   <button class="scan-close" onclick="stopScan()">キャンセル</button>
 </div>
 <input type="file" id="jan-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handleScanPhotoFile(event)">
@@ -1860,7 +1862,7 @@ function lookupWhItem() {
     return;
   }
   if (status) {
-    status.textContent = jan.length >= 8 ? '登録されていない商品です。JANコードから商品情報を自動検索します' : '';
+    status.innerHTML = jan.length >= 8 ? `登録されていない商品です。JANコードから商品情報を自動検索します。<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-size:12px">📦 価格.comで直接確認する</a>` : '';
     status.style.color = 'var(--text-muted)';
   }
   if (jan.length >= 8) {
@@ -1912,9 +1914,11 @@ async function autoSearchWhQuickRegisterByJan(jan) {
     const r = await fetch(url);
     const d = await r.json();
 
+    const manualLink = `<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-size:12px">📦 価格.comで手動検索する</a>`;
+
     if (!r.ok || d.error) {
       console.error('価格.com検索APIエラー:', r.status, d.error);
-      if (status) { status.innerHTML = `自動検索でエラーが発生しました${formatSearchApiError(r, d)}。上の欄に型番を入力して再検索するか、商品名を直接入力してください`; status.style.color = 'var(--danger)'; }
+      if (status) { status.innerHTML = `自動検索でエラーが発生しました${formatSearchApiError(r, d)}。上の欄に型番を入力して再検索するか、商品名を直接入力してください${manualLink}`; status.style.color = 'var(--danger)'; }
       return;
     }
 
@@ -1941,14 +1945,14 @@ async function autoSearchWhQuickRegisterByJan(jan) {
         const guessNote = guessedModel ? '（型番は自動推定のため必ずご確認ください）' : '';
         if (status) { status.innerHTML = `✅ JANコードから商品名を自動取得しました。確認・修正してから登録してください${guessNote}`; status.style.color = 'var(--success)'; }
       } else {
-        if (status) { status.innerHTML = '商品が見つかりませんでした。上の欄に型番を入力して再検索するか、商品名を直接入力してください'; status.style.color = 'var(--text-muted)'; }
+        if (status) { status.innerHTML = `商品が見つかりませんでした。上の欄に型番を入力して再検索するか、商品名を直接入力してください${manualLink}`; status.style.color = 'var(--text-muted)'; }
       }
     } else {
-      if (status) { status.innerHTML = '商品が見つかりませんでした。上の欄に型番を入力して再検索するか、商品名を直接入力してください'; status.style.color = 'var(--text-muted)'; }
+      if (status) { status.innerHTML = `商品が見つかりませんでした。上の欄に型番を入力して再検索するか、商品名を直接入力してください${manualLink}`; status.style.color = 'var(--text-muted)'; }
     }
   } catch(e) {
     console.error('価格.com検索リクエスト失敗:', e);
-    if (status) { status.innerHTML = '自動検索に失敗しました（通信エラーの可能性）。上の欄に型番を入力して再検索することもできます'; status.style.color = 'var(--danger)'; }
+    if (status) { status.innerHTML = `自動検索に失敗しました（通信エラーの可能性）。上の欄に型番を入力して再検索することもできます<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-size:12px">📦 価格.comで手動検索する</a>`; status.style.color = 'var(--danger)'; }
   }
 }
 
@@ -1958,6 +1962,7 @@ async function searchWhQuickRegister() {
   const status = document.getElementById('wh-qr-status');
   if (!model) { if (status) status.textContent = '型番を入力してから検索してください'; return; }
   if (status) { status.textContent = '🔍 価格.comで商品情報を検索中...'; status.style.color = 'var(--text-muted)'; }
+  const manualLink = `<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(model)}" target="_blank" style="color:var(--gold-dark);font-size:12px">📦 価格.comで手動検索する</a>`;
 
   try {
     const query = encodeURIComponent(model + ' 価格.com');
@@ -1967,7 +1972,7 @@ async function searchWhQuickRegister() {
 
     if (!r.ok || d.error) {
       console.error('価格.com検索APIエラー:', r.status, d.error);
-      if (status) { status.innerHTML = `検索でエラーが発生しました${formatSearchApiError(r, d)}。お手数ですが商品名は手入力をお願いします。`; status.style.color = 'var(--danger)'; }
+      if (status) { status.innerHTML = `検索でエラーが発生しました${formatSearchApiError(r, d)}。お手数ですが商品名は手入力をお願いします。${manualLink}`; status.style.color = 'var(--danger)'; }
       return;
     }
 
@@ -1991,14 +1996,14 @@ async function searchWhQuickRegister() {
         if (guessedMaker && makerField) makerField.value = guessedMaker;
         if (status) { status.innerHTML = '✅ 商品名を取得しました。確認・修正してから登録してください'; status.style.color = 'var(--success)'; }
       } else {
-        if (status) { status.textContent = '商品が見つかりませんでした。商品名を手入力してください'; status.style.color = 'var(--text-muted)'; }
+        if (status) { status.innerHTML = `商品が見つかりませんでした。商品名を手入力してください${manualLink}`; status.style.color = 'var(--text-muted)'; }
       }
     } else {
-      if (status) { status.textContent = '商品が見つかりませんでした。商品名を手入力してください'; status.style.color = 'var(--text-muted)'; }
+      if (status) { status.innerHTML = `商品が見つかりませんでした。商品名を手入力してください${manualLink}`; status.style.color = 'var(--text-muted)'; }
     }
   } catch(e) {
     console.error('価格.com検索リクエスト失敗:', e);
-    if (status) { status.textContent = '検索に失敗しました（通信エラーの可能性）。商品名を手入力してください'; status.style.color = 'var(--danger)'; }
+    if (status) { status.innerHTML = `検索に失敗しました（通信エラーの可能性）。商品名を手入力してください${manualLink}`; status.style.color = 'var(--danger)'; }
   }
 }
 
@@ -2483,7 +2488,9 @@ function lookupWhConsignItem() {
     return;
   }
   if (status) {
-    status.textContent = jan.length >= 8 ? '登録されていない商品です。JANコードをご確認ください' : '';
+    status.innerHTML = jan.length >= 8
+      ? `登録されていない商品です。JANコードをご確認ください。<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-size:12px">📦 価格.comで検索する</a>`
+      : '';
     status.style.color = 'var(--text-muted)';
   }
 }
@@ -3070,13 +3077,15 @@ function previewImage() {
 function lookupProduct() {
   const jan = document.getElementById('move-jan').value.trim();
   const info = document.getElementById('move-product-info');
-  if (!jan) { info.style.display = 'none'; return; }
+  const status = document.getElementById('move-jan-status');
+  if (!jan) { info.style.display = 'none'; if (status) status.textContent = ''; return; }
   const found = products.find(p => p.jan === jan || p.name.includes(jan));
   if (found) {
     document.getElementById('move-product-name').textContent = found.name;
     document.getElementById('move-current-stock').textContent = found.stock;
     info.style.display = 'block';
     info.dataset.key = found._key;
+    if (status) status.textContent = '';
     // 梱包追加フォームにJANと商品名を自動入力
     const packJan = document.getElementById('pack-jan-sp');
     const packProduct = document.getElementById('pack-product-sp');
@@ -3084,6 +3093,11 @@ function lookupProduct() {
     if (packProduct && !packProduct.value) packProduct.value = found.name;
   } else {
     info.style.display = 'none';
+    if (status) {
+      status.innerHTML = jan.length >= 8
+        ? `登録されていない商品です。<a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-weight:600;text-decoration:underline">📦 価格.comで検索する</a>`
+        : '';
+    }
   }
 }
 
@@ -3103,7 +3117,7 @@ function lookupPackJan() {
     status.innerHTML = `✅ ${found.name}（現在庫: ${found.stock}個）`;
     status.style.color = 'var(--success)';
   } else {
-    status.textContent = '登録されていない商品です。商品名は手入力してください';
+    status.innerHTML = `登録されていない商品です。商品名は手入力してください。<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-size:12px">📦 価格.comで検索する</a>`;
     status.style.color = 'var(--text-muted)';
   }
 }
@@ -3823,6 +3837,37 @@ async function handleBulkImportFile(event) {
 let zxingReader = null;
 let scanActive = false;
 let scanRAF = null;
+let scanTorchTrack = null;
+let scanTorchOn = false;
+
+// カメラのトーチ（ライト）に対応している端末であればボタンを表示し、暗い場所でも読み取りやすくする。
+// 非対応端末（iOS Safariなど）では getCapabilities().torch が存在しないため、その場合はボタンを出さない。
+function attachTorchSupport(track) {
+  const btn = document.getElementById('scan-torch-btn');
+  if (!btn) return;
+  scanTorchTrack = track || null;
+  scanTorchOn = false;
+  let supported = false;
+  try {
+    const caps = track && track.getCapabilities ? track.getCapabilities() : null;
+    supported = !!(caps && caps.torch);
+  } catch(e) { supported = false; }
+  btn.style.display = supported ? 'flex' : 'none';
+  btn.style.background = 'rgba(255,255,255,0.15)';
+}
+
+async function toggleScanTorch() {
+  if (!scanTorchTrack) return;
+  const next = !scanTorchOn;
+  try {
+    await scanTorchTrack.applyConstraints({ advanced: [{ torch: next }] });
+    scanTorchOn = next;
+    const btn = document.getElementById('scan-torch-btn');
+    if (btn) btn.style.background = scanTorchOn ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.15)';
+  } catch(e) {
+    console.error('ライトの切り替えに失敗:', e);
+  }
+}
 
 function loadScript(src) {
   return new Promise((resolve, reject) => {
@@ -3967,11 +4012,14 @@ async function startScan(targetId) {
   if ('BarcodeDetector' in window) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+        // 解像度は高ければ良いわけではなく、要求解像度が高すぎるとオートフォーカスが合うまでに時間がかかる端末があるため、
+        // バーコード読み取りには十分な1280x720程度に下げて、フォーカスが早く安定するようにする
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
       });
       if (!scanActive) { stream.getTracks().forEach(t => t.stop()); return; }
       video.srcObject = stream;
       await video.play().catch(()=>{});
+      attachTorchSupport(stream.getVideoTracks()[0]);
       let detector;
       try {
         detector = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128','code_39','upc_a','upc_e','itf'] });
@@ -4040,11 +4088,13 @@ async function startZxingLiveScan(video) {
     hints.set(window.ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
     hints.set(window.ZXing.DecodeHintType.TRY_HARDER, true);
 
-    zxingReader = new window.ZXing.BrowserMultiFormatReader(hints, 300);
+    // 走査間隔を300msから150msに短縮し、バーコードにかざしてからの反応をより素早くする
+    zxingReader = new window.ZXing.BrowserMultiFormatReader(hints, 150);
 
-    // Safariは advanced constraints（focusModeなど）を受け付けないことがあるため指定しない
+    // Safariは advanced constraints（focusModeなど）を受け付けないことがあるため指定しない。
+    // 解像度は1280x720程度に抑え、要求解像度が高すぎることによるオートフォーカスの遅延を避ける
     const constraints = {
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
     };
 
     const decodeCallback = (result, err) => {
@@ -4054,9 +4104,11 @@ async function startZxingLiveScan(video) {
 
     if (typeof zxingReader.decodeFromConstraints === 'function') {
       await zxingReader.decodeFromConstraints(constraints, video, decodeCallback);
+      if (video.srcObject) { attachTorchSupport(video.srcObject.getVideoTracks()[0]); }
     } else if (typeof zxingReader.decodeFromVideoDevice === 'function') {
       // 古いバージョンのライブラリ用フォールバック
       await zxingReader.decodeFromVideoDevice(undefined, video, decodeCallback);
+      if (video.srcObject) { attachTorchSupport(video.srcObject.getVideoTracks()[0]); }
     } else {
       throw new Error('この端末のスキャンライブラリでは対応していません');
     }
@@ -4088,6 +4140,10 @@ function stopScan() {
     try { video.srcObject.getTracks().forEach(t => t.stop()); } catch(e) {}
     video.srcObject = null;
   }
+  scanTorchTrack = null;
+  scanTorchOn = false;
+  const torchBtn = document.getElementById('scan-torch-btn');
+  if (torchBtn) { torchBtn.style.display = 'none'; torchBtn.style.background = 'rgba(255,255,255,0.15)'; }
   document.getElementById('scan-overlay').classList.remove('show');
 }
 
