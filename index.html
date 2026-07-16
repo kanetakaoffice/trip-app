@@ -195,6 +195,9 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 .inv-subcat-group-label { font-size: 10.5px; font-weight: 700; color: var(--text-muted); margin-right: 2px; }
 .inv-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border-top: 1px solid var(--border); }
 .inv-row-list { margin-top: 6px; }
+.inv-row-expand-arrow { font-size: 9px; color: var(--text-muted); display: inline-block; transition: transform 0.15s; flex-shrink: 0; }
+.inv-row-detail { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); font-size: 12px; color: var(--text-sub); display: flex; flex-direction: column; gap: 4px; cursor: default; }
+.inv-row-detail-label { display: inline-block; min-width: 68px; font-size: 11px; color: var(--text-muted); font-weight: 600; }
 .inv-row-list .inv-row:first-child { border-top: none; }
 .scan-btn { width: 100%; padding: 16px; background: var(--gold-bg); color: var(--gold-dark); border: 1.5px solid var(--gold); border-radius: var(--radius-sm); font-size: 15px; font-weight: 600; cursor: pointer; text-align: center; margin-bottom: 12px; }
 .img-preview { width: 100%; max-height: 200px; object-fit: cover; border-radius: var(--radius-sm); margin-top: 8px; display: none; }
@@ -3972,28 +3975,47 @@ function setInvSubcatTab(cat, sub) {
 }
 
 // 在庫一覧の1商品分の行（見本Cのシンプルな行表示。写真は使わない運用のため写真列は設けない）
+// 商品ごとの行の開閉状態（型番をタップすると、メーカー・商品名・JANコード・在庫切れ見込みなどの詳細を開閉する）
+let _invRowExpanded = {};
+function toggleInvRowExpand(key) {
+  _invRowExpanded[key] = !_invRowExpanded[key];
+  renderInventoryList();
+}
+
 function buildInvRow(p) {
   const threshold = getLowStockThreshold(p);
   const stockClass = p.stock === 0 ? 'stock-zero' : p.stock <= threshold ? 'stock-low' : 'stock-ok';
   const stockLabel = p.stock === 0 ? '在庫切れ' : p.stock <= threshold ? '残りわずか' : '在庫あり';
   const forecast = estimateStockoutForecast(p);
   const forecastDays = forecast ? Math.max(0, Math.round(forecast.daysLeft)) : null;
-  const forecastHtml = forecast ? `<div style="font-size:10.5px;margin-top:2px;color:${forecastDays<=7?'var(--danger)':forecastDays<=14?'var(--warning)':'var(--text-muted)'}">📉 このペースだと約${forecastDays}日で在庫切れの見込み</div>` : '';
-  const subLabel = p.subcategory ? `・${p.subcategory}` : '';
-  const janLabel = p.jan ? ` ／ JAN:${p.jan}` : '';
-  const editBtns = isAdmin() ? `<div style="display:flex;gap:4px;flex-shrink:0"><button onclick="openProductEdit('${p._key}')" style="padding:4px 9px;background:#bfdbfe;color:#1e3a5f;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">編集</button><button onclick="deleteProduct('${p._key}')" class="delete-btn" style="padding:4px 9px;font-size:11px">削除</button></div>` : '';
-  return `
-    <div class="inv-row">
-      <div style="min-width:0;flex:1">
-        <div style="font-size:13px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}</div>
-        <div style="font-size:11px;color:var(--text-muted)">${p.maker||''}${p.model?' / '+p.model:''}${subLabel}${janLabel}</div>
+  const forecastHtml = forecast ? `<div style="font-size:11px;color:${forecastDays<=7?'var(--danger)':forecastDays<=14?'var(--warning)':'var(--text-muted)'}">📉 このペースだと約${forecastDays}日で在庫切れの見込み（直近30日の平均出庫 ${forecast.avgDaily.toFixed(1)}個/日）</div>` : '';
+  const editBtns = isAdmin() ? `<div style="display:flex;gap:6px;margin-top:6px"><button onclick="openProductEdit('${p._key}')" style="padding:5px 10px;background:#bfdbfe;color:#1e3a5f;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">編集</button><button onclick="deleteProduct('${p._key}')" class="delete-btn" style="padding:5px 10px;font-size:11px">削除</button></div>` : '';
+  // 型番を主表示にする（型番未登録の商品は代わりに商品名を主表示にする）
+  const primaryLabel = p.model || p.name;
+  const expanded = !!_invRowExpanded[p._key];
+  const detailHtml = expanded ? `
+      <div class="inv-row-detail" onclick="event.stopPropagation()">
+        <div><span class="inv-row-detail-label">商品名</span>${p.name}</div>
+        ${p.maker ? `<div><span class="inv-row-detail-label">メーカー</span>${p.maker}</div>` : ''}
+        ${p.subcategory ? `<div><span class="inv-row-detail-label">サブカテゴリ</span>${p.subcategory}</div>` : ''}
+        ${p.jan ? `<div><span class="inv-row-detail-label">JAN</span>${p.jan}</div>` : ''}
+        ${p.location ? `<div><span class="inv-row-detail-label">保管場所</span>${p.location}</div>` : ''}
         ${forecastHtml}
-      </div>
-      <div style="text-align:right;flex-shrink:0;display:flex;align-items:center;gap:8px">
-        <span style="font-size:14px;font-weight:700;color:${p.stock<=threshold?'var(--danger)':'var(--text)'}">${p.stock}個</span>
-        <span class="stock-badge ${stockClass}">${stockLabel}</span>
         ${editBtns}
+      </div>` : '';
+  return `
+    <div class="inv-row" onclick="toggleInvRowExpand('${p._key}')" style="cursor:pointer;flex-direction:column;align-items:stretch">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <div style="min-width:0;flex:1;display:flex;align-items:center;gap:6px">
+          <span class="inv-row-expand-arrow" style="${expanded?'transform:rotate(90deg)':''}">▶</span>
+          <span style="font-size:14px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${primaryLabel}</span>
+        </div>
+        <div style="text-align:right;flex-shrink:0;display:flex;align-items:center;gap:8px">
+          <span style="font-size:14px;font-weight:700;color:${p.stock<=threshold?'var(--danger)':'var(--text)'}">${p.stock}個</span>
+          <span class="stock-badge ${stockClass}">${stockLabel}</span>
+        </div>
       </div>
+      ${detailHtml}
     </div>`;
 }
 
