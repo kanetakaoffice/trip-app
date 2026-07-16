@@ -11,6 +11,10 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- 納品書PDFの直接作成（ブラウザの印刷機能を経由すると、特にiPhoneのSafariで日時・URL・ページ番号が
+     自動的に付いてしまい消せないため、アプリ内でPDFファイルそのものを作って保存・共有できるようにする） -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -176,6 +180,22 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 .stock-ok { background: var(--success-bg); color: var(--success); }
 .stock-low { background: var(--danger-bg); color: var(--danger); }
 .stock-zero { background: #1f2937; color: #fff; }
+.inv-accordion { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.inv-accordion-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
+.inv-cat-name { font-size: 14px; font-weight: 700; color: var(--text); }
+.inv-cat-count { font-size: 12px; color: var(--text-muted); margin-left: 8px; font-weight: 400; }
+.inv-accordion-arrow { font-size: 11px; color: var(--gold-dark); transition: transform 0.2s; display: inline-block; }
+.inv-accordion.open .inv-accordion-arrow { transform: rotate(180deg); }
+.inv-subcat-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 12px 0; }
+.inv-subcat-tab { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; background: var(--gold-bg); color: var(--gold-dark); cursor: pointer; }
+.inv-subcat-tab.active { background: #3a3a3a; color: #fff; }
+.inv-subcat-tabs-grouped { padding: 8px 12px 2px; }
+.inv-subcat-tabs-grouped > .inv-subcat-tab { margin-bottom: 6px; display: inline-block; }
+.inv-subcat-group-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 6px; }
+.inv-subcat-group-label { font-size: 10.5px; font-weight: 700; color: var(--text-muted); margin-right: 2px; }
+.inv-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border-top: 1px solid var(--border); }
+.inv-row-list { margin-top: 6px; }
+.inv-row-list .inv-row:first-child { border-top: none; }
 .scan-btn { width: 100%; padding: 16px; background: var(--gold-bg); color: var(--gold-dark); border: 1.5px solid var(--gold); border-radius: var(--radius-sm); font-size: 15px; font-weight: 600; cursor: pointer; text-align: center; margin-bottom: 12px; }
 .img-preview { width: 100%; max-height: 200px; object-fit: cover; border-radius: var(--radius-sm); margin-top: 8px; display: none; }
 #scan-overlay { display: none; position: fixed; inset: 0; background: #000; z-index: 300; flex-direction: column; align-items: center; }
@@ -786,13 +806,18 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <div class="field-divider"></div>
         <div class="field" style="padding-top:16px">
           <div class="field-label">カテゴリ</div>
-          <select id="inv-category">
+          <select id="inv-category" onchange="handleCategorySelectChange('inv-category','inv-subcategory')">
             <option value="家電">家電</option>
             <option value="家具">家具</option>
             <option value="車用品">車用品</option>
             <option value="ゴルフウェア">ゴルフウェア</option>
             <option value="ピラティスウェア">ピラティスウェア</option>
           </select>
+        </div>
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">サブカテゴリ</div>
+          <select id="inv-subcategory"></select>
         </div>
         <div class="field-divider"></div>
         <div class="field" style="padding-top:16px">
@@ -890,6 +915,11 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
           <div class="field-label">メモ</div>
           <input type="text" id="move-memo" placeholder="理由・備考など">
         </div>
+        <div class="field-divider"></div>
+        <div class="field" style="padding-top:16px">
+          <div class="field-label">傷・つぶれの記録（任意）</div>
+          <div id="move-damage-section"></div>
+        </div>
       </div>
       <div class="btn-row">
         <button class="btn btn-gold" onclick="submitMove()">入出庫を記録する</button>
@@ -935,15 +965,6 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         </div>
       </div>
       <input type="text" id="inv-search" placeholder="🔍 商品名・JANコードで検索" oninput="renderInventoryList()" style="margin-bottom:10px">
-      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
-        <button onclick="setInvCatFilter(null)" id="inv-cat-all" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #3a3a3a;border-radius:20px;background:#3a3a3a;color:#fff;cursor:pointer">すべて</button>
-        <button onclick="setInvCatFilter('家電')" id="inv-cat-家電" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">家電</button>
-        <button onclick="setInvCatFilter('家具')" id="inv-cat-家具" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">家具</button>
-        <button onclick="setInvCatFilter('車用品')" id="inv-cat-車用品" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">車用品</button>
-        <button onclick="setInvCatFilter('ゴルフウェア')" id="inv-cat-ゴルフウェア" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">ゴルフウェア</button>
-        <button onclick="setInvCatFilter('ピラティスウェア')" id="inv-cat-ピラティスウェア" style="padding:4px 12px;font-size:11px;font-weight:600;border:1.5px solid #d1d5db;border-radius:20px;background:none;color:#909090;cursor:pointer">ピラティスウェア</button>
-
-      </div>
       <div id="inv-list-container"></div>
       <div id="inv-list-empty" class="empty-state" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/><line x1="12" y1="12" x2="12" y2="16"/></svg>
@@ -1205,6 +1226,18 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
               <input type="number" id="wh-qr-stock" placeholder="0">
             </div>
           </div>
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <div class="field" style="flex:1">
+              <div class="field-label" style="font-size:11px">カテゴリー</div>
+              <select id="wh-qr-category" onchange="handleCategorySelectChange('wh-qr-category','wh-qr-subcategory')" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;width:100%">
+                <option value="家電">家電</option><option value="家具">家具</option><option value="車用品">車用品</option><option value="ゴルフウェア">ゴルフウェア</option><option value="ピラティスウェア">ピラティスウェア</option>
+              </select>
+            </div>
+            <div class="field" style="flex:1">
+              <div class="field-label" style="font-size:11px">サブカテゴリー</div>
+              <select id="wh-qr-subcategory" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;width:100%"></select>
+            </div>
+          </div>
           <div style="display:flex;gap:8px">
             <button onclick="submitWhQuickRegister()" style="flex:1;padding:9px;background:var(--gold);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">登録して追加</button>
             <button onclick="cancelWhQuickRegister()" style="flex:1;padding:9px;background:var(--white);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:13px;cursor:pointer">キャンセル</button>
@@ -1345,10 +1378,12 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     <div id="wh-deliv-detail-title" style="font-size:12px;color:var(--text-muted);margin-bottom:12px"></div>
     <div id="wh-deliv-detail-items"></div>
     <div id="wh-deliv-detail-total" style="text-align:right;font-size:14px;font-weight:700;color:var(--text);margin-top:10px;padding-top:10px;border-top:1.5px solid var(--border)"></div>
+    <div id="wh-deliv-detail-status" style="display:none;font-size:12px;padding:8px 10px;border-radius:8px;margin-top:10px"></div>
     <div style="display:flex;gap:10px;margin-top:18px">
-      <button onclick="printWhDelivDetailFromModal()" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8d8d8,#a8a8a8);color:#1a1a1a;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">🖨 印刷する</button>
+      <button id="wh-deliv-detail-pdf-btn" onclick="pdfWhDelivDetailFromModal()" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8d8d8,#a8a8a8);color:#1a1a1a;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">📄 PDFを保存・共有する</button>
       <button onclick="closeWhDelivDetailModal()" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">閉じる</button>
     </div>
+    <button onclick="printWhDelivDetailFromModal()" style="display:block;width:100%;margin-top:8px;background:none;border:none;color:var(--text-muted);font-size:11px;text-decoration:underline;cursor:pointer;padding:4px">従来の印刷機能を使う（ブラウザの印刷ダイアログ）</button>
   </div>
 </div>
 
@@ -1535,9 +1570,12 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       <input type="number" id="prod-edit-cost" min="0"></div>
     <div class="field-divider"></div>
     <div class="field" style="padding-top:12px"><div class="field-label">カテゴリ</div>
-      <select id="prod-edit-category" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;width:100%">
+      <select id="prod-edit-category" onchange="handleCategorySelectChange('prod-edit-category','prod-edit-subcategory')" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;width:100%">
         <option>家電</option><option>家具</option><option>車用品</option><option>ゴルフウェア</option><option>ピラティスウェア</option>
       </select></div>
+    <div class="field-divider"></div>
+    <div class="field" style="padding-top:12px"><div class="field-label">サブカテゴリ</div>
+      <select id="prod-edit-subcategory" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;width:100%"></select></div>
     <div class="field-divider"></div>
     <div class="field" style="padding-top:12px"><div class="field-label">保管場所</div>
       <input type="text" id="prod-edit-location"></div>
@@ -1681,6 +1719,56 @@ window._getStockMoves = () => stockMoves;
 
 // ── 在庫管理 ──
 let products = [], stockMoves = [], wholesaleClients = [], overseasClients = [];
+
+// カテゴリー・サブカテゴリーの定義。サブカテゴリー名は仮の案（正式名称が決まり次第ここだけ書き換えれば全画面に反映される）
+const CATEGORY_LIST = ['家電','家具','車用品','ゴルフウェア','ピラティスウェア'];
+const CATEGORY_SUBCATS = {
+  '家電': ['映像機器','生活家電','調理家電','OA機器','カメラ・フィルム','美容家電','モバイル端末'],
+  // 家具・車用品はサブカテゴリー未決定のため、決まり次第ここに追加する（それまでは分類なしで表示）
+  '家具': [],
+  '車用品': [],
+  // ゴルフウェアは項目数が多いため、メンズ/レディースでグループ化する（値自体は「メンズ・◯◯」のような1つの文字列のまま）
+  'ゴルフウェア': {
+    'メンズ': ['メンズ・ポロシャツ','メンズ・モックネック','メンズ・スウェット','メンズ・ブルゾン','メンズ・パンツ','メンズ・ショートパンツ','メンズ・靴下','メンズ・キャップ','メンズ・バッグ','メンズ・ポーチ'],
+    'レディース': ['レディース・ポロシャツ','レディース・カットソー','レディース・ノースリーブ','レディース・セーター','レディース・プルオーバー','レディース・ワンピース','レディース・スカート','レディース・ショートパンツ','レディース・靴下','レディース・キャップ','レディース・バッグ','レディース・ポーチ'],
+  },
+  'ピラティスウェア': ['半袖','長袖','ノースリーブ','スポーツブラ','アウター','レギンス','靴下','タオル'],
+};
+// グループ化されているカテゴリー（例：ゴルフウェア）でも、既存コードが期待するフラットな配列を返す
+function getSubcatsFor(cat) {
+  const entry = CATEGORY_SUBCATS[cat];
+  if (!entry) return [];
+  return Array.isArray(entry) ? entry : Object.values(entry).flat();
+}
+// グループ化されている場合のみ、そのグループ構成（{グループ名: [項目...]}）を返す。フラットなカテゴリーはnull
+function getSubcatGroupsFor(cat) {
+  const entry = CATEGORY_SUBCATS[cat];
+  return (entry && !Array.isArray(entry)) ? entry : null;
+}
+// カテゴリー選択に連動して、対応するサブカテゴリー<select>の選択肢を作り直す。
+// selectedValはできるだけ復元したい値（商品編集時など）。一致しない場合は先頭を選ぶ。
+function populateSubcatSelect(subcatSelId, cat, selectedVal) {
+  const sel = document.getElementById(subcatSelId);
+  if (!sel) return;
+  const groups = getSubcatGroupsFor(cat);
+  const subs = getSubcatsFor(cat);
+  if (groups) {
+    // グループ化されているカテゴリー（例：ゴルフウェア）は<optgroup>で見出しを分け、表示名からはグループ名の接頭辞を外す
+    sel.innerHTML = Object.entries(groups).map(([g, items]) =>
+      `<optgroup label="${g}">${items.map(s => `<option value="${s}">${s.startsWith(g + '・') ? s.slice(g.length + 1) : s}</option>`).join('')}</optgroup>`
+    ).join('');
+  } else {
+    // まだサブカテゴリーが決まっていないカテゴリーは、空の選択肢ではなく分かりやすい表示にしておく
+    sel.innerHTML = subs.length
+      ? subs.map(s => `<option value="${s}">${s}</option>`).join('')
+      : '<option value="">（サブカテゴリー未設定）</option>';
+  }
+  if (selectedVal && subs.includes(selectedVal)) sel.value = selectedVal;
+}
+function handleCategorySelectChange(catSelId, subcatSelId) {
+  const cat = document.getElementById(catSelId)?.value || CATEGORY_LIST[0];
+  populateSubcatSelect(subcatSelId, cat);
+}
 // 納品書などの印刷書類に載せる自社情報。角印画像は用意でき次第 COMPANY_SEAL_DATA_URI に base64 data URI を設定する。
 const COMPANY_INFO = { name: '株式会社KANETAKA', zip: '453-0811', address1: '愛知県名古屋市中村区太閤通3-25-1', address2: 'AROME DE JOIE 908', tel: '080-2414-8907' };
 let COMPANY_SEAL_DATA_URI = 'data:image/png;base64,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';
@@ -1765,6 +1853,7 @@ function showInvScreen(name) {
   // 画面ごとの追加処理
   if (name === 'inv-add') {
     renderMakerSelectUI('inv');
+    populateSubcatSelect('inv-subcategory', document.getElementById('inv-category')?.value || CATEGORY_LIST[0]);
     const listCol = document.getElementById('inv-add-list-col');
     if (listCol) {
       listCol.style.display = window.innerWidth >= 768 ? 'block' : 'none';
@@ -1795,6 +1884,7 @@ function showInvScreen(name) {
       packCol.style.display = window.innerWidth >= 768 ? 'block' : 'none';
       if (window.innerWidth >= 768) loadPackItems().then(renderMovePackList);
     }
+    renderMoveDamageSection();
   }
   if (name === 'inv-wholesale') {
     switchWhTab('deliv');
@@ -2034,6 +2124,9 @@ function showWhQuickRegister(jan) {
   const panel = document.getElementById('wh-quick-register');
   if (panel) panel.style.display = 'block';
   renderMakerSelectUI('wh-qr');
+  const catEl = document.getElementById('wh-qr-category');
+  if (catEl) catEl.selectedIndex = 0;
+  populateSubcatSelect('wh-qr-subcategory', CATEGORY_LIST[0]);
 }
 function hideWhQuickRegister() {
   _whQuickRegisterJan = '';
@@ -2042,6 +2135,9 @@ function hideWhQuickRegister() {
   if (panel) panel.style.display = 'none';
   ['wh-qr-model','wh-qr-name','wh-qr-maker','wh-qr-stock'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   renderMakerSelectUI('wh-qr');
+  const catEl = document.getElementById('wh-qr-category');
+  if (catEl) catEl.selectedIndex = 0;
+  populateSubcatSelect('wh-qr-subcategory', CATEGORY_LIST[0]);
   const st = document.getElementById('wh-qr-status'); if (st) st.textContent = '';
 }
 function cancelWhQuickRegister() {
@@ -2176,7 +2272,8 @@ async function submitWhQuickRegister() {
     stock,
     lowStock: null,
     cost: 0,
-    category: '家電',
+    category: document.getElementById('wh-qr-category')?.value || '家電',
+    subcategory: document.getElementById('wh-qr-subcategory')?.value || '',
     location: '',
     memo: '納品書作成画面から新規登録',
     image: '',
@@ -2283,8 +2380,9 @@ function updateWhDelivTotalDisplay() {
   if (!totalEl) return;
   if (!_whDelivItems.length) { totalEl.style.display = 'none'; return; }
   const total = _whDelivItems.reduce((s,it) => s + it.amount, 0);
+  const totalQty = _whDelivItems.reduce((s,it) => s + (it.qty || 0), 0);
   totalEl.style.display = 'flex';
-  totalEl.innerHTML = `<span>合計</span><span>¥${total.toLocaleString('ja-JP')}</span>`;
+  totalEl.innerHTML = `<span>合計（${totalQty}個）</span><span>¥${total.toLocaleString('ja-JP')}</span>`;
 }
 
 // ── 納品書作成の下書き自動保存 ──
@@ -2371,8 +2469,69 @@ function renderWhDelivItems() {
         </div>
       </div>
       ${it.qty > 1 ? `<button onclick="splitWhDelivItem(${idx})" style="margin-top:6px;background:none;border:none;color:var(--text-muted);font-size:11px;text-decoration:underline;cursor:pointer;padding:0">傷・潰れなどで1個だけ単価を変える</button>` : ''}
+      ${it._splitFrom != null ? whItemDamageSectionHtml(it, idx) : ''}
     </div>`).join('');
   updateWhDelivTotalDisplay();
+}
+
+// 傷・潰れ分の行（splitWhDelivItemで切り分けた行）にだけ表示する、写真 or 詳細を選んで記録するUI。
+// どちらか一方のみを残す（納品書には詳細のテキストだけが載り、写真は社内記録用としてのみ保持する）
+function whItemDamageSectionHtml(it, idx) {
+  const modeBtnStyle = active => `flex:1;padding:6px;font-size:11px;font-weight:600;border-radius:6px;cursor:pointer;border:1.5px solid ${active?'#3a3a3a':'var(--border)'};background:${active?'#3a3a3a':'var(--white)'};color:${active?'#fff':'var(--text)'}`;
+  return `
+    <div style="margin-top:8px;padding:8px 10px;background:var(--gold-bg);border-radius:6px">
+      <div style="font-size:11px;font-weight:700;color:var(--text-sub);margin-bottom:6px">傷・つぶれの記録（納品書には詳細のテキストのみ反映されます。写真は社内記録用です）</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px">
+        <button onclick="setWhItemDamageMode(${idx},'detail')" style="${modeBtnStyle(it.damageMode==='detail')}">📝 詳細を入力</button>
+        <button onclick="setWhItemDamageMode(${idx},'photo')" style="${modeBtnStyle(it.damageMode==='photo')}">📷 写真を添付</button>
+      </div>
+      ${it.damageMode === 'detail' ? `<input type="text" value="${(it.damageDetail||'').replace(/"/g,'&quot;')}" oninput="updateWhItemDamageDetail(${idx}, this.value)" placeholder="例：側面に傷、角がつぶれ" style="width:100%;padding:6px 8px;font-size:12px;border:1.5px solid var(--border);border-radius:6px">` : ''}
+      ${it.damageMode === 'photo' ? `
+        <input type="file" id="wh-item-damage-photo-${idx}" accept="image/*" capture="environment" style="display:none" onchange="handleWhItemDamagePhoto(${idx}, event)">
+        <button onclick="document.getElementById('wh-item-damage-photo-${idx}').click()" style="padding:6px 10px;font-size:12px;border:1.5px solid var(--border);border-radius:6px;background:var(--white);cursor:pointer">📷 写真を撮る・選択</button>
+        ${it.damagePhoto
+          ? `<div style="margin-top:6px;display:flex;align-items:center;gap:8px"><img src="${it.damagePhoto}" style="width:56px;height:56px;object-fit:cover;border-radius:6px"><button onclick="clearWhItemDamagePhoto(${idx})" style="background:none;border:none;color:var(--danger);font-size:11px;text-decoration:underline;cursor:pointer">削除</button></div>`
+          : `<div style="font-size:11px;color:var(--text-muted);margin-top:4px">まだ写真がありません</div>`}
+      ` : ''}
+    </div>`;
+}
+
+function setWhItemDamageMode(idx, mode) {
+  const it = _whDelivItems[idx];
+  if (!it) return;
+  it.damageMode = (it.damageMode === mode) ? null : mode; // 同じボタンをもう一度押すと選択解除
+  // 写真・詳細のどちらか一方だけを残す（両方は持たせない）
+  if (it.damageMode !== 'detail') it.damageDetail = '';
+  if (it.damageMode !== 'photo') it.damagePhoto = '';
+  renderWhDelivItems();
+  saveWhDelivDraft();
+}
+
+function updateWhItemDamageDetail(idx, value) {
+  const it = _whDelivItems[idx];
+  if (!it) return;
+  it.damageDetail = value;
+  saveWhDelivDraftDebounced();
+}
+
+async function handleWhItemDamagePhoto(idx, event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const it = _whDelivItems[idx];
+  if (!it) return;
+  try {
+    it.damagePhoto = await compressImageFile(file, 1000, 0.6);
+    renderWhDelivItems();
+    saveWhDelivDraft();
+  } catch (e) { showToast('写真の読み込みに失敗しました'); }
+}
+
+function clearWhItemDamagePhoto(idx) {
+  const it = _whDelivItems[idx];
+  if (!it) return;
+  it.damagePhoto = '';
+  renderWhDelivItems();
+  saveWhDelivDraft();
 }
 
 // 納品書を発行：明細ごとに出庫記録＋在庫減算、まとめて売上（未入金）を1件登録し、印刷用の納品書を開く
@@ -2428,7 +2587,10 @@ async function submitWhDeliverySlip() {
     await Promise.all(_whDelivItems.map(it => fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
       productKey: it.productKey, productName: it.name, model: it.model || '', jan: it.jan,
       type: 'out', channel: '卸売', client, qty: it.qty, unitPrice: it.unitPrice, amount: it.amount,
-      slipId, date, memo: '', stockBefore: stockBeforeByProduct[it.productKey], stockAfter: stockBeforeByProduct[it.productKey] - newQtyByProduct[it.productKey], createdAt: Date.now()
+      slipId, date, memo: '', stockBefore: stockBeforeByProduct[it.productKey], stockAfter: stockBeforeByProduct[it.productKey] - newQtyByProduct[it.productKey], createdAt: Date.now(),
+      // 傷・つぶれの記録：詳細（テキスト）は納品書にも表示されるが、写真は社内記録用のみで納品書には出さない
+      damageDetail: it.damageMode === 'detail' ? (it.damageDetail || '') : '',
+      damagePhoto: it.damageMode === 'photo' ? (it.damagePhoto || '') : ''
     })})));
 
     await window._fbPushSales({ type: 'sales', date, salesType: '国内（請求書）', client, amount: total, due: '', slipId, note: `卸売納品書（${slipId}）より自動登録`, payStatus: '未入金', submittedAt: new Date().toLocaleDateString('ja-JP') });
@@ -2461,15 +2623,11 @@ function openWhDelivHistoryAccordion() {
   if (section) section.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
-// 納品書の印刷用ドキュメントを開く（取引先名・型番・数量・単価・金額のみの簡易リスト）。
-// 商品数が多い（30〜50件程度）場合にも対応できるよう、1列目が用紙の縦半分あたりまで埋まったら
-// 自動的に2列目へ続きが入るようにする（件数ではなく実際の高さで判定するため、印刷用ウィンドウ側で
-// 一度隠して高さを測ってから、収まる分だけ1列目に、はみ出す分を2列目に振り分けている）
-function openDeliverySlipPrint(client, date, items) {
-  // 単価は商談しながら決めるため、納品書には金額・小計・消費税・合計金額は表示しない（型番・数量・単価のみ）
-  const html = `
-    <style>
-      .ds-wrap { font-size:11px; }
+// 納品書の見た目（取引先名・型番・数量・単価のみの簡易レイアウト）を組み立てる。
+// ブラウザ印刷用のポップアップ、アプリ内で直接PDFを作る場合のオフスクリーン描画のどちらからも
+// 同じ見た目で使えるよう、HTML/CSSの組み立てと、列分割の描画処理を分けて共通化してある。
+const DS_STYLE = `
+      .ds-wrap { font-size:11px; background:#fff; }
       .ds-title-row { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; }
       .ds-title { font-size:17px; font-weight:700; letter-spacing:0.15em; }
       .ds-date { font-size:10px; color:#555; }
@@ -2485,10 +2643,17 @@ function openDeliverySlipPrint(client, date, items) {
       .ds-col { flex:1; min-width:0; }
       .ds-row { display:flex; align-items:baseline; gap:6px; padding:4px 0; margin-bottom:3px; border-bottom:1px solid #ccc; font-size:10.5px; }
       .ds-row.ds-headrow { font-weight:700; border-bottom:1.5px solid #999; margin-bottom:5px; }
+      .ds-row-wrap { border-bottom:1px solid #ccc; margin-bottom:3px; padding-bottom:2px; }
+      .ds-row-wrap .ds-row { border-bottom:none; margin-bottom:0; padding-bottom:0; }
+      .ds-note { font-size:9px; color:#555; padding-left:2px; margin-top:-2px; }
       .ds-model { flex:2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
       .ds-qty { flex:0.6; text-align:right; }
-      .ds-price { flex:0.9; text-align:right; }
-    </style>
+      .ds-price { flex:0.9; text-align:right; }`;
+
+// 単価は商談しながら決めるため、納品書には金額・小計・消費税・合計金額は表示しない（型番・数量・単価のみ）
+function dsSlipBodyHtml(client, date) {
+  return `
+    <style>${DS_STYLE}</style>
     <div class="ds-wrap">
       <div class="ds-title-row">
         <div class="ds-title">納品書</div>
@@ -2511,76 +2676,172 @@ function openDeliverySlipPrint(client, date, items) {
       </div>
       <div id="ds-measure" style="position:absolute;visibility:hidden;left:-9999px;top:0;width:50%"></div>
       <div id="ds-final"></div>
-    </div>
-    <script>
-    (function() {
-      const items = ${JSON.stringify(items)};
-      const headerHtml = '<div class="ds-row ds-headrow"><span class="ds-model">型番</span><span class="ds-qty">数量</span><span class="ds-price">単価</span></div>';
-      const rowHtml = function(it) {
-        const priceDisp = it.unitPrice ? ('¥' + it.unitPrice.toLocaleString('ja-JP')) : '';
-        return '<div class="ds-row"><span class="ds-model">' + (it.model||'') + '</span><span class="ds-qty">' + it.qty + '</span><span class="ds-price">' + priceDisp + '</span></div>';
-      };
-      const finalEl = document.getElementById('ds-final');
-      const measureEl = document.getElementById('ds-measure');
+    </div>`;
+}
 
-      // 用紙の縦半分（A4想定）に収まる高さをmm→px換算で測り、そこから取引先名・日付などの見出し部分を
-      // 差し引いた「残り」を、明細1列目に割り当てられる高さとする
-      const ruler = document.createElement('div');
-      ruler.style.cssText = 'position:absolute;visibility:hidden;height:100mm;width:1px;';
-      document.body.appendChild(ruler);
-      const pxPerMm = ruler.getBoundingClientRect().height / 100;
-      document.body.removeChild(ruler);
-      const HALF_PAGE_MM = 148; // A4（297mm）の約半分
-      const wrapTop = document.querySelector('.ds-wrap').getBoundingClientRect().top;
-      const usedBeforeItems = document.getElementById('ds-final').getBoundingClientRect().top - wrapTop; // 見出し部分の高さ
+// 商品数が多い（30〜50件程度）場合にも対応できるよう、1列目が用紙の縦半分あたりまで埋まったら
+// 自動的に2列目へ続きが入るようにする（件数ではなく実際の高さで判定するため、一度隠して高さを
+// 測ってから、収まる分だけ1列目に、はみ出す分を2列目に振り分けている）。
+// 印刷用ポップアップ・オフスクリーン描画のどちらのdocumentに対しても使えるよう、対象のdocumentを引数で受け取る。
+function renderDeliverySlipColumns(doc, items) {
+  const headerHtml = '<div class="ds-row ds-headrow ds-measurable"><span class="ds-model">型番</span><span class="ds-qty">数量</span><span class="ds-price">単価</span></div>';
+  const rowHtml = function(it) {
+    const priceDisp = it.unitPrice ? ('¥' + it.unitPrice.toLocaleString('ja-JP')) : '';
+    // 傷・つぶれの詳細（テキスト）が入力されている行だけ、注記として下に表示する（写真は納品書には出さない）
+    const noteHtml = it.damageDetail ? '<div class="ds-note">※' + it.damageDetail + '</div>' : '';
+    return '<div class="ds-row-wrap ds-measurable"><div class="ds-row"><span class="ds-model">' + (it.model||'') + '</span><span class="ds-qty">' + it.qty + '</span><span class="ds-price">' + priceDisp + '</span></div>' + noteHtml + '</div>';
+  };
+  const finalEl = doc.getElementById('ds-final');
+  const measureEl = doc.getElementById('ds-measure');
 
-      measureEl.innerHTML = headerHtml + items.map(rowHtml).join('');
-      const allRowEls = measureEl.querySelectorAll('.ds-row');
-      const headerH = allRowEls[0].getBoundingClientRect().height;
-      const rowHeights = [];
-      for (let i = 1; i < allRowEls.length; i++) rowHeights.push(allRowEls[i].getBoundingClientRect().height);
-      const oneColumnHeight = headerH + rowHeights.reduce(function(s,h){ return s+h; }, 0);
-      // 万一マイナスなどの異常値になっても最低限の行数は1列に残るようフロアを設ける
-      const targetHeightPx = Math.max((pxPerMm * HALF_PAGE_MM) - usedBeforeItems - 12, headerH * 5);
+  // 用紙の縦半分（A4想定）に収まる高さをmm→px換算で測り、そこから取引先名・日付などの見出し部分を
+  // 差し引いた「残り」を、明細1列目に割り当てられる高さとする
+  const ruler = doc.createElement('div');
+  ruler.style.cssText = 'position:absolute;visibility:hidden;height:100mm;width:1px;';
+  doc.body.appendChild(ruler);
+  const pxPerMm = ruler.getBoundingClientRect().height / 100;
+  doc.body.removeChild(ruler);
+  const HALF_PAGE_MM = 148; // A4（297mm）の約半分
+  const wrapTop = doc.querySelector('.ds-wrap').getBoundingClientRect().top;
+  const usedBeforeItems = finalEl.getBoundingClientRect().top - wrapTop; // 見出し部分の高さ
 
-      let splitIdx = items.length; // 既定は1列のまま（全部が目安の高さに収まる場合）
-      if (oneColumnHeight > targetHeightPx) {
-        // 2列に分ける必要がある場合は、1列目を目安の高さまで詰め込むのではなく、
-        // 2列とも見出し込みでなるべく同じ高さになるよう分割点を探す（2列目だけ長くなるのを防ぐ）
-        const idealPerColumn = (oneColumnHeight + headerH) / 2;
-        let cum = headerH;
-        for (let i = 0; i < rowHeights.length; i++) {
-          cum += rowHeights[i];
-          if (cum >= idealPerColumn) { splitIdx = i + 1; break; }
-        }
-        splitIdx = Math.max(1, Math.min(splitIdx, items.length - 1));
-      }
-      measureEl.innerHTML = '';
+  measureEl.innerHTML = headerHtml + items.map(rowHtml).join('');
+  const allRowEls = measureEl.querySelectorAll('.ds-measurable');
+  const headerH = allRowEls[0].getBoundingClientRect().height;
+  const rowHeights = [];
+  for (let i = 1; i < allRowEls.length; i++) rowHeights.push(allRowEls[i].getBoundingClientRect().height);
+  const oneColumnHeight = headerH + rowHeights.reduce(function(s,h){ return s+h; }, 0);
+  // 万一マイナスなどの異常値になっても最低限の行数は1列に残るようフロアを設ける
+  const targetHeightPx = Math.max((pxPerMm * HALF_PAGE_MM) - usedBeforeItems - 12, headerH * 5);
 
-      const col1 = items.slice(0, splitIdx);
-      const col2 = items.slice(splitIdx);
-      let colsHtml = '<div class="ds-col">' + headerHtml + col1.map(rowHtml).join('') + '</div>';
-      if (col2.length) colsHtml += '<div class="ds-col">' + headerHtml + col2.map(rowHtml).join('') + '</div>';
-      finalEl.innerHTML = '<div class="ds-cols-wrap">' + colsHtml + '</div>';
-    })();
-    <\/script>`;
+  let splitIdx = items.length; // 既定は1列のまま（全部が目安の高さに収まる場合）
+  if (oneColumnHeight > targetHeightPx) {
+    // 2列に分ける必要がある場合は、1列目を目安の高さまで詰め込むのではなく、
+    // 2列とも見出し込みでなるべく同じ高さになるよう分割点を探す（2列目だけ長くなるのを防ぐ）
+    const idealPerColumn = (oneColumnHeight + headerH) / 2;
+    let cum = headerH;
+    for (let i = 0; i < rowHeights.length; i++) {
+      cum += rowHeights[i];
+      if (cum >= idealPerColumn) { splitIdx = i + 1; break; }
+    }
+    splitIdx = Math.max(1, Math.min(splitIdx, items.length - 1));
+  }
+  measureEl.innerHTML = '';
+
+  const col1 = items.slice(0, splitIdx);
+  const col2 = items.slice(splitIdx);
+  let colsHtml = '<div class="ds-col">' + headerHtml + col1.map(rowHtml).join('') + '</div>';
+  if (col2.length) colsHtml += '<div class="ds-col">' + headerHtml + col2.map(rowHtml).join('') + '</div>';
+  finalEl.innerHTML = '<div class="ds-cols-wrap">' + colsHtml + '</div>';
+}
+
+// 納品書の印刷用ドキュメントを開く（従来のブラウザ印刷機能を使う場合。実際に紙のプリンターに
+// 送りたい場合などのために残しているが、iPhoneのSafariなどではPDF化時に日時・URL・ページ番号が
+// 付いてしまうため、通常は下のexportDeliverySlipPdf（アプリ内で直接PDFを作る方式）を使う）
+function openDeliverySlipPrint(client, date, items) {
+  const html = dsSlipBodyHtml(client, date);
   const w = window.open('', '_blank');
   w.document.write(buildPrintHtml(`納品書_${client}_${date}`, html));
   w.document.close();
+  renderDeliverySlipColumns(w.document, items);
 }
 
-// 発行済みの納品書を、保存されている出庫記録から再構成して印刷する（履歴一覧から呼ばれる）
-function printDeliverySlip(slipId) {
+// 納品書をブラウザの印刷機能を経由せず、アプリ内で直接PDFファイルとして作成し、
+// 対応環境では共有シート（AirDrop・保存・送信など）、それ以外ではダウンロードで保存する。
+// html2canvasで実際の表示内容をそのまま画像化してPDFに埋め込むため、ブラウザ・OSが印刷時に
+// 自動で付け足す日時・URL・ページ番号などは一切含まれない。
+async function exportDeliverySlipPdf(client, date, items, statusCb) {
+  const setStatus = statusCb || function(){};
+  if (typeof html2canvas === 'undefined' || !window.jspdf) {
+    setStatus('PDF作成に必要な機能の読み込みに失敗しました。通信環境をご確認のうえ、しばらくしてからもう一度お試しください。', true);
+    return;
+  }
+  const container = document.createElement('div');
+  container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:#fff;padding:24px;font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;color:#1a1a1a;z-index:-1;';
+  container.innerHTML = dsSlipBodyHtml(client, date);
+  document.body.appendChild(container);
+  setStatus('PDFを作成しています…');
+  try {
+    renderDeliverySlipColumns(document, items);
+    const canvas = await html2canvas(container, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
+    const jsPDF = window.jspdf.jsPDF;
+    const pageWmm = 210, pageHmm = 297, marginMm = 6;
+    const usableWmm = pageWmm - marginMm * 2;
+    const usableHmm = pageHmm - marginMm * 2;
+    const pxPerMmW = canvas.width / usableWmm;
+    const pageHeightPx = Math.max(1, Math.floor(usableHmm * pxPerMmW));
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+    let renderedPx = 0;
+    let first = true;
+    while (renderedPx < canvas.height) {
+      const sliceHeightPx = Math.min(pageHeightPx, canvas.height - renderedPx);
+      const sliceCanvas = document.createElement('canvas');
+      sliceCanvas.width = canvas.width;
+      sliceCanvas.height = sliceHeightPx;
+      sliceCanvas.getContext('2d').drawImage(canvas, 0, renderedPx, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
+      const sliceHmm = sliceHeightPx / pxPerMmW;
+      if (!first) pdf.addPage();
+      pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', marginMm, marginMm, usableWmm, sliceHmm);
+      renderedPx += sliceHeightPx;
+      first = false;
+    }
+    const fileName = `納品書_${client}_${date}`.replace(/[\\/:*?"<>|]/g, '_') + '.pdf';
+    const blob = pdf.output('blob');
+    try {
+      const file = new File([blob], fileName, { type: 'application/pdf' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: fileName });
+        setStatus('');
+      } else {
+        pdf.save(fileName);
+        setStatus('PDFを保存しました（ダウンロード先をご確認ください）');
+      }
+    } catch (shareErr) {
+      if (shareErr && shareErr.name === 'AbortError') {
+        setStatus('');
+      } else {
+        console.error(shareErr);
+        pdf.save(fileName);
+        setStatus('共有できなかったため、PDFをダウンロードしました');
+      }
+    }
+  } catch (e) {
+    console.error(e);
+    setStatus('PDFの作成に失敗しました。通信環境をご確認のうえ、もう一度お試しください。', true);
+  } finally {
+    document.body.removeChild(container);
+  }
+}
+
+// 発行済みの納品書について、保存されている出庫記録から取引先・日付・明細を再構成する
+// （印刷・PDF保存のどちらからも同じ内容を使えるよう共通化）
+function buildDeliverySlipDataFromSlipId(slipId) {
   const moves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'out')
     .sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
-  if (!moves.length) { showToast('対象の納品書が見つかりません'); return; }
+  if (!moves.length) return null;
   const items = moves.map(m => ({
     // 型番は納品書の明細でその場修正できるようになったため、記録済みの値を優先する。
     // それより前に発行された古い記録にはmodelが保存されていないため、その場合のみ商品マスタから補う
     model: m.model || (products.find(p => p._key === m.productKey) || {}).model || '',
-    qty: m.qty, unitPrice: m.unitPrice, amount: m.amount
+    qty: m.qty, unitPrice: m.unitPrice, amount: m.amount,
+    // 傷・つぶれの詳細（テキスト）のみ納品書に載せる。写真（damagePhoto）はここで一切扱わない
+    damageDetail: m.damageDetail || ''
   }));
-  openDeliverySlipPrint(moves[0].client, moves[0].date, items);
+  return { client: moves[0].client, date: moves[0].date, items };
+}
+
+// 発行済みの納品書を、従来のブラウザ印刷機能で開く（紙のプリンターに直接送りたい場合など）
+function printDeliverySlip(slipId) {
+  const data = buildDeliverySlipDataFromSlipId(slipId);
+  if (!data) { showToast('対象の納品書が見つかりません'); return; }
+  openDeliverySlipPrint(data.client, data.date, data.items);
+}
+
+// 発行済みの納品書を、アプリ内で直接PDFファイルとして作成し保存・共有する（通常はこちらを使う）
+async function exportDeliverySlipPdfBySlipId(slipId, statusCb) {
+  const data = buildDeliverySlipDataFromSlipId(slipId);
+  if (!data) { showToast('対象の納品書が見つかりません'); return; }
+  await exportDeliverySlipPdf(data.client, data.date, data.items, statusCb);
 }
 
 // slipIdに紐づく出庫記録を取り消して在庫を戻し、対応する売上記録も削除する（編集・取消の両方から呼ばれる共通処理）
@@ -2699,7 +2960,7 @@ function renderWhDelivHistory() {
       <div style="color:var(--text-muted);font-size:11px;margin-top:2px">数量合計 ${s.itemQty}個／合計 ¥${s.total.toLocaleString('ja-JP')}</div>
       <div style="display:flex;gap:8px;margin-top:8px">
         <button onclick="viewDeliverySlipDetail('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">📄 内容を見る</button>
-        <button onclick="printDeliverySlip('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">🖨 印刷</button>
+        <button onclick="pdfDeliverySlipFromHistory('${s.slipId}', this)" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">📄 PDF保存</button>
         <button onclick="editDeliverySlip('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">編集する</button>
         <button onclick="confirmCancelDeliverySlip('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--danger);cursor:pointer">取り消す</button>
       </div>
@@ -2747,6 +3008,34 @@ function closeWhDelivDetailModal() {
 }
 function printWhDelivDetailFromModal() {
   if (_whDelivDetailSlipId) printDeliverySlip(_whDelivDetailSlipId);
+}
+// 履歴一覧から直接PDF保存する場合は、専用の表示欄がないためボタン自体のラベルで進捗を伝える
+async function pdfDeliverySlipFromHistory(slipId, btnEl) {
+  const origLabel = btnEl ? btnEl.textContent : '';
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = '作成中…'; }
+  await exportDeliverySlipPdfBySlipId(slipId, (msg, isError) => {
+    if (msg) showToast(msg);
+  });
+  if (btnEl) { btnEl.disabled = false; btnEl.textContent = origLabel; }
+}
+async function pdfWhDelivDetailFromModal() {
+  if (!_whDelivDetailSlipId) return;
+  const btn = document.getElementById('wh-deliv-detail-pdf-btn');
+  const statusEl = document.getElementById('wh-deliv-detail-status');
+  const origLabel = btn ? btn.textContent : '';
+  function setStatus(msg, isError) {
+    if (!statusEl) return;
+    statusEl.textContent = msg || '';
+    statusEl.style.display = msg ? 'block' : 'none';
+    statusEl.style.background = isError ? '#fdecea' : '#fff8e1';
+    statusEl.style.color = isError ? '#b3261e' : '#8a6d00';
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'PDFを作成しています…'; }
+  try {
+    await exportDeliverySlipPdfBySlipId(_whDelivDetailSlipId, setStatus);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = origLabel; }
+  }
 }
 
 let _whConsignItems = [];
@@ -3237,6 +3526,7 @@ async function submitProduct() {
       ]);
       ['inv-maker','inv-name','inv-model','inv-jan','inv-stock','inv-threshold','inv-cost','inv-location','inv-memo'].forEach(id => document.getElementById(id).value = '');
       const catEl = document.getElementById('inv-category'); if(catEl) catEl.selectedIndex = 0;
+      populateSubcatSelect('inv-subcategory', CATEGORY_LIST[0]);
       document.getElementById('inv-image').value = '';
       document.getElementById('inv-img-preview').style.display = 'none';
       clearInvAddExistingMode();
@@ -3267,6 +3557,7 @@ async function submitProduct() {
     lowStock: document.getElementById('inv-threshold').value !== '' ? (parseInt(document.getElementById('inv-threshold').value) || 0) : null,
     cost: parseInt(document.getElementById('inv-cost').value) || 0,
     category: document.getElementById('inv-category')?.value || '家電',
+    subcategory: document.getElementById('inv-subcategory')?.value || '',
     location: document.getElementById('inv-location').value.trim(),
     memo: document.getElementById('inv-memo').value.trim(),
     image: imageData,
@@ -3288,6 +3579,7 @@ async function submitProduct() {
     }
     ['inv-maker','inv-name','inv-model','inv-jan','inv-stock','inv-threshold','inv-cost','inv-location','inv-memo'].forEach(id => document.getElementById(id).value = '');
     const catEl = document.getElementById('inv-category'); if(catEl) catEl.selectedIndex = 0;
+    populateSubcatSelect('inv-subcategory', CATEGORY_LIST[0]);
     document.getElementById('inv-image').value = '';
     document.getElementById('inv-img-preview').style.display = 'none';
     renderMakerSelectUI('inv');
@@ -3312,6 +3604,7 @@ function openProductEdit(key) {
   document.getElementById('prod-edit-threshold').value = (typeof p.lowStock === 'number') ? p.lowStock : '';
   document.getElementById('prod-edit-cost').value = p.cost || 0;
   document.getElementById('prod-edit-category').value = p.category || '家電';
+  populateSubcatSelect('prod-edit-subcategory', p.category || '家電', p.subcategory || '');
   document.getElementById('prod-edit-location').value = p.location || '';
   document.getElementById('prod-edit-memo').value = p.memo || '';
   modal.style.display = 'flex';
@@ -3336,6 +3629,7 @@ async function saveProductEdit() {
     lowStock: document.getElementById('prod-edit-threshold').value !== '' ? (parseInt(document.getElementById('prod-edit-threshold').value) || 0) : null,
     cost:     parseInt(document.getElementById('prod-edit-cost').value) || 0,
     category: document.getElementById('prod-edit-category').value,
+    subcategory: document.getElementById('prod-edit-subcategory')?.value || '',
     location: document.getElementById('prod-edit-location').value.trim(),
     memo:     document.getElementById('prod-edit-memo').value.trim(),
   };
@@ -3369,6 +3663,34 @@ function previewImage() {
     img.style.display = 'block';
   };
   reader.readAsDataURL(file);
+}
+
+// スマホのカメラ写真は数MBになることがあるため、傷・つぶれ記録用の写真は
+// 保存前にキャンバスで縮小・再圧縮してからdataURL化する（商品登録の写真は既存動作を変えないため対象外）
+function compressImageFile(file, maxDim, quality) {
+  maxDim = maxDim || 1280;
+  quality = quality || 0.7;
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width >= height) { height = Math.round(height * maxDim / width); width = maxDim; }
+          else { width = Math.round(width * maxDim / height); height = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => reject(new Error('画像の読み込みに失敗しました'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('ファイルの読み込みに失敗しました'));
+    reader.readAsDataURL(file);
+  });
 }
 
 function lookupProduct() {
@@ -3430,6 +3752,46 @@ function handleMoveType() {
   if (!show) { const ch = document.getElementById('move-channel'); if (ch) ch.selectedIndex = 0; }
 }
 
+// 入出庫（入荷・出荷どちらも対象）で使う、傷・つぶれの写真 or 詳細の記録（任意・どちらか一方のみ）
+let _moveDamage = { mode: null, detail: '', photo: '' };
+
+function renderMoveDamageSection() {
+  const el = document.getElementById('move-damage-section');
+  if (!el) return;
+  const modeBtnStyle = active => `flex:1;padding:8px;font-size:12px;font-weight:600;border-radius:6px;cursor:pointer;border:1.5px solid ${active?'#3a3a3a':'var(--border)'};background:${active?'#3a3a3a':'var(--white)'};color:${active?'#fff':'var(--text)'}`;
+  el.innerHTML = `
+    <div style="display:flex;gap:6px;margin-bottom:6px">
+      <button type="button" onclick="setMoveDamageMode('detail')" style="${modeBtnStyle(_moveDamage.mode==='detail')}">📝 詳細を入力</button>
+      <button type="button" onclick="setMoveDamageMode('photo')" style="${modeBtnStyle(_moveDamage.mode==='photo')}">📷 写真を添付</button>
+    </div>
+    ${_moveDamage.mode === 'detail' ? `<input type="text" value="${(_moveDamage.detail||'').replace(/"/g,'&quot;')}" oninput="updateMoveDamageDetail(this.value)" placeholder="例：側面に傷、角がつぶれ" style="width:100%;padding:8px;font-size:13px;border:1.5px solid var(--border);border-radius:6px">` : ''}
+    ${_moveDamage.mode === 'photo' ? `
+      <input type="file" id="move-damage-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handleMoveDamagePhoto(event)">
+      <button type="button" onclick="document.getElementById('move-damage-photo-input').click()" style="padding:8px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:6px;background:var(--white);cursor:pointer">📷 写真を撮る・選択</button>
+      ${_moveDamage.photo
+        ? `<div style="margin-top:6px;display:flex;align-items:center;gap:8px"><img src="${_moveDamage.photo}" style="width:60px;height:60px;object-fit:cover;border-radius:6px"><button type="button" onclick="clearMoveDamagePhoto()" style="background:none;border:none;color:var(--danger);font-size:12px;text-decoration:underline;cursor:pointer">削除</button></div>`
+        : `<div style="font-size:11px;color:var(--text-muted);margin-top:4px">まだ写真がありません</div>`}
+    ` : ''}`;
+}
+
+function setMoveDamageMode(mode) {
+  _moveDamage.mode = (_moveDamage.mode === mode) ? null : mode; // 同じボタンをもう一度押すと選択解除
+  if (_moveDamage.mode !== 'detail') _moveDamage.detail = '';
+  if (_moveDamage.mode !== 'photo') _moveDamage.photo = '';
+  renderMoveDamageSection();
+}
+function updateMoveDamageDetail(value) { _moveDamage.detail = value; }
+async function handleMoveDamagePhoto(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  try {
+    _moveDamage.photo = await compressImageFile(file, 1000, 0.6);
+    renderMoveDamageSection();
+  } catch (e) { showToast('写真の読み込みに失敗しました'); }
+}
+function clearMoveDamagePhoto() { _moveDamage.photo = ''; renderMoveDamageSection(); }
+function resetMoveDamageSection() { _moveDamage = { mode: null, detail: '', photo: '' }; renderMoveDamageSection(); }
+
 async function submitMove() {
   const jan  = document.getElementById('move-jan').value.trim();
   const date = document.getElementById('move-date').value;
@@ -3457,7 +3819,10 @@ async function submitMove() {
       fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
         productKey: prodKey, productName: prod.name, jan,
         type, qty, date, channel: type === 'out' ? channel : '', memo: document.getElementById('move-memo').value.trim(),
-        stockBefore: prod.stock, stockAfter: newStock, createdAt: Date.now()
+        stockBefore: prod.stock, stockAfter: newStock, createdAt: Date.now(),
+        // 傷・つぶれの記録（任意）。写真・詳細のどちらか一方のみ保持する
+        damageDetail: _moveDamage.mode === 'detail' ? (_moveDamage.detail || '') : '',
+        damagePhoto: _moveDamage.mode === 'photo' ? (_moveDamage.photo || '') : ''
       })})
     ]);
     // 卸売事業もあり出庫＝EC販売とは限らないため、入出庫からEC売上への自動連携は行わない
@@ -3465,6 +3830,7 @@ async function submitMove() {
     ['move-jan','move-date','move-qty','move-memo'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
     document.getElementById('move-type').selectedIndex = 0;
     handleMoveType();
+    resetMoveDamageSection();
     document.getElementById('move-product-info').style.display = 'none';
     await loadInventory();
     showToast('入出庫を記録しました（在庫: ' + newStock + '個）');
@@ -3588,29 +3954,124 @@ function renderInvAddList() {
   listEl.innerHTML = sorted.map(p => buildInvCard(p, {editable:true})).join('');
 }
 
+// 在庫一覧：カテゴリーごとに折りたたみ、開くとサブカテゴリーをタブで絞り込める表示（見本C）。
+// _invOpenCatsはカテゴリーの開閉状態（未初期化時は最初のカテゴリーだけ開く）、
+// _invSubcatTabはカテゴリーごとに選ばれているサブカテゴリータブを覚えておく。
+let _invOpenCats = null;
+let _invSubcatTab = {};
+
+function toggleInvCatAccordion(cat) {
+  if (!_invOpenCats) _invOpenCats = {};
+  _invOpenCats[cat] = !_invOpenCats[cat];
+  renderInventoryList();
+}
+
+function setInvSubcatTab(cat, sub) {
+  _invSubcatTab[cat] = sub;
+  renderInventoryList();
+}
+
+// 在庫一覧の1商品分の行（見本Cのシンプルな行表示。写真は使わない運用のため写真列は設けない）
+function buildInvRow(p) {
+  const threshold = getLowStockThreshold(p);
+  const stockClass = p.stock === 0 ? 'stock-zero' : p.stock <= threshold ? 'stock-low' : 'stock-ok';
+  const stockLabel = p.stock === 0 ? '在庫切れ' : p.stock <= threshold ? '残りわずか' : '在庫あり';
+  const forecast = estimateStockoutForecast(p);
+  const forecastDays = forecast ? Math.max(0, Math.round(forecast.daysLeft)) : null;
+  const forecastHtml = forecast ? `<div style="font-size:10.5px;margin-top:2px;color:${forecastDays<=7?'var(--danger)':forecastDays<=14?'var(--warning)':'var(--text-muted)'}">📉 このペースだと約${forecastDays}日で在庫切れの見込み</div>` : '';
+  const subLabel = p.subcategory ? `・${p.subcategory}` : '';
+  const janLabel = p.jan ? ` ／ JAN:${p.jan}` : '';
+  const editBtns = isAdmin() ? `<div style="display:flex;gap:4px;flex-shrink:0"><button onclick="openProductEdit('${p._key}')" style="padding:4px 9px;background:#bfdbfe;color:#1e3a5f;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">編集</button><button onclick="deleteProduct('${p._key}')" class="delete-btn" style="padding:4px 9px;font-size:11px">削除</button></div>` : '';
+  return `
+    <div class="inv-row">
+      <div style="min-width:0;flex:1">
+        <div style="font-size:13px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}</div>
+        <div style="font-size:11px;color:var(--text-muted)">${p.maker||''}${p.model?' / '+p.model:''}${subLabel}${janLabel}</div>
+        ${forecastHtml}
+      </div>
+      <div style="text-align:right;flex-shrink:0;display:flex;align-items:center;gap:8px">
+        <span style="font-size:14px;font-weight:700;color:${p.stock<=threshold?'var(--danger)':'var(--text)'}">${p.stock}個</span>
+        <span class="stock-badge ${stockClass}">${stockLabel}</span>
+        ${editBtns}
+      </div>
+    </div>`;
+}
+
+// カテゴリー内のサブカテゴリータブを組み立てる。ゴルフウェアのようにグループ化されたカテゴリーは、
+// グループ（メンズ／レディースなど）ごとに段を分けて表示し、圧迫感を減らす。表示名からはグループ名の接頭辞を外す。
+function buildInvSubcatTabBar(cat, subs, activeSub) {
+  if (!subs.length) return '';
+  const tab = s => `<span class="inv-subcat-tab ${activeSub===s?'active':''}" onclick="event.stopPropagation();setInvSubcatTab('${cat}','${s}')">${s}</span>`;
+  const allTab = `<span class="inv-subcat-tab ${!activeSub?'active':''}" onclick="event.stopPropagation();setInvSubcatTab('${cat}','')">すべて</span>`;
+  const groups = getSubcatGroupsFor(cat);
+  if (!groups) {
+    return `<div class="inv-subcat-tabs">${allTab}${subs.map(tab).join('')}</div>`;
+  }
+  const used = new Set();
+  const groupRows = Object.entries(groups).map(([g, items]) => {
+    const present = subs.filter(s => items.includes(s));
+    present.forEach(s => used.add(s));
+    if (!present.length) return '';
+    const tabsHtml = present.map(s => {
+      const label = s.startsWith(g + '・') ? s.slice(g.length + 1) : s;
+      return `<span class="inv-subcat-tab ${activeSub===s?'active':''}" onclick="event.stopPropagation();setInvSubcatTab('${cat}','${s}')">${label}</span>`;
+    }).join('');
+    return `<div class="inv-subcat-group-row"><span class="inv-subcat-group-label">${g}</span>${tabsHtml}</div>`;
+  }).join('');
+  const leftover = subs.filter(s => !used.has(s));
+  const leftoverRow = leftover.length ? `<div class="inv-subcat-group-row">${leftover.map(tab).join('')}</div>` : '';
+  return `<div class="inv-subcat-tabs-grouped">${allTab}${groupRows}${leftoverRow}</div>`;
+}
+
 function renderInventoryList() {
   // 梱包リスト・EC売上は「出荷管理」タブに一本化したため、在庫一覧側では表示しない
   const q = (document.getElementById('inv-search')?.value || '').toLowerCase();
-  const catF = window._invCatFilter || null;
-  const filtered = products.filter(p => {
-    const matchQ = !q || p.name?.toLowerCase().includes(q) || (p.jan||'').includes(q) || (p.maker||'').toLowerCase().includes(q);
-    const matchC = !catF || (p.category||'家電') === catF;
-    return matchQ && matchC;
-  });
   const container = document.getElementById('inv-list-container');
   const empty = document.getElementById('inv-list-empty');
-  document.getElementById('inv-list-count').textContent = filtered.length + '件';
+  const countEl = document.getElementById('inv-list-count');
 
   const adminActions = document.getElementById('inv-list-admin-actions');
   if (adminActions) adminActions.style.display = isAdmin() ? 'flex' : 'none';
 
   renderInvReorderPanel();
 
-  if (!filtered.length) { container.innerHTML = ''; empty.style.display = 'block'; return; }
+  const searching = !!q;
+  const matched = products.filter(p => !q || p.name?.toLowerCase().includes(q) || (p.jan||'').includes(q) || (p.maker||'').toLowerCase().includes(q));
+  countEl.textContent = matched.length + '件';
+
+  if (!matched.length) { container.innerHTML = ''; empty.style.display = 'block'; return; }
   empty.style.display = 'none';
 
-  const sorted = [...filtered].sort((a,b) => a.stock - b.stock);
-  container.innerHTML = sorted.map(p => buildInvCard(p, {editable:true})).join('');
+  // 開閉状態が未初期化の場合は、最初のカテゴリーだけ開いた状態にする
+  if (!_invOpenCats) {
+    _invOpenCats = {};
+    CATEGORY_LIST.forEach((c, i) => { _invOpenCats[c] = i === 0; });
+  }
+
+  const html = CATEGORY_LIST.map(cat => {
+    const inCat = matched.filter(p => (p.category || CATEGORY_LIST[0]) === cat);
+    if (!inCat.length) return ''; // 該当商品がないカテゴリーは表示しない
+    // 検索でヒットしたカテゴリーは、開閉の記憶状態に関係なく自動的に開いて表示する
+    const isOpen = searching ? true : !!_invOpenCats[cat];
+    const subs = Array.from(new Set(inCat.map(p => p.subcategory).filter(Boolean)));
+    const activeSub = _invSubcatTab[cat] || '';
+    const rowsSrc = (activeSub && subs.includes(activeSub)) ? inCat.filter(p => p.subcategory === activeSub) : inCat;
+    const tabBar = buildInvSubcatTabBar(cat, subs, activeSub);
+    const sorted = [...rowsSrc].sort((a,b) => a.stock - b.stock);
+    return `
+      <div class="inv-accordion ${isOpen?'open':''}">
+        <div class="inv-accordion-head" onclick="toggleInvCatAccordion('${cat}')">
+          <div><span class="inv-cat-name">📦 ${cat}</span><span class="inv-cat-count">${inCat.length}件</span></div>
+          <span class="inv-accordion-arrow">▼</span>
+        </div>
+        <div class="inv-row-list" style="display:${isOpen?'block':'none'}">
+          ${tabBar}
+          ${sorted.map(buildInvRow).join('')}
+        </div>
+      </div>`;
+  }).join('');
+
+  container.innerHTML = html;
 }
 
 // 「発注目安」パネル：14日以内に在庫切れが見込まれる商品を予測日数の短い順に表示
@@ -3990,43 +4451,23 @@ function printOutOnlyReport() {
   showToast('印刷ダイアログを開きました');
 }
 
-function setInvCatFilter(cat) {
-  window._invCatFilter = cat;
-  const defs = [
-    {id:'inv-cat-all', val:null},
-    {id:'inv-cat-家電', val:'家電'},
-    {id:'inv-cat-家具', val:'家具'},
-    {id:'inv-cat-車用品', val:'車用品'},
-    {id:'inv-cat-ゴルフウェア', val:'ゴルフウェア'},
-    {id:'inv-cat-ピラティスウェア', val:'ピラティスウェア'},
-  ];
-  defs.forEach(({id, val}) => {
-    const btn = document.getElementById(id);
-    if (!btn) return;
-    const active = val === cat;
-    btn.style.background = active ? '#3a3a3a' : 'none';
-    btn.style.color = active ? '#fff' : '#909090';
-    btn.style.borderColor = active ? '#3a3a3a' : '#d1d5db';
-  });
-  renderInventoryList();
-}
-
 function doExportInventory() {
   if (!products.length) { showToast('商品データがありません'); return; }
-  const headers = ['商品名','メーカー','型番','JANコード','在庫数','仕入値（円）','在庫金額（円）','保管場所','備考'];
+  const headers = ['商品名','メーカー','型番','JANコード','在庫数','仕入値（円）','在庫金額（円）','カテゴリー','サブカテゴリー','保管場所','備考'];
   const rows = products.map(p => [
     p.name, p.maker||'', p.model||'', p.jan||'',
     p.stock, p.cost||0, (p.cost||0)*p.stock,
+    p.category||'家電', p.subcategory||'',
     p.location||'', p.memo||''
   ]);
   const totalVal = products.reduce((s,p) => s + (p.cost||0)*p.stock, 0);
   const aoa = [
     ['在庫一覧'], [`出力日: ${new Date().toLocaleDateString('ja-JP')}`], [],
     headers, ...rows,
-    [], ['','','','','','在庫金額合計', totalVal, '', '']
+    [], ['','','','','','在庫金額合計', totalVal, '', '', '', '']
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [{wch:20},{wch:16},{wch:14},{wch:16},{wch:8},{wch:12},{wch:14},{wch:14},{wch:20}];
+  ws['!cols'] = [{wch:20},{wch:16},{wch:14},{wch:16},{wch:8},{wch:12},{wch:14},{wch:14},{wch:16},{wch:14},{wch:20}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '在庫一覧');
   XLSX.writeFile(wb, `在庫一覧_${ymdKey(new Date()).replace(/-/g,'')}.xlsx`);
@@ -4059,6 +4500,7 @@ async function handleBulkImportFile(event) {
     const colIdx = (label) => headers.indexOf(label);
     const iName = colIdx('商品名'), iMaker = colIdx('メーカー'), iModel = colIdx('型番'),
           iJan = colIdx('JANコード'), iStock = colIdx('在庫数'), iCost = colIdx('仕入値（円）'),
+          iCategory = colIdx('カテゴリー'), iSubcategory = colIdx('サブカテゴリー'),
           iLocation = colIdx('保管場所'), iMemo = colIdx('備考');
 
     const dataRows = rows.slice(headerIdx + 1).filter(r => Array.isArray(r) && r.some(c => String(c).trim() !== ''));
@@ -4078,6 +4520,11 @@ async function handleBulkImportFile(event) {
       const maker    = iMaker    >= 0 ? String(r[iMaker] || '').trim() : '';
       const model    = iModel    >= 0 ? String(r[iModel] || '').trim() : '';
       const cost     = iCost     >= 0 ? (parseInt(r[iCost]) || 0) : 0;
+      // カテゴリー・サブカテゴリー列がない古い形式のファイルにも対応できるよう、無ければ既定値（家電・先頭のサブカテゴリー）にする
+      let category    = iCategory    >= 0 ? String(r[iCategory] || '').trim() : '';
+      if (!CATEGORY_LIST.includes(category)) category = CATEGORY_LIST[0];
+      let subcategory = iSubcategory >= 0 ? String(r[iSubcategory] || '').trim() : '';
+      if (!getSubcatsFor(category).includes(subcategory)) subcategory = getSubcatsFor(category)[0] || '';
       const location = iLocation >= 0 ? String(r[iLocation] || '').trim() : '';
       const memo     = iMemo     >= 0 ? String(r[iMemo] || '').trim() : '';
 
@@ -4102,7 +4549,7 @@ async function handleBulkImportFile(event) {
         continue;
       }
 
-      const data = { maker, name, model, jan, stock: stockVal, lowStock: null, cost, category: '家電', location, memo, image: null, createdAt: Date.now() };
+      const data = { maker, name, model, jan, stock: stockVal, lowStock: null, cost, category, subcategory, location, memo, image: null, createdAt: Date.now() };
       const res = await fetch(authedUrl('/products.json'), { method: 'POST', body: JSON.stringify(data) });
       const resData = await res.json().catch(() => null);
       const newKey = resData && resData.name;
@@ -7873,8 +8320,9 @@ function buildPrintHtml(title, tableHtml) {
     tr:nth-child(even) td { background:#f9f9f9; }
     .total td { font-weight:700; background:#f0f0f0; }
     .subtitle { font-size:13px; font-weight:700; margin:16px 0 6px; }
-    /* ブラウザ標準の印刷ヘッダー・フッター（URL・日時・ページ番号）は@pageのmarginを0にすることで
-       表示されなくなるため、印刷時にそれを利用しつつ、内容が用紙端に寄りすぎないよう.contentの余白で調整する */
+    /* @pageのmarginを0にすると、一部のブラウザ（Chromeなど）では印刷時のヘッダー・フッターが
+       表示されなくなるため、それを利用しつつ内容側の余白で調整しておく（iPhoneのSafariには
+       効果がない。納品書はこの印刷機能を使わず、アプリ内で直接PDFを作る方式にしている） */
     @page { size: auto; margin: 0; }
     @media print { .btn-bar { display:none; } .content { padding:14mm 10mm; } }
   </style></head><body>
