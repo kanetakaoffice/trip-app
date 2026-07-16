@@ -1338,6 +1338,20 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
   </div>
 </div>
 
+<!-- 発行済み納品書の内容確認（編集・印刷はせず、明細を見るだけ） -->
+<div id="wh-deliv-detail-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:380px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:2px">納品書の内容</div>
+    <div id="wh-deliv-detail-title" style="font-size:12px;color:var(--text-muted);margin-bottom:12px"></div>
+    <div id="wh-deliv-detail-items"></div>
+    <div id="wh-deliv-detail-total" style="text-align:right;font-size:14px;font-weight:700;color:var(--text);margin-top:10px;padding-top:10px;border-top:1.5px solid var(--border)"></div>
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button onclick="printWhDelivDetailFromModal()" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8d8d8,#a8a8a8);color:#1a1a1a;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">🖨 印刷する</button>
+      <button onclick="closeWhDelivDetailModal()" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">閉じる</button>
+    </div>
+  </div>
+</div>
+
 <!-- カメラスキャンオーバーレイ -->
 <div id="scan-overlay">
   <video id="scan-video" autoplay playsinline muted></video>
@@ -2684,11 +2698,55 @@ function renderWhDelivHistory() {
       <div style="color:var(--text);font-weight:600">${s.client || ''}／${fmtDateJP(s.date)}</div>
       <div style="color:var(--text-muted);font-size:11px;margin-top:2px">数量合計 ${s.itemQty}個／合計 ¥${s.total.toLocaleString('ja-JP')}</div>
       <div style="display:flex;gap:8px;margin-top:8px">
+        <button onclick="viewDeliverySlipDetail('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">📄 内容を見る</button>
         <button onclick="printDeliverySlip('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">🖨 印刷</button>
         <button onclick="editDeliverySlip('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">編集する</button>
         <button onclick="confirmCancelDeliverySlip('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--danger);cursor:pointer">取り消す</button>
       </div>
     </div>`).join('');
+}
+
+// 発行済みの納品書を、編集モードに入らず内容（型番・数量・単価・金額）だけ確認できるようにするモーダル
+let _whDelivDetailSlipId = null;
+function viewDeliverySlipDetail(slipId) {
+  const moves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'out')
+    .sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+  if (!moves.length) { showToast('対象の納品書が見つかりません'); return; }
+  const client = moves[0].client || '';
+  const date = moves[0].date || '';
+  const total = moves.reduce((s,m) => s + (m.amount || 0), 0);
+  const titleEl = document.getElementById('wh-deliv-detail-title');
+  if (titleEl) titleEl.textContent = `${client}／${fmtDateJP(date)}`;
+  const itemsEl = document.getElementById('wh-deliv-detail-items');
+  if (itemsEl) {
+    itemsEl.innerHTML = moves.map(m => {
+      const model = m.model || (products.find(p => p._key === m.productKey) || {}).model || '';
+      return `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <div style="min-width:0">
+          <div style="color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${model || m.productName || ''}</div>
+          <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.productName || ''}</div>
+        </div>
+        <div style="flex-shrink:0;text-align:right">
+          <div style="font-size:12px;color:var(--text-muted)">${m.qty}個 × ¥${(m.unitPrice||0).toLocaleString('ja-JP')}</div>
+          <div style="font-size:13px;color:var(--text);font-weight:700">¥${(m.amount||0).toLocaleString('ja-JP')}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  const totalEl = document.getElementById('wh-deliv-detail-total');
+  if (totalEl) totalEl.textContent = `合計 ¥${total.toLocaleString('ja-JP')}`;
+  _whDelivDetailSlipId = slipId;
+  const modal = document.getElementById('wh-deliv-detail-modal');
+  if (modal) modal.style.display = 'flex';
+}
+function closeWhDelivDetailModal() {
+  const modal = document.getElementById('wh-deliv-detail-modal');
+  if (modal) modal.style.display = 'none';
+  _whDelivDetailSlipId = null;
+}
+function printWhDelivDetailFromModal() {
+  if (_whDelivDetailSlipId) printDeliverySlip(_whDelivDetailSlipId);
 }
 
 let _whConsignItems = [];
