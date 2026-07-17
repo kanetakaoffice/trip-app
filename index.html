@@ -1196,6 +1196,18 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <div class="field-label">日付 <span class="req">*</span></div>
         <input type="date" id="wh-deliv-date" oninput="saveWhDelivDraft()">
       </div>
+      <div class="field-divider"></div>
+      <div class="field" style="padding-top:16px">
+        <div class="field-label">件名（任意）</div>
+        <input type="text" id="wh-deliv-subject" list="wh-deliv-subject-datalist" placeholder="例：家電・カメラ・ダイソン・Starlinkなど" oninput="saveWhDelivDraft()">
+        <datalist id="wh-deliv-subject-datalist">
+          <option value="家電"></option>
+          <option value="カメラ"></option>
+          <option value="ダイソン"></option>
+          <option value="Starlink"></option>
+        </datalist>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">同じ日付・取引先・件名の分は、都度分かれず1枚の納品書にまとめられます</div>
+      </div>
     </div>
     <div class="card">
       <div class="card-title">商品をスキャンして追加</div>
@@ -2541,8 +2553,9 @@ function saveWhDelivDraft() {
   try {
     const client = document.getElementById('wh-deliv-client')?.value || '';
     const date = document.getElementById('wh-deliv-date')?.value || '';
-    if (!_whDelivItems.length && !client && !date) { localStorage.removeItem(WH_DELIV_DRAFT_KEY); return; }
-    localStorage.setItem(WH_DELIV_DRAFT_KEY, JSON.stringify({ client, date, items: _whDelivItems, savedAt: Date.now() }));
+    const subject = document.getElementById('wh-deliv-subject')?.value || '';
+    if (!_whDelivItems.length && !client && !date && !subject) { localStorage.removeItem(WH_DELIV_DRAFT_KEY); return; }
+    localStorage.setItem(WH_DELIV_DRAFT_KEY, JSON.stringify({ client, date, subject, items: _whDelivItems, savedAt: Date.now() }));
   } catch(e) {}
 }
 // 入力のたびに毎回書き込むと頻度が高すぎるため、数量・単価・商品名・型番の編集時は少し間を置いてまとめて保存する
@@ -2557,7 +2570,7 @@ function loadWhDelivDraft() {
     if (!raw) return;
     const draft = JSON.parse(raw);
     if (!draft) return;
-    const hasContent = (draft.items && draft.items.length) || draft.client || draft.date;
+    const hasContent = (draft.items && draft.items.length) || draft.client || draft.date || draft.subject;
     if (!hasContent) return;
     _whDelivItems = draft.items || [];
     // 保存されていた行のうち_uidを持たない古い下書きにも念のため採番しておく。
@@ -2567,8 +2580,10 @@ function loadWhDelivDraft() {
     if (maxUid >= _whDelivItemUidSeq) _whDelivItemUidSeq = maxUid + 1;
     const clientEl = document.getElementById('wh-deliv-client');
     const dateEl = document.getElementById('wh-deliv-date');
+    const subjectEl = document.getElementById('wh-deliv-subject');
     if (clientEl && draft.client) clientEl.value = draft.client;
     if (dateEl && draft.date) dateEl.value = draft.date;
+    if (subjectEl && draft.subject) subjectEl.value = draft.subject;
     renderClientSelectUI('wh-deliv');
     renderWhDelivItems();
     updateWhDelivSubmitButtonLabel();
@@ -2682,9 +2697,20 @@ function clearWhItemDamagePhoto(idx) {
 
 // 納品書を発行：明細ごとに出庫記録＋在庫減算、まとめて売上（未入金）を1件登録し、印刷用の納品書を開く
 // （_editingSlipIdが設定されている場合は、既存の納品書を一度取り消してから新しい内容で作り直す＝実質的な「編集」）
+// 明示的に「編集する」から呼ばれたのではない通常の発行時、同じ日付・取引先・件名の納品書が
+// すでにあれば、そのslipIdを返す（見つからなければnull）。呼び出し側はこれを見つけたら、
+// 新しく別の納品書として発行するのではなく、既存の納品書に追記する形にする。
+function findMergeTargetSlipId(client, date, subject) {
+  const existing = (stockMoves || []).find(m =>
+    m.type === 'out' && m.channel === '卸売' && m.client === client && m.date === date && (m.subject || '') === subject
+  );
+  return existing ? existing.slipId : null;
+}
+
 async function submitWhDeliverySlip() {
   const client = document.getElementById('wh-deliv-client').value.trim();
   const date = document.getElementById('wh-deliv-date').value;
+  const subject = (document.getElementById('wh-deliv-subject')?.value || '').trim();
   if (!client) { showToast('取引先を入力してください'); return; }
   if (!date) { showToast('日付を入力してください'); return; }
   if (!_whDelivItems.length) { showToast('商品を1つ以上追加してください'); return; }
@@ -2692,8 +2718,30 @@ async function submitWhDeliverySlip() {
     if (!it.qty || it.qty < 1) { showToast(`${it.name}の数量を確認してください`); return; }
   }
 
-  const editingSlipId = _editingSlipId;
-  // 編集中の場合、元の納品書がすでに減らしている分は「まだ在庫にある」ものとして在庫チェックする
+  const wasExplicitEdit = !!_editingSlipId;
+  let editingSlipId = _editingSlipId;
+  let mergedFromExisting = false;
+  // 「編集する」から来たのではない通常の発行操作のときだけ、同じ日付・取引先・件名の納品書が
+  // 既にあれば新規に分けず、その納品書に今回の明細を追記する（都度バラバラの納品書になるのを防ぐ）。
+  if (!editingSlipId) {
+    const mergeTargetSlipId = findMergeTargetSlipId(client, date, subject);
+    if (mergeTargetSlipId) {
+      editingSlipId = mergeTargetSlipId;
+      mergedFromExisting = true;
+      const oldMoves = (stockMoves || []).filter(m => m.slipId === mergeTargetSlipId && m.type === 'out')
+        .sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+      const oldItems = oldMoves.map(m => ({
+        productKey: m.productKey, jan: m.jan, name: m.productName,
+        model: m.model || (products.find(p => p._key === m.productKey) || {}).model || '',
+        qty: m.qty, unitPrice: m.unitPrice, amount: m.amount,
+        damageMode: m.damageDetail ? 'detail' : (m.damagePhoto ? 'photo' : null),
+        damageDetail: m.damageDetail || '', damagePhoto: m.damagePhoto || '',
+        _uid: _whDelivItemUidSeq++
+      }));
+      _whDelivItems = [...oldItems, ..._whDelivItems];
+    }
+  }
+  // 編集中（＝既存の納品書を作り直す）場合、元の納品書がすでに減らしている分は「まだ在庫にある」ものとして在庫チェックする
   const oldQtyByProduct = {};
   if (editingSlipId) {
     stockMoves.filter(m => m.slipId === editingSlipId && m.type === 'out').forEach(m => {
@@ -2732,14 +2780,14 @@ async function submitWhDeliverySlip() {
 
     await Promise.all(_whDelivItems.map(it => fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
       productKey: it.productKey, productName: it.name, model: it.model || '', jan: it.jan,
-      type: 'out', channel: '卸売', client, qty: it.qty, unitPrice: it.unitPrice, amount: it.amount,
+      type: 'out', channel: '卸売', client, subject, qty: it.qty, unitPrice: it.unitPrice, amount: it.amount,
       slipId, date, memo: '', stockBefore: stockBeforeByProduct[it.productKey], stockAfter: stockBeforeByProduct[it.productKey] - newQtyByProduct[it.productKey], createdAt: Date.now(),
       // 傷・つぶれの記録：詳細（テキスト）は納品書にも表示されるが、写真は社内記録用のみで納品書には出さない
       damageDetail: it.damageMode === 'detail' ? (it.damageDetail || '') : '',
       damagePhoto: it.damageMode === 'photo' ? (it.damagePhoto || '') : ''
     })})));
 
-    await window._fbPushSales({ type: 'sales', date, salesType: '国内（請求書）', client, amount: total, due: '', slipId, note: `卸売納品書（${slipId}）より自動登録`, payStatus: '未入金', submittedAt: new Date().toLocaleDateString('ja-JP') });
+    await window._fbPushSales({ type: 'sales', date, salesType: '国内（請求書）', client, subject, amount: total, due: '', slipId, note: `卸売納品書（${slipId}）より自動登録`, payStatus: '未入金', submittedAt: new Date().toLocaleDateString('ja-JP') });
 
     _whDelivItems = [];
     _editingSlipId = null;
@@ -2751,13 +2799,15 @@ async function submitWhDeliverySlip() {
     const banner = document.getElementById('wh-deliv-edit-banner');
     if (banner) banner.style.display = 'none';
     document.getElementById('wh-deliv-client').value = '';
+    document.getElementById('wh-deliv-subject').value = '';
     await loadInventory();
     renderWhDelivHistory();
     // 発行・編集と印刷を分けているため、ここでは自動で印刷ウィンドウを開かず、
     // 代わりに「発行済みの納品書」の履歴を開いて、そこから好きなタイミングで印刷できるようにする
     openWhDelivHistoryAccordion();
-    showToast((editingSlipId ? '納品書を更新しました' : '納品書を発行しました') + '（合計 ¥' + total.toLocaleString('ja-JP') + '）。印刷は下の履歴からできます');
-  } catch(e) { showToast(editingSlipId ? '更新に失敗しました' : '発行に失敗しました'); console.error(e); }
+    const actionLabel = wasExplicitEdit ? '納品書を更新しました' : (mergedFromExisting ? '同じ納品書にまとめました' : '納品書を発行しました');
+    showToast(actionLabel + '（合計 ¥' + total.toLocaleString('ja-JP') + '）。印刷は下の履歴からできます');
+  } catch(e) { showToast(wasExplicitEdit ? '更新に失敗しました' : '発行に失敗しました'); console.error(e); }
 }
 
 function openWhDelivHistoryAccordion() {
@@ -2779,8 +2829,10 @@ const DS_STYLE = `
       .ds-date { grid-column:3; justify-self:end; font-size:10px; color:#555; }
       .ds-head-box { padding:12px 0; margin-bottom:16px; }
       .ds-head-row { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+      .ds-client-block { min-width:0; }
       .ds-client { font-size:17px; font-weight:700; }
       .ds-client .ds-client-suffix { font-size:17px; font-weight:700; margin-left:8px; }
+      .ds-subject { font-size:11px; color:#555; margin-top:4px; }
       .ds-issuer { text-align:right; font-size:10px; color:#333; line-height:1.65; }
       .ds-issuer .ds-logo-img { height:22px; display:block; margin:0 0 6px auto; }
       .ds-issuer .ds-issuer-name-row { display:flex; align-items:center; justify-content:flex-end; gap:0; }
@@ -2805,7 +2857,7 @@ const DS_STYLE = `
 
 // 単価は商談しながら決めるため、納品書には金額・小計・消費税・合計金額は表示しない（型番・数量・単価のみ）。
 // ただし合計数量は品数の確認に必要なため、明細の下に表示する。
-function dsSlipBodyHtml(client, date) {
+function dsSlipBodyHtml(client, date, subject) {
   return `
     <style>${DS_STYLE}</style>
     <div class="ds-wrap">
@@ -2815,7 +2867,10 @@ function dsSlipBodyHtml(client, date) {
       </div>
       <div class="ds-head-box">
         <div class="ds-head-row">
-          <div class="ds-client">${client}<span class="ds-client-suffix">御中</span></div>
+          <div class="ds-client-block">
+            <div class="ds-client">${client}<span class="ds-client-suffix">御中</span></div>
+            ${subject ? `<div class="ds-subject">件名　${subject}</div>` : ''}
+          </div>
           <div class="ds-issuer">
             ${COMPANY_LOGO_DATA_URI ? `<img class="ds-logo-img" src="${COMPANY_LOGO_DATA_URI}" alt="ロゴ">` : ''}
             <div class="ds-issuer-name-row">
@@ -2929,8 +2984,8 @@ function renderDeliverySlipColumns(root, items) {
 // 納品書の印刷用ドキュメントを開く（従来のブラウザ印刷機能を使う場合。実際に紙のプリンターに
 // 送りたい場合などのために残しているが、iPhoneのSafariなどではPDF化時に日時・URL・ページ番号が
 // 付いてしまうため、通常は下のexportDeliverySlipPdf（アプリ内で直接PDFを作る方式）を使う）
-function openDeliverySlipPrint(client, date, items) {
-  const html = dsSlipBodyHtml(client, date);
+function openDeliverySlipPrint(client, date, items, subject) {
+  const html = dsSlipBodyHtml(client, date, subject);
   const w = window.open('', '_blank');
   w.document.write(buildPrintHtml(`納品書_${client}_${date}`, html));
   w.document.close();
@@ -2941,7 +2996,7 @@ function openDeliverySlipPrint(client, date, items) {
 // 対応環境では共有シート（AirDrop・保存・送信など）、それ以外ではダウンロードで保存する。
 // html2canvasで実際の表示内容をそのまま画像化してPDFに埋め込むため、ブラウザ・OSが印刷時に
 // 自動で付け足す日時・URL・ページ番号などは一切含まれない。
-async function exportDeliverySlipPdf(client, date, items, statusCb) {
+async function exportDeliverySlipPdf(client, date, items, statusCb, subject) {
   const setStatus = statusCb || function(){};
   if (typeof html2canvas === 'undefined' || !window.jspdf) {
     setStatus('PDF作成に必要な機能の読み込みに失敗しました。通信環境をご確認のうえ、しばらくしてからもう一度お試しください。', true);
@@ -2949,7 +3004,7 @@ async function exportDeliverySlipPdf(client, date, items, statusCb) {
   }
   const container = document.createElement('div');
   container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:#fff;padding:24px;font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;color:#1a1a1a;z-index:-1;';
-  container.innerHTML = dsSlipBodyHtml(client, date);
+  container.innerHTML = dsSlipBodyHtml(client, date, subject);
   document.body.appendChild(container);
   setStatus('PDFを作成しています…');
   try {
@@ -3018,21 +3073,21 @@ function buildDeliverySlipDataFromSlipId(slipId) {
     // 傷・つぶれの詳細（テキスト）のみ納品書に載せる。写真（damagePhoto）はここで一切扱わない
     damageDetail: m.damageDetail || ''
   }));
-  return { client: moves[0].client, date: moves[0].date, items };
+  return { client: moves[0].client, date: moves[0].date, subject: moves[0].subject || '', items };
 }
 
 // 発行済みの納品書を、従来のブラウザ印刷機能で開く（紙のプリンターに直接送りたい場合など）
 function printDeliverySlip(slipId) {
   const data = buildDeliverySlipDataFromSlipId(slipId);
   if (!data) { showToast('対象の納品書が見つかりません'); return; }
-  openDeliverySlipPrint(data.client, data.date, data.items);
+  openDeliverySlipPrint(data.client, data.date, data.items, data.subject);
 }
 
 // 発行済みの納品書を、アプリ内で直接PDFファイルとして作成し保存・共有する（通常はこちらを使う）
 async function exportDeliverySlipPdfBySlipId(slipId, statusCb) {
   const data = buildDeliverySlipDataFromSlipId(slipId);
   if (!data) { showToast('対象の納品書が見つかりません'); return; }
-  await exportDeliverySlipPdf(data.client, data.date, data.items, statusCb);
+  await exportDeliverySlipPdf(data.client, data.date, data.items, statusCb, data.subject);
 }
 
 // 実際にPDF・印刷される見た目そのままの印刷プレビューを表示する（「内容を見る」「PDF保存」の
@@ -3051,7 +3106,7 @@ function showDeliverySlipPreview(slipId) {
   if (modal) modal.style.display = 'flex';
   const pageEl = document.getElementById('ds-preview-page');
   if (pageEl) {
-    pageEl.innerHTML = dsSlipBodyHtml(data.client, data.date);
+    pageEl.innerHTML = dsSlipBodyHtml(data.client, data.date, data.subject);
     renderDeliverySlipColumns(pageEl, data.items);
   }
   fitDeliverySlipPreviewScale();
@@ -3150,6 +3205,7 @@ function editDeliverySlip(slipId) {
   document.getElementById('wh-deliv-client').value = moves[0].client || '';
   renderClientSelectUI('wh-deliv');
   document.getElementById('wh-deliv-date').value = moves[0].date || '';
+  document.getElementById('wh-deliv-subject').value = moves[0].subject || '';
   _editingSlipId = slipId;
   renderWhDelivItems();
   updateWhDelivSubmitButtonLabel();
@@ -3164,6 +3220,7 @@ function cancelEditDeliverySlip() {
   _editingSlipId = null;
   _whDelivItems = [];
   document.getElementById('wh-deliv-client').value = '';
+  document.getElementById('wh-deliv-subject').value = '';
   renderClientSelectUI('wh-deliv');
   // 編集を始める前に新規の納品書を作成中だった場合は、その下書きをここで復元する
   loadWhDelivDraft();
@@ -3194,6 +3251,7 @@ function renderWhDelivHistory() {
       slipId,
       client: first.client,
       date: first.date,
+      subject: first.subject || '',
       total: items.reduce((s,m) => s + (m.amount || 0), 0),
       itemQty: items.reduce((s,m) => s + (m.qty || 0), 0),
       createdAt: Math.max(...items.map(m => m.createdAt || 0))
@@ -3213,7 +3271,7 @@ function renderWhDelivHistory() {
   }
   listEl.innerHTML = slips.map(s => `
     <div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:13px">
-      <div style="color:var(--text);font-weight:600">${s.client || ''}／${fmtDateJP(s.date)}</div>
+      <div style="color:var(--text);font-weight:600">${s.client || ''}／${fmtDateJP(s.date)}${s.subject ? '／' + s.subject : ''}</div>
       <div style="color:var(--text-muted);font-size:11px;margin-top:2px">数量合計 ${s.itemQty}個／合計 ¥${s.total.toLocaleString('ja-JP')}</div>
       <div style="display:flex;gap:8px;margin-top:8px">
         <button onclick="showDeliverySlipPreview('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">📄 内容を見る</button>
