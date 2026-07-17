@@ -3118,6 +3118,10 @@ function showDeliverySlipPreview(slipId) {
   if (modal) modal.style.display = 'flex';
   const pageEl = document.getElementById('ds-preview-page');
   if (pageEl) {
+    // 前回別の納品書を表示した際にfitDeliverySlipPreviewScaleが付けた縮小率(transform)が
+    // 残ったままだと、getBoundingClientRectの測定値がその縮小率の分だけ縮んでしまい、
+    // 縦線の位置・高さの計算が二重に縮小されて狂ってしまう。必ず等倍に戻してから測定・描画する。
+    pageEl.style.transform = 'none';
     pageEl.innerHTML = dsSlipBodyHtml(data.client, data.date, data.subject);
     renderDeliverySlipColumns(pageEl, data.items);
   }
