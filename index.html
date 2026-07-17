@@ -1371,16 +1371,27 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
   </div>
 </div>
 
-<!-- 預かり商品の数量編集モーダル（商談中の変更などに対応） -->
+<!-- 預かり商品の編集モーダル（数量の変更に加えて、納品書作成と同じ感覚で別の商品もその場で追加できる） -->
 <div id="wh-consign-edit-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:16px">
-  <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:340px;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
-    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">預け数量を編集</div>
+  <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:400px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">預かりを編集</div>
     <div id="wh-consign-edit-desc" style="font-size:12px;color:var(--text-muted);margin-bottom:14px"></div>
     <div class="field">
       <div class="field-label">新しい数量 <span class="req">*</span></div>
       <input type="number" id="wh-consign-edit-qty" placeholder="0" min="1">
       <div style="font-size:11px;color:var(--text-muted);margin-top:4px">在庫数もあわせて自動で調整されます</div>
     </div>
+    <div class="field-divider" style="margin:16px 0"></div>
+    <div class="card-title" style="font-size:13px;margin-bottom:8px">同じ預け先に他の商品も追加</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">スキャン・入力するたびに下のリストへ追加されます</div>
+    <div style="display:flex;gap:8px;margin-bottom:6px">
+      <button class="scan-btn" onclick="scanFromPhoto('wh-consign-edit-add-jan')" style="flex:1">📸 写真で読み取る</button>
+      <button class="scan-btn" onclick="startScan('wh-consign-edit-add-jan')" style="flex:1;background:var(--surface);color:var(--text);border:1.5px solid var(--border)">📷 連続スキャン</button>
+    </div>
+    <input type="text" id="wh-consign-edit-add-jan" placeholder="または手入力" oninput="lookupConsignEditAddItem()">
+    <div id="wh-consign-edit-add-status" style="font-size:12px;margin-top:6px;color:var(--text-muted)"></div>
+    <div id="wh-consign-edit-add-list" style="margin-top:8px"></div>
+    <div id="wh-consign-edit-add-empty" style="font-size:12px;color:var(--text-muted);padding:8px 0">まだ追加した商品はありません</div>
     <div style="display:flex;gap:10px;margin-top:18px">
       <button onclick="confirmEditConsignQty()" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8d8d8,#a8a8a8);color:#1a1a1a;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">保存する</button>
       <button onclick="closeEditConsignQty()" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">キャンセル</button>
@@ -2787,7 +2798,8 @@ async function submitWhDeliverySlip() {
       damagePhoto: it.damageMode === 'photo' ? (it.damagePhoto || '') : ''
     })})));
 
-    await window._fbPushSales({ type: 'sales', date, salesType: '国内（請求書）', client, subject, amount: total, due: '', slipId, note: `卸売納品書（${slipId}）より自動登録`, payStatus: '未入金', submittedAt: new Date().toLocaleDateString('ja-JP') });
+    // 納品書は金額未確定の商談段階で使うものであり、正式な請求金額が決まった請求書とは別物のため、
+    // ここでは業務の売り上げには自動反映しない（在庫の増減記録・納品書自体の発行のみ行う）。
 
     _whDelivItems = [];
     _editingSlipId = null;
@@ -2832,7 +2844,7 @@ const DS_STYLE = `
       .ds-client-block { min-width:0; }
       .ds-client { font-size:17px; font-weight:700; }
       .ds-client .ds-client-suffix { font-size:17px; font-weight:700; margin-left:8px; }
-      .ds-subject { font-size:14px; font-weight:700; color:#1a1a1a; margin-top:4px; }
+      .ds-subject { font-size:14px; font-weight:500; color:#1a1a1a; margin-top:10px; }
       .ds-issuer { text-align:right; font-size:10px; color:#333; line-height:1.65; }
       .ds-issuer .ds-logo-img { height:22px; display:block; margin:0 0 6px auto; }
       .ds-issuer .ds-issuer-name-row { display:flex; align-items:center; justify-content:flex-end; gap:0; }
@@ -3478,16 +3490,24 @@ function closeSettleConsign() {
 }
 
 let _consignEditKey = null;
+let _consignEditAddItems = [];
 
 // 商談中の変更に対応するため、預けている数量を後から修正できるようにする（在庫は差分に応じて自動調整）
+// また、納品書作成時と同じ感覚で、その場で別の商品も追加で預けられるようにする
 function openEditConsignQty(key) {
   const m = stockMoves.find(x => x._key === key);
   if (!m) return;
   _consignEditKey = key;
+  _consignEditAddItems = [];
   const desc = document.getElementById('wh-consign-edit-desc');
   if (desc) desc.textContent = `${m.productName || ''}／預け先: ${m.client || ''}／現在の数量: ${m.qty}個`;
   const qtyInput = document.getElementById('wh-consign-edit-qty');
   if (qtyInput) qtyInput.value = m.qty;
+  const janInput = document.getElementById('wh-consign-edit-add-jan');
+  if (janInput) janInput.value = '';
+  const addStatus = document.getElementById('wh-consign-edit-add-status');
+  if (addStatus) addStatus.textContent = '';
+  renderConsignEditAddItems();
   const modal = document.getElementById('wh-consign-edit-modal');
   if (modal) modal.style.display = 'flex';
 }
@@ -3496,6 +3516,65 @@ function closeEditConsignQty() {
   const modal = document.getElementById('wh-consign-edit-modal');
   if (modal) modal.style.display = 'none';
   _consignEditKey = null;
+  _consignEditAddItems = [];
+}
+
+// JANが商品と一致した瞬間だけ、追加リストに自動で追加する（預かりリスト作成時のクイック追加と同じ挙動）
+function lookupConsignEditAddItem() {
+  const input = document.getElementById('wh-consign-edit-add-jan');
+  const status = document.getElementById('wh-consign-edit-add-status');
+  const jan = input.value.trim();
+  if (!jan) { if (status) status.textContent = ''; return; }
+  const found = products.find(p => p.jan === jan);
+  if (found) {
+    addConsignEditAddRow(found);
+    input.value = '';
+    if (status) status.textContent = '';
+    return;
+  }
+  if (status) {
+    status.innerHTML = jan.length >= 8
+      ? `登録されていない商品です。JANコードをご確認ください。<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-size:12px">📦 価格.comで検索する</a>`
+      : '';
+    status.style.color = 'var(--text-muted)';
+  }
+}
+
+function addConsignEditAddRow(prod) {
+  const existing = _consignEditAddItems.find(it => it.productKey === prod._key);
+  if (existing) { existing.qty += 1; }
+  else { _consignEditAddItems.push({ productKey: prod._key, jan: prod.jan, name: prod.name, model: prod.model || '', qty: 1 }); }
+  renderConsignEditAddItems();
+  showToast(`${prod.name} を追加しました（${existing ? existing.qty : 1}個）`);
+}
+
+function removeConsignEditAddItem(idx) {
+  _consignEditAddItems.splice(idx, 1);
+  renderConsignEditAddItems();
+}
+
+function updateConsignEditAddQty(idx, value) {
+  const it = _consignEditAddItems[idx];
+  if (!it) return;
+  const num = parseInt(value);
+  it.qty = isNaN(num) ? 0 : num;
+}
+
+function renderConsignEditAddItems() {
+  const container = document.getElementById('wh-consign-edit-add-list');
+  const empty = document.getElementById('wh-consign-edit-add-empty');
+  if (!container || !empty) return;
+  if (!_consignEditAddItems.length) { container.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  container.innerHTML = _consignEditAddItems.map((it, idx) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+      <div style="min-width:0;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${it.name}${it.model ? '（' + it.model + '）' : ''}</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:8px">
+        <input type="number" min="1" value="${it.qty}" oninput="updateConsignEditAddQty(${idx},this.value)" style="width:56px;padding:6px;font-size:13px;border:1.5px solid var(--border);border-radius:6px;text-align:right">
+        <span style="font-size:12px;color:var(--text-muted)">個</span>
+        <button onclick="removeConsignEditAddItem(${idx})" style="background:none;border:none;color:var(--danger);font-size:16px;cursor:pointer;padding:0 4px">✕</button>
+      </div>
+    </div>`).join('');
 }
 
 async function confirmEditConsignQty() {
@@ -3508,16 +3587,41 @@ async function confirmEditConsignQty() {
   const delta = newQty - m.qty; // 増える分は在庫からさらに減らし、減る分は在庫に戻す
   const prod = products.find(p => p._key === m.productKey);
   if (delta > 0 && prod && delta > prod.stock) { showToast(`在庫（${prod.stock}個）を超えています`); return; }
+
+  // その場で追加した商品についても、何か1つでも在庫不足があれば全体を中止する（更新を始める前にチェック）
+  for (const it of _consignEditAddItems) {
+    if (!it.qty || it.qty < 1) { showToast(`${it.name}の数量を確認してください`); return; }
+    const p2 = products.find(p => p._key === it.productKey);
+    if (p2 && it.qty > p2.stock) { showToast(`${it.name}の在庫数（${p2.stock}個）を超えています`); return; }
+  }
+
   const newStock = (prod ? prod.stock : 0) - delta;
   try {
     await Promise.all([
       fetch(authedUrl('/products/' + m.productKey + '/stock.json'), { method: 'PUT', body: JSON.stringify(newStock) }),
       fetch(authedUrl('/stockMoves/' + key + '.json'), { method: 'PATCH', body: JSON.stringify({ qty: newQty }) })
     ]);
+
+    // 同じ預け先に対して、その場で追加した別商品もそれぞれ独立した預かりレコードとして登録する
+    await Promise.all(_consignEditAddItems.map(it => {
+      const p2 = products.find(p => p._key === it.productKey);
+      const stockBefore2 = p2 ? p2.stock : null;
+      const newStock2 = (stockBefore2 || 0) - it.qty;
+      return Promise.all([
+        fetch(authedUrl('/products/' + it.productKey + '/stock.json'), { method: 'PUT', body: JSON.stringify(newStock2) }),
+        fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
+          productKey: it.productKey, productName: it.name, jan: it.jan,
+          type: 'consign', status: 'holding', client: m.client, qty: it.qty, date: m.date, memo: m.memo || '',
+          stockBefore: stockBefore2, stockAfter: newStock2, createdAt: Date.now()
+        })})
+      ]);
+    }));
+
+    const addedCount = _consignEditAddItems.length;
     closeEditConsignQty();
     await loadInventory();
     renderWhConsignList();
-    showToast('数量を変更しました（' + newQty + '個）');
+    showToast(addedCount > 0 ? `数量を変更し、${addedCount}件の商品を追加しました` : '数量を変更しました（' + newQty + '個）');
   } catch(e) { showToast('処理に失敗しました'); console.error(e); }
 }
 
@@ -4916,6 +5020,7 @@ function handleScanResult(text) {
   if (scanTarget === 'pack-jan-sp') lookupPackJan();
   if (scanTarget === 'wh-item-jan') lookupWhItem();
   if (scanTarget === 'wh-consign-jan') lookupWhConsignItem();
+  if (scanTarget === 'wh-consign-edit-add-jan') lookupConsignEditAddItem();
 }
 
 // ── 写真から読み取る（iPhoneでの連続スキャンがうまく動かない場合の代替手段）──
