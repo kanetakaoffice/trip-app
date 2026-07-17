@@ -822,7 +822,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <div class="field-divider"></div>
         <div class="field" style="padding-top:16px">
           <div class="field-label">サブカテゴリ</div>
-          <select id="inv-subcategory"></select>
+          <select id="inv-subcategory" onchange="handleSubcatSelectChange(this)"></select>
         </div>
         <div class="field-divider"></div>
         <div class="field" style="padding-top:16px">
@@ -1240,7 +1240,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
             </div>
             <div class="field" style="flex:1">
               <div class="field-label" style="font-size:11px">サブカテゴリー</div>
-              <select id="wh-qr-subcategory" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;width:100%"></select>
+              <select id="wh-qr-subcategory" onchange="handleSubcatSelectChange(this)" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;width:100%"></select>
             </div>
           </div>
           <div style="display:flex;gap:8px">
@@ -1507,6 +1507,23 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     </div>
   </div>
 </div>
+<div id="add-subcat-modal" style="display:none;position:fixed;inset:0;z-index:650;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:24px">
+  <div style="background:var(--white);border-radius:16px;padding:24px;width:100%;max-width:320px;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px">新しいサブカテゴリーを追加</div>
+    <div id="add-subcat-cat-label" style="font-size:12px;color:var(--text-muted);margin-bottom:14px"></div>
+    <div id="add-subcat-group-field" style="display:none;margin-bottom:12px">
+      <div class="field-label">グループ</div>
+      <select id="add-subcat-group-select" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;width:100%"></select>
+    </div>
+    <div class="field-label">サブカテゴリー名</div>
+    <input type="text" id="add-subcat-name-input" placeholder="例）調理家電" style="margin-bottom:12px" onkeydown="if(event.key==='Enter'){event.preventDefault();confirmAddSubcat();}">
+    <div id="add-subcat-error" style="display:none;color:var(--danger);font-size:12px;margin:-4px 0 12px"></div>
+    <div style="display:flex;gap:10px">
+      <button onclick="closeAddSubcatModal()" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">キャンセル</button>
+      <button onclick="confirmAddSubcat()" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8d8d8,#a8a8a8);color:#1a1a1a;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">追加する</button>
+    </div>
+  </div>
+</div>
 <div id="pack-edit-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:16px">
   <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:16px">梱包リストを編集</div>
@@ -1580,7 +1597,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       </select></div>
     <div class="field-divider"></div>
     <div class="field" style="padding-top:12px"><div class="field-label">サブカテゴリ</div>
-      <select id="prod-edit-subcategory" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;width:100%"></select></div>
+      <select id="prod-edit-subcategory" onchange="handleSubcatSelectChange(this)" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;width:100%"></select></div>
     <div class="field-divider"></div>
     <div class="field" style="padding-top:12px"><div class="field-label">保管場所</div>
       <input type="text" id="prod-edit-location"></div>
@@ -1724,6 +1741,10 @@ window._getStockMoves = () => stockMoves;
 
 // ── 在庫管理 ──
 let products = [], stockMoves = [], wholesaleClients = [], overseasClients = [];
+// ユーザーがその場で追加したサブカテゴリー（Firebaseの/customSubcats.jsonに保存し、他の端末でも使えるようにする）。
+// 形はCATEGORY_SUBCATSと同じ（フラットな配列、またはゴルフウェアのようにグループ化されたオブジェクト）だが、
+// 追加分の項目だけを持つ。起動時・データ更新時にapplyCustomSubcats()でCATEGORY_SUBCATS側に合流させる。
+let customSubcats = {};
 
 // カテゴリー・サブカテゴリーの定義。サブカテゴリー名は仮の案（正式名称が決まり次第ここだけ書き換えれば全画面に反映される）
 const CATEGORY_LIST = ['家電','家具','車用品','ゴルフウェア','ピラティスウェア'];
@@ -1750,6 +1771,33 @@ function getSubcatGroupsFor(cat) {
   const entry = CATEGORY_SUBCATS[cat];
   return (entry && !Array.isArray(entry)) ? entry : null;
 }
+// Firebaseから読み込んだcustomSubcatsの内容を、起動時の分類定義（CATEGORY_SUBCATS）に合流させる。
+// 既存の項目と重複するものは追加しない（何度呼んでも安全）。
+function applyCustomSubcats() {
+  Object.entries(customSubcats || {}).forEach(([cat, extra]) => {
+    if (!CATEGORY_SUBCATS[cat] || !extra) return; // 未知のカテゴリーは無視（将来カテゴリー自体が変わった場合の保険）
+    const groups = getSubcatGroupsFor(cat);
+    if (groups && !Array.isArray(extra)) {
+      Object.entries(extra).forEach(([g, items]) => {
+        if (!groups[g]) return;
+        (items || []).forEach(s => { if (!groups[g].includes(s)) groups[g].push(s); });
+      });
+    } else if (!groups && Array.isArray(extra)) {
+      extra.forEach(s => { if (!CATEGORY_SUBCATS[cat].includes(s)) CATEGORY_SUBCATS[cat].push(s); });
+    }
+  });
+}
+// 現在表示中のサブカテゴリー<select>があれば、選択中の値を保ったまま選択肢を最新化する
+// （customSubcatsの読み込みが、既にサブカテゴリー欄を開いた後に完了した場合の取りこぼし対策）
+function refreshOpenSubcatSelects() {
+  ['inv-subcategory', 'prod-edit-subcategory', 'wh-qr-subcategory'].forEach(subcatSelId => {
+    const sel = document.getElementById(subcatSelId);
+    if (!sel) return;
+    const catSelId = subcatSelId.replace('subcategory', 'category');
+    const cat = document.getElementById(catSelId)?.value || CATEGORY_LIST[0];
+    populateSubcatSelect(subcatSelId, cat, sel.value);
+  });
+}
 // カテゴリー選択に連動して、対応するサブカテゴリー<select>の選択肢を作り直す。
 // selectedValはできるだけ復元したい値（商品編集時など）。一致しない場合は先頭を選ぶ。
 function populateSubcatSelect(subcatSelId, cat, selectedVal) {
@@ -1768,11 +1816,98 @@ function populateSubcatSelect(subcatSelId, cat, selectedVal) {
       ? subs.map(s => `<option value="${s}">${s}</option>`).join('')
       : '<option value="">（サブカテゴリー未設定）</option>';
   }
+  // 一覧にない項目でも、その場で新しいサブカテゴリーとして追加できるようにする
+  sel.insertAdjacentHTML('beforeend', `<option value="${SUBCAT_ADD_NEW_VALUE}">＋ 新しい項目を追加...</option>`);
   if (selectedVal && subs.includes(selectedVal)) sel.value = selectedVal;
 }
 function handleCategorySelectChange(catSelId, subcatSelId) {
   const cat = document.getElementById(catSelId)?.value || CATEGORY_LIST[0];
   populateSubcatSelect(subcatSelId, cat);
+}
+
+// サブカテゴリー<select>で「＋ 新しい項目を追加...」が選ばれたことを検知して、追加用モーダルを開く。
+// 対応するカテゴリー<select>のidは、命名規則（〜-subcategory ⇔ 〜-category）から機械的に求める。
+const SUBCAT_ADD_NEW_VALUE = '__add_subcat__';
+let _addSubcatCtx = null; // { subcatSelId, cat }
+
+function handleSubcatSelectChange(selectEl) {
+  if (!selectEl || selectEl.value !== SUBCAT_ADD_NEW_VALUE) return;
+  const subcatSelId = selectEl.id;
+  const catSelId = subcatSelId.replace('subcategory', 'category');
+  const cat = document.getElementById(catSelId)?.value || CATEGORY_LIST[0];
+  openAddSubcatModal(subcatSelId, cat);
+}
+
+function openAddSubcatModal(subcatSelId, cat) {
+  _addSubcatCtx = { subcatSelId, cat };
+  document.getElementById('add-subcat-cat-label').textContent = `カテゴリー：${cat}`;
+  const groups = getSubcatGroupsFor(cat);
+  const groupField = document.getElementById('add-subcat-group-field');
+  const groupSel = document.getElementById('add-subcat-group-select');
+  if (groups) {
+    groupSel.innerHTML = Object.keys(groups).map(g => `<option value="${g}">${g}</option>`).join('');
+    groupField.style.display = 'block';
+  } else {
+    groupField.style.display = 'none';
+  }
+  document.getElementById('add-subcat-name-input').value = '';
+  document.getElementById('add-subcat-error').style.display = 'none';
+  document.getElementById('add-subcat-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('add-subcat-name-input')?.focus(), 50);
+}
+
+function closeAddSubcatModal() {
+  document.getElementById('add-subcat-modal').style.display = 'none';
+  // 追加せずキャンセルした場合、選択が「＋追加」のままにならないよう選び直す
+  if (_addSubcatCtx) populateSubcatSelect(_addSubcatCtx.subcatSelId, _addSubcatCtx.cat);
+  _addSubcatCtx = null;
+}
+
+async function confirmAddSubcat() {
+  if (!_addSubcatCtx) return;
+  const { cat, subcatSelId } = _addSubcatCtx;
+  const nameInput = document.getElementById('add-subcat-name-input');
+  const name = (nameInput.value || '').trim();
+  const errorEl = document.getElementById('add-subcat-error');
+  if (!name) {
+    errorEl.textContent = 'サブカテゴリー名を入力してください';
+    errorEl.style.display = 'block';
+    return;
+  }
+  const groups = getSubcatGroupsFor(cat);
+  const group = groups ? document.getElementById('add-subcat-group-select').value : null;
+  // ゴルフウェアのようにグループ化されているカテゴリーは、既存の命名規則（「メンズ・◯◯」）に合わせる
+  const finalValue = group ? (name.startsWith(group + '・') ? name : `${group}・${name}`) : name;
+  if (getSubcatsFor(cat).includes(finalValue)) {
+    errorEl.textContent = 'すでに同じ名前のサブカテゴリーがあります';
+    errorEl.style.display = 'block';
+    return;
+  }
+  if (group) {
+    groups[group].push(finalValue);
+  } else {
+    CATEGORY_SUBCATS[cat].push(finalValue);
+  }
+  await addCustomSubcategory(cat, group, finalValue);
+  document.getElementById('add-subcat-modal').style.display = 'none';
+  populateSubcatSelect(subcatSelId, cat, finalValue);
+  showToast('サブカテゴリーを追加しました');
+  _addSubcatCtx = null;
+}
+// 新しく追加したサブカテゴリーを/customSubcats.jsonに保存し、他の端末でも同じ選択肢が使えるようにする。
+// 一覧そのもの（wholesaleClientsのような1件ずつのリスト）ではなく、カテゴリー単位のちいさな設定なので、
+// レコードごとにPOSTするのではなく、customSubcats全体をひとつのオブジェクトとしてPUTで保存する。
+async function addCustomSubcategory(cat, group, finalValue) {
+  if (!customSubcats[cat]) customSubcats[cat] = group ? {} : [];
+  if (group) {
+    if (!customSubcats[cat][group]) customSubcats[cat][group] = [];
+    if (!customSubcats[cat][group].includes(finalValue)) customSubcats[cat][group].push(finalValue);
+  } else if (Array.isArray(customSubcats[cat]) && !customSubcats[cat].includes(finalValue)) {
+    customSubcats[cat].push(finalValue);
+  }
+  try {
+    await fetch(authedUrl('/customSubcats.json'), { method: 'PUT', body: JSON.stringify(customSubcats) });
+  } catch(e) { console.error('customSubcats save error', e); }
 }
 // 納品書などの印刷書類に載せる自社情報。角印画像は用意でき次第 COMPANY_SEAL_DATA_URI に base64 data URI を設定する。
 const COMPANY_INFO = { name: '株式会社KANETAKA', zip: '453-0811', address1: '愛知県名古屋市中村区太閤通3-25-1', address2: 'AROME DE JOIE 908', tel: '080-2414-8907' };
@@ -1901,16 +2036,20 @@ function showInvScreen(name) {
 
 async function loadInventory() {
   try {
-    const [p, m, c, oc] = await Promise.all([
+    const [p, m, c, oc, cs] = await Promise.all([
       fetch(authedUrl('/products.json')).then(r => r.json()),
       fetch(authedUrl('/stockMoves.json')).then(r => r.json()),
       fetch(authedUrl('/wholesaleClients.json')).then(r => r.json()),
-      fetch(authedUrl('/overseasClients.json')).then(r => r.json())
+      fetch(authedUrl('/overseasClients.json')).then(r => r.json()),
+      fetch(authedUrl('/customSubcats.json')).then(r => r.json())
     ]);
     products   = objToArr(p);
     stockMoves = objToArr(m);
     wholesaleClients = objToArr(c);
     overseasClients = objToArr(oc);
+    customSubcats = cs || {};
+    applyCustomSubcats();
+    refreshOpenSubcatSelects();
     renderWhClientDatalist();
     if (document.getElementById('screen-inv-list')?.classList.contains('active')) {
       renderInventoryList();
