@@ -4313,8 +4313,11 @@ function buildInvCard(p, opts) {
             <span class="stock-badge ${stockClass}">${stockLabel}</span>
           </div>
           <div style="font-size:12px;color:var(--text-muted)">
-            ${p.location ? '📍 ' + p.location : ''}
-            ${totalVal > 0 ? ' ／ 在庫金額 ¥' + totalVal.toLocaleString('ja-JP') : ''}
+            ${[
+              p.location ? '📍 ' + p.location : '',
+              p.cost ? '仕入値 ¥' + p.cost.toLocaleString('ja-JP') : '',
+              totalVal > 0 ? '在庫金額 ¥' + totalVal.toLocaleString('ja-JP') : ''
+            ].filter(Boolean).join(' ／ ')}
           </div>
           ${latestDateDisp ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">📅 最新入荷日: ${latestDateDisp}${receipts.length>1?`（累計${receipts.length}回入荷）`:''}</div>` : ''}
           ${forecastHtml}
@@ -4373,6 +4376,7 @@ function buildInvRow(p) {
   const threshold = getLowStockThreshold(p);
   const stockClass = p.stock === 0 ? 'stock-zero' : p.stock <= threshold ? 'stock-low' : 'stock-ok';
   const stockLabel = p.stock === 0 ? '在庫切れ' : p.stock <= threshold ? '残りわずか' : '在庫あり';
+  const totalVal = (p.cost || 0) * p.stock;
   const forecast = estimateStockoutForecast(p);
   const forecastDays = forecast ? Math.max(0, Math.round(forecast.daysLeft)) : null;
   const forecastHtml = forecast ? `<div style="font-size:11px;color:${forecastDays<=7?'var(--danger)':forecastDays<=14?'var(--warning)':'var(--text-muted)'}">📉 このペースだと約${forecastDays}日で在庫切れの見込み（直近30日の平均出庫 ${forecast.avgDaily.toFixed(1)}個/日）</div>` : '';
@@ -4387,6 +4391,8 @@ function buildInvRow(p) {
         ${p.subcategory ? `<div><span class="inv-row-detail-label">サブカテゴリ</span>${p.subcategory}</div>` : ''}
         ${p.jan ? `<div><span class="inv-row-detail-label">JAN</span>${p.jan}</div>` : ''}
         ${p.location ? `<div><span class="inv-row-detail-label">保管場所</span>${p.location}</div>` : ''}
+        ${p.cost ? `<div><span class="inv-row-detail-label">仕入値</span>¥${p.cost.toLocaleString('ja-JP')}</div>` : ''}
+        ${totalVal > 0 ? `<div><span class="inv-row-detail-label">在庫金額</span>¥${totalVal.toLocaleString('ja-JP')}</div>` : ''}
         ${forecastHtml}
         ${editBtns}
       </div>` : '';
