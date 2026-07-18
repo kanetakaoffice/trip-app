@@ -3008,10 +3008,11 @@ function openDeliverySlipPrint(client, date, items, subject) {
 // 対応環境では共有シート（AirDrop・保存・送信など）、それ以外ではダウンロードで保存する。
 // html2canvasで実際の表示内容をそのまま画像化してPDFに埋め込むため、ブラウザ・OSが印刷時に
 // 自動で付け足す日時・URL・ページ番号などは一切含まれない。
-async function exportDeliverySlipPdf(client, date, items, statusCb, subject) {
+async function exportDeliverySlipPdf(client, date, items, statusCb, subject, pdfWindow) {
   const setStatus = statusCb || function(){};
   if (typeof html2canvas === 'undefined' || !window.jspdf) {
     setStatus('PDF作成に必要な機能の読み込みに失敗しました。通信環境をご確認のうえ、しばらくしてからもう一度お試しください。', true);
+    if (pdfWindow && !pdfWindow.closed) pdfWindow.close();
     return;
   }
   const container = document.createElement('div');
@@ -3044,28 +3045,51 @@ async function exportDeliverySlipPdf(client, date, items, statusCb, subject) {
       first = false;
     }
     const fileName = `納品書_${client}_${date}`.replace(/[\\/:*?"<>|]/g, '_') + '.pdf';
+    try { pdf.setProperties({ title: fileName }); } catch(e) {}
     const blob = pdf.output('blob');
-    try {
-      const file = new File([blob], fileName, { type: 'application/pdf' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: fileName });
-        setStatus('');
-      } else {
-        pdf.save(fileName);
-        setStatus('PDFを保存しました（ダウンロード先をご確認ください）');
+
+    // アプリ内でJSのBlobをnavigator.share()で直接共有すると、機種・OSバージョンや
+    // 送信先アプリによっては共有シートが開いても実際にはファイルが正しく送れないことがある
+    // （「印刷してから共有すると送れる」という報告の通り、ブラウザ標準のPDFビューアー経由の
+    // 共有の方が確実）。そのため、まずはボタンを押した直後（非同期処理が始まる前）に開いておいた
+    // 空のタブへPDFを読み込ませ、ブラウザ標準のPDFビューアーの共有ボタンから送ってもらう方式を優先する。
+    // ポップアップブロックなどでタブが開けなかった場合のみ、従来通りWeb Share API／ダウンロードにフォールバックする。
+    const blobUrl = URL.createObjectURL(blob);
+    let openedInTab = false;
+    if (pdfWindow && !pdfWindow.closed) {
+      try {
+        pdfWindow.location.href = blobUrl;
+        openedInTab = true;
+        setStatus('PDFを開きました。共有ボタンから送信できます');
+      } catch (openErr) {
+        console.error(openErr);
       }
-    } catch (shareErr) {
-      if (shareErr && shareErr.name === 'AbortError') {
-        setStatus('');
-      } else {
-        console.error(shareErr);
-        pdf.save(fileName);
-        setStatus('共有できなかったため、PDFをダウンロードしました');
+    }
+
+    if (!openedInTab) {
+      try {
+        const file = new File([blob], fileName, { type: 'application/pdf' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: fileName });
+          setStatus('');
+        } else {
+          pdf.save(fileName);
+          setStatus('PDFを保存しました（ダウンロード先をご確認ください）');
+        }
+      } catch (shareErr) {
+        if (shareErr && shareErr.name === 'AbortError') {
+          setStatus('');
+        } else {
+          console.error(shareErr);
+          pdf.save(fileName);
+          setStatus('共有できなかったため、PDFをダウンロードしました');
+        }
       }
     }
   } catch (e) {
     console.error(e);
     setStatus('PDFの作成に失敗しました。通信環境をご確認のうえ、もう一度お試しください。', true);
+    if (pdfWindow && !pdfWindow.closed) pdfWindow.close();
   } finally {
     document.body.removeChild(container);
   }
@@ -3096,10 +3120,10 @@ function printDeliverySlip(slipId) {
 }
 
 // 発行済みの納品書を、アプリ内で直接PDFファイルとして作成し保存・共有する（通常はこちらを使う）
-async function exportDeliverySlipPdfBySlipId(slipId, statusCb) {
+async function exportDeliverySlipPdfBySlipId(slipId, statusCb, pdfWindow) {
   const data = buildDeliverySlipDataFromSlipId(slipId);
-  if (!data) { showToast('対象の納品書が見つかりません'); return; }
-  await exportDeliverySlipPdf(data.client, data.date, data.items, statusCb, data.subject);
+  if (!data) { showToast('対象の納品書が見つかりません'); if (pdfWindow && !pdfWindow.closed) pdfWindow.close(); return; }
+  await exportDeliverySlipPdf(data.client, data.date, data.items, statusCb, data.subject, pdfWindow);
 }
 
 // 実際にPDF・印刷される見た目そのままの印刷プレビューを表示する（「内容を見る」「PDF保存」の
@@ -3164,9 +3188,18 @@ async function pdfFromDeliverySlipPreview() {
     statusEl.style.background = isError ? '#fdecea' : '#fff8e1';
     statusEl.style.color = isError ? '#b3261e' : '#8a6d00';
   }
+  // ポップアップブロックされないよう、非同期処理（PDF作成）が始まる前、クリック操作の直後に
+  // 空のタブを開いておく。この時点で開いたタブへは後からPDFの中身を読み込ませる。
+  let pdfWindow = null;
+  try {
+    pdfWindow = window.open('', '_blank');
+    if (pdfWindow) {
+      pdfWindow.document.write('<title>PDFを作成しています…</title><body style="font-family:-apple-system,sans-serif;padding:24px;color:#555">PDFを作成しています…しばらくお待ちください。</body>');
+    }
+  } catch (e) { pdfWindow = null; }
   if (btn) { btn.disabled = true; btn.textContent = 'PDFを作成しています…'; }
   try {
-    await exportDeliverySlipPdfBySlipId(slipId, setStatus);
+    await exportDeliverySlipPdfBySlipId(slipId, setStatus, pdfWindow);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = origLabel; }
   }
