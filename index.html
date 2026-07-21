@@ -215,9 +215,21 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 .toast.show { opacity: 1; transform: translateY(0); }
 .ds-preview-scale-wrap { width: 100%; overflow: hidden; background: #e5e5e5; border-radius: 8px; padding: 12px 0; display: flex; justify-content: center; }
 .ds-preview-page { width: 794px; background: #fff; padding: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.15); transform-origin: top center; flex-shrink: 0; position: relative; overflow: hidden; }
+/* 納品書の「従来の印刷機能を使う」：新しいタブ・ウィンドウを開かず、今表示しているページ自体を
+   印刷する方式（window.open()を一切使わないため、iOSのポップアップブロックの影響を受けない）。
+   普段はposition:fixedで画面外に置いておく（display:noneにすると寸法が0になり、縦線の位置・高さの
+   計算(getBoundingClientRect)が狂ってしまうため、オフスクリーンPDF書き出し用のコンテナと同じ方式にする）。
+   印刷時だけ通常配置に戻し、#ds-print-only-root以外の要素をすべて隠して納品書の内容だけを印刷する。 */
+#ds-print-only-root { position: fixed; left: -9999px; top: 0; width: 794px; background: #fff; padding: 24px; font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif; color: #1a1a1a; z-index: -1; }
+@media print {
+  body > *:not(#ds-print-only-root) { display: none !important; }
+  #ds-print-only-root { position: static !important; left: auto !important; width: auto !important; z-index: auto !important; padding: 14mm 10mm !important; }
+}
 </style>
 </head>
 <body>
+
+<div id="ds-print-only-root"></div>
 
 <div class="login-screen" id="login-screen">
   <div class="login-box">
@@ -3092,15 +3104,37 @@ function renderDeliverySlipColumns(root, items) {
   }
 }
 
-// 納品書の印刷用ドキュメントを開く（従来のブラウザ印刷機能を使う場合。実際に紙のプリンターに
-// 送りたい場合などのために残しているが、iPhoneのSafariなどではPDF化時に日時・URL・ページ番号が
-// 付いてしまうため、通常は下のexportDeliverySlipPdf（アプリ内で直接PDFを作る方式）を使う）
+// 納品書の印刷（従来のブラウザ印刷機能を使う場合。実際に紙のプリンターに送りたい場合や、
+// アプリ内PDF作成（exportDeliverySlipPdf）がうまくいかない場合の代替手段として残している）。
+// 以前は新しいタブ（window.open）を開いてそこに印刷用ページを書き出していたが、iOS（特にホーム画面に
+// 追加したPWAとして使っている場合）ではこのwindow.open自体がブロックされてしまい、ボタンをタップしても
+// 何も起こらないことがあると分かったため、新しいタブ・ウィンドウを一切開かず、今表示している画面自体を
+// 印刷する方式に変更した（ポップアップブロックの影響を受けない、最も基本的な印刷手法）。
 function openDeliverySlipPrint(client, date, items, subject) {
-  const html = dsSlipBodyHtml(client, date, subject);
-  const w = window.open('', '_blank');
-  w.document.write(buildPrintHtml(`納品書_${client}_${date}`, html));
-  w.document.close();
-  renderDeliverySlipColumns(w.document, items);
+  const root = document.getElementById('ds-print-only-root');
+  if (!root) return;
+  root.innerHTML = dsSlipBodyHtml(client, date, subject);
+  renderDeliverySlipColumns(root, items);
+
+  const fileName = `納品書_${client}_${date}`.replace(/[\\/:*?"<>|]/g, '_');
+  const prevTitle = document.title;
+  // 印刷ダイアログから「PDFとして保存」した場合などに、ファイル名の候補としてページタイトルが
+  // 使われることがあるため、印刷中だけタイトルを一時的に差し替える
+  document.title = fileName;
+
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    document.title = prevTitle;
+    root.innerHTML = '';
+    window.removeEventListener('afterprint', cleanup);
+  };
+  window.addEventListener('afterprint', cleanup);
+  // 'afterprint'イベントが発火しない環境でもタイトル・内容が残り続けないよう、念のため保険をかけておく
+  setTimeout(cleanup, 60000);
+
+  window.print();
 }
 
 // iOS（iPhone・iPad）かどうかを判定する。iOS上はSafariに限らずChrome・Edgeなども含め
