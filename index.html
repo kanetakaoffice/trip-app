@@ -3124,16 +3124,16 @@ function renderDeliverySlipColumns(root, items) {
 // 印刷・PDF保存されてしまう不具合があった。そのため、隠しiframeの中に納品書だけの完全に独立した
 // HTML文書を書き出し、そのiframe自体に対してprint()を呼ぶ方式に変更した。ページ本体の見た目や
 // 他の要素と一切干渉しないため、より確実に印刷・PDFの中身が表示される。
-function openDeliverySlipPrint(client, date, items, subject) {
-  const fileName = `納品書_${client}_${date}`.replace(/[\\/:*?"<>|]/g, '_');
-
+// 印刷・PDF保存用の隠しiframeを用意し、指定したファイル名（タイトル）で真っ新な文書を書き出して返す。
+// 中身は空の#ds-print-rootだけを持つ状態で返すので、呼び出し側がそこに内容を入れる。
+function preparePrintIframeDoc(fileName) {
   let iframe = document.getElementById('ds-print-iframe');
   if (!iframe) {
     iframe = document.createElement('iframe');
     iframe.id = 'ds-print-iframe';
     iframe.setAttribute('aria-hidden', 'true');
     // 幅をA4用紙相当（96dpiで約794px）に固定しておく。0のままだと内部の文書がほぼ幅0で
-    // レイアウトされてしまい、renderDeliverySlipColumns内の高さ計測（getBoundingClientRect）が
+    // レイアウトされてしまい、列分割の高さ計測（getBoundingClientRect）が
     // 実際に印刷される見た目と大きくズレてしまうため
     iframe.style.cssText = 'position:absolute; left:-9999px; top:0; width:794px; height:1123px; border:0;';
     document.body.appendChild(iframe);
@@ -3150,11 +3150,11 @@ function openDeliverySlipPrint(client, date, items, subject) {
 </style>
 </head><body><div id="ds-print-root"></div></body></html>`);
   idoc.close();
+  return { iframe, idoc };
+}
 
-  const rootEl = idoc.getElementById('ds-print-root');
-  rootEl.innerHTML = dsSlipBodyHtml(client, date, subject);
-  renderDeliverySlipColumns(rootEl, items);
-
+// 用意済みのiframeに対して、タイトルの一時差し替え・実際の印刷実行・後片付けまでを行う共通処理
+function triggerPrintOnIframe(iframe, fileName) {
   const prevTitle = document.title;
   // 印刷ダイアログから「PDFとして保存」した場合などに、ファイル名の候補としてページ（iframe）の
   // タイトルが使われることがあるため、念のためメインページ側のタイトルも印刷中だけ差し替えておく
@@ -3179,6 +3179,27 @@ function openDeliverySlipPrint(client, date, items, subject) {
       iframe.contentWindow.print();
     });
   });
+}
+
+// プレビュー画面（#ds-preview-page）で実際に表示されている、組み立て済みのHTMLをそのまま印刷・PDF保存する。
+// 印刷側で列分割を独自に再計算すると、環境によってプレビューと印刷とで見た目が変わってしまうことが
+// あったため、プレビューで確認した内容をそのまま流用することで、必ず同じ見た目になるようにしている。
+function printRenderedDeliverySlip(htmlContent, client, date) {
+  const fileName = `納品書_${client}_${date}`.replace(/[\\/:*?"<>|]/g, '_');
+  const { iframe, idoc } = preparePrintIframeDoc(fileName);
+  idoc.getElementById('ds-print-root').innerHTML = htmlContent;
+  triggerPrintOnIframe(iframe, fileName);
+}
+
+// プレビューを経由せず直接呼ばれた場合（テストからの直接呼び出しなど、プレビューの描画済みDOMが
+// 手元にない場合）のために、内容を組み立ててから印刷する
+function openDeliverySlipPrint(client, date, items, subject) {
+  const fileName = `納品書_${client}_${date}`.replace(/[\\/:*?"<>|]/g, '_');
+  const { iframe, idoc } = preparePrintIframeDoc(fileName);
+  const rootEl = idoc.getElementById('ds-print-root');
+  rootEl.innerHTML = dsSlipBodyHtml(client, date, subject);
+  renderDeliverySlipColumns(rootEl, items);
+  triggerPrintOnIframe(iframe, fileName);
 }
 
 // 発行済みの納品書について、保存されている出庫記録から取引先・日付・明細を再構成する
@@ -3383,9 +3404,15 @@ function renderWhDelivHistory() {
     </div>`).join('');
 }
 
-// プレビューを見ながら、ブラウザの印刷機能でPDFの保存・共有まで行う（納品書のPDF保存・共有はこちらに一本化した）
+// プレビューを見ながら、ブラウザの印刷機能でPDFの保存・共有まで行う（納品書のPDF保存・共有はこちらに一本化した）。
+// このとき印刷側で内容を作り直すのではなく、プレビュー（#ds-preview-page）に今まさに表示されている
+// HTMLをそのまま使う。そうしないと、プレビューで見た見た目と実際に印刷・PDF保存されたものとで
+// レイアウトが変わってしまうことがあったため。
 function printFromDeliverySlipPreview() {
   if (!_dsPreviewSlipId) return;
+  const data = buildDeliverySlipDataFromSlipId(_dsPreviewSlipId);
+  const pageEl = document.getElementById('ds-preview-page');
+  if (!data || !pageEl || !pageEl.innerHTML) { showToast('印刷対象が見つかりません'); return; }
   const statusEl = document.getElementById('wh-deliv-preview-status');
   if (statusEl) {
     statusEl.textContent = '印刷画面が開きます。そこから「PDFに保存」または共有をお選びください';
@@ -3393,7 +3420,7 @@ function printFromDeliverySlipPreview() {
     statusEl.style.background = '#fff8e1';
     statusEl.style.color = '#8a6d00';
   }
-  printDeliverySlip(_dsPreviewSlipId);
+  printRenderedDeliverySlip(pageEl.innerHTML, data.client, data.date);
 }
 
 let _whConsignItems = [];
