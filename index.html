@@ -883,6 +883,12 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
             <div style="font-weight:700;font-size:15px" id="move-product-name"></div>
             <div style="font-size:13px;color:var(--text-sub);margin-top:4px">現在庫: <span id="move-current-stock" style="font-weight:700;color:var(--gold-dark)"></span>個</div>
           </div>
+          <div style="margin-top:14px">
+            <div class="field-label">型番・商品名で検索</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">JANコードが手元になくても、登録済みの商品から型番や商品名の一部で探せます</div>
+            <input type="text" id="move-model-search" placeholder="例：NW-500" oninput="searchMoveItemByModel()">
+            <div id="move-model-results" style="margin-top:6px"></div>
+          </div>
         </div>
       </div>
       <div class="card">
@@ -1220,6 +1226,12 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         </div>
         <input type="text" id="wh-item-jan" placeholder="または手入力" oninput="lookupWhItem()">
         <div id="wh-item-status" style="font-size:12px;margin-top:6px;color:var(--text-muted)"></div>
+        <div style="margin-top:14px">
+          <div class="field-label">型番・商品名で検索して追加</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">JANコードが手元になくても、登録済みの商品から型番や商品名の一部で探せます</div>
+          <input type="text" id="wh-item-model-search" placeholder="例：NW-500" oninput="searchWhItemByModel()">
+          <div id="wh-item-model-results" style="margin-top:6px"></div>
+        </div>
         <div id="wh-quick-register" style="display:none;margin-top:10px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
           <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px">この商品はまだ登録されていません。JANコードから商品情報を自動検索します</div>
           <div style="display:flex;gap:6px;margin-bottom:8px">
@@ -1320,6 +1332,12 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         </div>
         <input type="text" id="wh-consign-jan" placeholder="または手入力" oninput="lookupWhConsignItem()">
         <div id="wh-consign-status" style="font-size:12px;margin-top:6px;color:var(--text-muted)"></div>
+        <div style="margin-top:14px">
+          <div class="field-label">型番・商品名で検索して追加</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">JANコードが手元になくても、登録済みの商品から型番や商品名の一部で探せます</div>
+          <input type="text" id="wh-consign-model-search" placeholder="例：NW-500" oninput="searchWhConsignItemByModel()">
+          <div id="wh-consign-model-results" style="margin-top:6px"></div>
+        </div>
       </div>
     </div>
     <div class="card">
@@ -2352,6 +2370,44 @@ function cancelWhQuickRegister() {
   if (status) status.textContent = '';
 }
 
+// JANコードが手元にない・読み取りにくい場合でも、登録済みの商品を型番や商品名の一部から
+// 探して納品明細に追加できるようにする（在庫一覧の検索と同様、型番・商品名の両方にマッチさせる）
+function searchWhItemByModel() {
+  const input = document.getElementById('wh-item-model-search');
+  const resultsEl = document.getElementById('wh-item-model-results');
+  if (!input || !resultsEl) return;
+  const q = input.value.trim().toLowerCase();
+  if (!q) { resultsEl.innerHTML = ''; return; }
+  const matches = products.filter(p =>
+    (p.model && p.model.toLowerCase().includes(q)) ||
+    (p.name && p.name.toLowerCase().includes(q))
+  ).slice(0, 8);
+  if (!matches.length) {
+    resultsEl.innerHTML = `<div style="font-size:12px;color:var(--text-muted);padding:6px 2px">該当する商品が見つかりません</div>`;
+    return;
+  }
+  resultsEl.innerHTML = matches.map(p => `
+    <div onclick="selectWhItemModelResult('${p._key}')" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer">
+      <div style="min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name || ''}</div>
+        <div style="font-size:11px;color:var(--text-muted)">${p.model || '型番未登録'}・在庫${p.stock ?? 0}個</div>
+      </div>
+      <div style="font-size:12px;color:var(--gold-dark);font-weight:600;white-space:nowrap;flex-shrink:0">＋ 追加</div>
+    </div>
+  `).join('');
+}
+
+// 検索結果から商品を選ぶと、JANでスキャンした時と同じ経路（addWhItemRow）で納品明細に追加される
+function selectWhItemModelResult(productKey) {
+  const prod = products.find(p => p._key === productKey);
+  if (!prod) return;
+  addWhItemRow(prod);
+  const input = document.getElementById('wh-item-model-search');
+  if (input) input.value = '';
+  const resultsEl = document.getElementById('wh-item-model-results');
+  if (resultsEl) resultsEl.innerHTML = '';
+}
+
 // スキャン（または入力）されたJANコードから価格.comを自動検索し、商品名・型番・メーカーを推定して埋める。
 // バーコード自体には型番の文字列は入っていない（JAN番号のみ）ため、「型番が自動入力される」を実現する方法として、
 // スキャンで取得済みのJANをそのまま検索キーに使い、その検索結果から型番を推定するというlookupJan()と同じ仕組みを使う。
@@ -2798,12 +2854,15 @@ async function submitWhDeliverySlip() {
   // （行ごとにバラバラに減算すると、2行目が古い在庫数を元に計算してしまい片方の減算が消えてしまうため）
   const newQtyByProduct = {};
   _whDelivItems.forEach(it => { newQtyByProduct[it.productKey] = (newQtyByProduct[it.productKey] || 0) + it.qty; });
+  // 入荷してすぐに卸す（在庫（入庫）の記録より先に納品書を作る）ことも多いため、登録済みの在庫数を
+  // 超える数量でも納品書の発行自体はブロックしない。超えた分は在庫がマイナスとして記録され、
+  // 後から入庫を記録すれば正しい数値に戻る（発行後のトースト・在庫一覧の「在庫切れ」表示で気づけるようにする）
+  const insufficientStockNames = [];
   for (const pk of Object.keys(newQtyByProduct)) {
     const prod = products.find(p => p._key === pk);
     const availableStock = (prod ? prod.stock : 0) + (oldQtyByProduct[pk] || 0);
     if (newQtyByProduct[pk] > availableStock) {
-      showToast(`${(prod && prod.name) || ''}の在庫数（${availableStock}個）を超えています`);
-      return;
+      insufficientStockNames.push((prod && prod.name) || '');
     }
   }
 
@@ -2853,7 +2912,10 @@ async function submitWhDeliverySlip() {
     // 代わりに「発行済みの納品書」の履歴を開いて、そこから好きなタイミングで印刷できるようにする
     openWhDelivHistoryAccordion();
     const actionLabel = wasExplicitEdit ? '納品書を更新しました' : (mergedFromExisting ? '同じ納品書にまとめました' : '納品書を発行しました');
-    showToast(actionLabel + '（合計 ¥' + total.toLocaleString('ja-JP') + '）。印刷は下の履歴からできます');
+    const stockNote = insufficientStockNames.length
+      ? `／${insufficientStockNames.join('・')}は登録在庫を超えて出庫したため在庫がマイナスになっています。入庫の記録をお忘れなく`
+      : '';
+    showToast(actionLabel + '（合計 ¥' + total.toLocaleString('ja-JP') + '）。印刷は下の履歴からできます' + stockNote);
   } catch(e) { showToast(wasExplicitEdit ? '更新に失敗しました' : '発行に失敗しました'); console.error(e); }
 }
 
@@ -3042,38 +3104,6 @@ function openDeliverySlipPrint(client, date, items, subject) {
 }
 
 // iOS（iPhone・iPad）かどうかを判定する。iOS上はSafariに限らずChrome・Edgeなども含め
-// 全てのブラウザがWebKitベースであり、blob: URLの共有時にファイル名が失われる挙動も共通のため、
-// ブラウザ種別ではなくOSがiOSかどうかで判定する（iPadOSはUAがMacと区別つかない場合があるため、
-// タッチ対応のMacIntelもiPadとして扱う）。
-function isIOSWebKitEnv() {
-  try {
-    const ua = navigator.userAgent || '';
-    if (/iP(hone|od|ad)/.test(ua)) return true;
-    // iPadOSは「Macintosh」を名乗りつつタッチ操作に対応しているMacIntelとして見分ける
-    return navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
-  } catch (e) { return false; }
-}
-
-// PDFのBlobを、iOSで正しくファイル名付きの「保存・共有」対象として扱ってもらうためのURLに変換する。
-// blob: URLのままiOSでタブに開いて共有すると、共有シート側にファイル名の情報が伝わらず
-// 「Unknown.pdf」という名無しファイルとして送られてしまう（PDF作成ライブラリでも報告されている
-// 既知の挙動）。そのためPDF作成ライブラリが内部で使っているのと同じ手法として、
-// Blobを一度data URL化した上で、先頭のMIME部分を「data:attachment/file;...」に書き換える
-// （ページ内でそのまま表示する対象ではなく、保存・共有の対象として扱わせるためのおまじない）。
-function blobToAttachmentDataUrl(blob) {
-  return new Promise((resolve, reject) => {
-    try {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = String(reader.result || '');
-        resolve(result.replace(/^data:[^;]*;/, 'data:attachment/file;'));
-      };
-      reader.onerror = () => reject(reader.error || new Error('FileReader error'));
-      reader.readAsDataURL(blob);
-    } catch (e) { reject(e); }
-  });
-}
-
 // 納品書をブラウザの印刷機能を経由せず、アプリ内で直接PDFファイルとして作成し、
 // 対応環境では共有シート（AirDrop・保存・送信など）、それ以外ではダウンロードで保存する。
 // html2canvasで実際の表示内容をそのまま画像化してPDFに埋め込むため、ブラウザ・OSが印刷時に
@@ -3131,22 +3161,13 @@ async function exportDeliverySlipPdf(client, date, items, statusCb, subject, pdf
     let openedInTab = false;
     if (pdfWindow && !pdfWindow.closed) {
       try {
-        // iOS（Safari・iOS版Chromeなど、iOS上は全てWebKitベース）では、blob: URLをそのままタブに
-        // 開いて共有すると、ファイル名の情報が共有シートまで伝わらず「Unknown.pdf」という
-        // 名無しファイルとして送られてしまう（PDF作成ライブラリ側でも報告されている既知の挙動）。
-        // そのためiOSの場合のみ、PDF作成ライブラリ内部が使っているのと同じ手法
-        // （Blob→data URL化した上でMIME部分を「attachment/file」に書き換え、ページ内表示ではなく
-        // 「保存・共有」対象として扱わせる）でURLを作る。タブのタイトルにもファイル名を設定しておき、
-        // Safari側がファイル名を推測する手がかりを少しでも増やす。
-        // iOS以外（Android・パソコンなど）は、これまで通りのblob: URL方式のままとする
-        // （data:attachment/file形式は環境によってはプレビューでなく強制ダウンロードになってしまうため）。
-        if (isIOSWebKitEnv()) {
-          try { pdfWindow.document.title = fileName; } catch (titleErr) {}
-          const dataUrl = await blobToAttachmentDataUrl(file);
-          pdfWindow.location.href = dataUrl;
-        } else {
-          pdfWindow.location.href = URL.createObjectURL(file);
-        }
+        // 補足：iOSのSafariでこのタブを介して共有すると、ファイル名の情報が共有シートまで伝わらず
+        // 「Unknown.pdf」という名無しファイルになってしまうことがある（PDF作成ライブラリ側でも
+        // 報告されている既知の挙動）。一度「data:」形式のURLに変換して回避を試みたが、その方式は
+        // Safariが独自にブロックしてしまい、タブが「PDFを作成しています…」の画面のまま固まって
+        // しまうという、より重大な問題が判明したため撤回した。現状はblob: URL方式のままとし、
+        // 「開けない・固まる」よりは「開けるが名前がUnknownになる場合がある」を優先している。
+        pdfWindow.location.href = URL.createObjectURL(file);
         openedInTab = true;
         setStatus('PDFを開きました。共有ボタンから送信できます');
       } catch (openErr) {
@@ -3444,6 +3465,43 @@ function lookupWhConsignItem() {
       : '';
     status.style.color = 'var(--text-muted)';
   }
+}
+
+// JANコードが手元にない・読み取りにくい場合でも、登録済みの商品を型番や商品名の一部から探せるようにする
+// （納品書作成画面の検索と同じ仕組みを、預かりリストの追加にも使う）
+function searchWhConsignItemByModel() {
+  const input = document.getElementById('wh-consign-model-search');
+  const resultsEl = document.getElementById('wh-consign-model-results');
+  if (!input || !resultsEl) return;
+  const q = input.value.trim().toLowerCase();
+  if (!q) { resultsEl.innerHTML = ''; return; }
+  const matches = products.filter(p =>
+    (p.model && p.model.toLowerCase().includes(q)) ||
+    (p.name && p.name.toLowerCase().includes(q))
+  ).slice(0, 8);
+  if (!matches.length) {
+    resultsEl.innerHTML = `<div style="font-size:12px;color:var(--text-muted);padding:6px 2px">該当する商品が見つかりません</div>`;
+    return;
+  }
+  resultsEl.innerHTML = matches.map(p => `
+    <div onclick="selectWhConsignModelResult('${p._key}')" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer">
+      <div style="min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name || ''}</div>
+        <div style="font-size:11px;color:var(--text-muted)">${p.model || '型番未登録'}・在庫${p.stock ?? 0}個</div>
+      </div>
+      <div style="font-size:12px;color:var(--gold-dark);font-weight:600;white-space:nowrap;flex-shrink:0">＋ 追加</div>
+    </div>
+  `).join('');
+}
+
+function selectWhConsignModelResult(productKey) {
+  const prod = products.find(p => p._key === productKey);
+  if (!prod) return;
+  addWhConsignRow(prod);
+  const input = document.getElementById('wh-consign-model-search');
+  if (input) input.value = '';
+  const resultsEl = document.getElementById('wh-consign-model-results');
+  if (resultsEl) resultsEl.innerHTML = '';
 }
 
 function addWhConsignRow(prod) {
@@ -4180,6 +4238,62 @@ function compressImageFile(file, maxDim, quality) {
   });
 }
 
+// JANコードでの一致（または旧仕様の名前一部一致）で見つかった商品を入出庫フォームに反映する。
+// JANスキャン・型番/商品名検索のどちらから選んでも同じ経路で反映されるよう共通化してある
+function selectMoveProduct(found) {
+  const info = document.getElementById('move-product-info');
+  const status = document.getElementById('move-jan-status');
+  document.getElementById('move-product-name').textContent = found.name;
+  document.getElementById('move-current-stock').textContent = found.stock;
+  info.style.display = 'block';
+  info.dataset.key = found._key;
+  if (status) status.textContent = '';
+  // 梱包追加フォームにJANと商品名を自動入力
+  const packJan = document.getElementById('pack-jan-sp');
+  const packProduct = document.getElementById('pack-product-sp');
+  if (packJan) packJan.value = found.jan || '';
+  if (packProduct && !packProduct.value) packProduct.value = found.name;
+}
+
+// JANコードが手元にない・読み取りにくい場合でも、登録済みの商品を型番や商品名の一部から探せるようにする
+function searchMoveItemByModel() {
+  const input = document.getElementById('move-model-search');
+  const resultsEl = document.getElementById('move-model-results');
+  if (!input || !resultsEl) return;
+  const q = input.value.trim().toLowerCase();
+  if (!q) { resultsEl.innerHTML = ''; return; }
+  const matches = products.filter(p =>
+    (p.model && p.model.toLowerCase().includes(q)) ||
+    (p.name && p.name.toLowerCase().includes(q))
+  ).slice(0, 8);
+  if (!matches.length) {
+    resultsEl.innerHTML = `<div style="font-size:12px;color:var(--text-muted);padding:6px 2px">該当する商品が見つかりません</div>`;
+    return;
+  }
+  resultsEl.innerHTML = matches.map(p => `
+    <div onclick="selectMoveModelResult('${p._key}')" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer">
+      <div style="min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name || ''}</div>
+        <div style="font-size:11px;color:var(--text-muted)">${p.model || '型番未登録'}・在庫${p.stock ?? 0}個</div>
+      </div>
+      <div style="font-size:12px;color:var(--gold-dark);font-weight:600;white-space:nowrap;flex-shrink:0">選択</div>
+    </div>
+  `).join('');
+}
+
+function selectMoveModelResult(productKey) {
+  const prod = products.find(p => p._key === productKey);
+  if (!prod) return;
+  // JANコード欄も検索結果に合わせておく（この後の入出庫送信処理がmove-janの値を参照するため）
+  const janInput = document.getElementById('move-jan');
+  if (janInput) janInput.value = prod.jan || '';
+  selectMoveProduct(prod);
+  const input = document.getElementById('move-model-search');
+  if (input) input.value = '';
+  const resultsEl = document.getElementById('move-model-results');
+  if (resultsEl) resultsEl.innerHTML = '';
+}
+
 function lookupProduct() {
   const jan = document.getElementById('move-jan').value.trim();
   const info = document.getElementById('move-product-info');
@@ -4187,16 +4301,7 @@ function lookupProduct() {
   if (!jan) { info.style.display = 'none'; if (status) status.textContent = ''; return; }
   const found = products.find(p => p.jan === jan || p.name.includes(jan));
   if (found) {
-    document.getElementById('move-product-name').textContent = found.name;
-    document.getElementById('move-current-stock').textContent = found.stock;
-    info.style.display = 'block';
-    info.dataset.key = found._key;
-    if (status) status.textContent = '';
-    // 梱包追加フォームにJANと商品名を自動入力
-    const packJan = document.getElementById('pack-jan-sp');
-    const packProduct = document.getElementById('pack-product-sp');
-    if (packJan) packJan.value = found.jan || jan;
-    if (packProduct && !packProduct.value) packProduct.value = found.name;
+    selectMoveProduct(found);
   } else {
     info.style.display = 'none';
     if (status) {
@@ -4375,8 +4480,10 @@ function estimateStockoutForecast(p) {
 function buildInvCard(p, opts) {
   const editable = !!(opts && opts.editable);
   const threshold = getLowStockThreshold(p);
-  const stockClass = p.stock === 0 ? 'stock-zero' : p.stock <= threshold ? 'stock-low' : 'stock-ok';
-  const stockLabel = p.stock === 0 ? '在庫切れ' : p.stock <= threshold ? '残りわずか' : '在庫あり';
+  // 入荷記録より先に納品書を作って卸してしまうことも多く、在庫がマイナスになる場合があるため、
+  // 0だけでなくマイナスの場合も「在庫切れ」として扱う（残りわずか、ではなく明確に切れている表示にする）
+  const stockClass = p.stock <= 0 ? 'stock-zero' : p.stock <= threshold ? 'stock-low' : 'stock-ok';
+  const stockLabel = p.stock <= 0 ? '在庫切れ' : p.stock <= threshold ? '残りわずか' : '在庫あり';
   const totalVal = (p.cost || 0) * p.stock;
   // 入荷履歴（同じ商品でも入荷日が複数ある場合はここに積み重なる）
   const receipts = getProductReceipts(p._key);
@@ -4471,8 +4578,10 @@ function toggleInvRowExpand(key) {
 
 function buildInvRow(p) {
   const threshold = getLowStockThreshold(p);
-  const stockClass = p.stock === 0 ? 'stock-zero' : p.stock <= threshold ? 'stock-low' : 'stock-ok';
-  const stockLabel = p.stock === 0 ? '在庫切れ' : p.stock <= threshold ? '残りわずか' : '在庫あり';
+  // 入荷記録より先に納品書を作って卸してしまうことも多く、在庫がマイナスになる場合があるため、
+  // 0だけでなくマイナスの場合も「在庫切れ」として扱う
+  const stockClass = p.stock <= 0 ? 'stock-zero' : p.stock <= threshold ? 'stock-low' : 'stock-ok';
+  const stockLabel = p.stock <= 0 ? '在庫切れ' : p.stock <= threshold ? '残りわずか' : '在庫あり';
   const totalVal = (p.cost || 0) * p.stock;
   const forecast = estimateStockoutForecast(p);
   const forecastDays = forecast ? Math.max(0, Math.round(forecast.daysLeft)) : null;
