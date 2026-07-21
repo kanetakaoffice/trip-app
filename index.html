@@ -211,27 +211,18 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 .toast.show { opacity: 1; transform: translateY(0); }
 .ds-preview-scale-wrap { width: 100%; overflow: hidden; background: #e5e5e5; border-radius: 8px; padding: 12px 0; display: flex; justify-content: center; }
 .ds-preview-page { width: 794px; background: #fff; padding: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.15); transform-origin: top center; flex-shrink: 0; position: relative; overflow: hidden; }
-/* 納品書の「従来の印刷機能を使う」：新しいタブ・ウィンドウを開かず、今表示しているページ自体を
-   印刷する方式（window.open()を一切使わないため、iOSのポップアップブロックの影響を受けない）。
-   普段はposition:absoluteで画面外に置いておく（display:noneにすると寸法が0になり、縦線の位置・高さの
-   計算(getBoundingClientRect)が狂ってしまうため、オフスクリーンPDF書き出し用のコンテナと同じ方式にする）。
-   position:fixedではなくabsoluteにしているのは、Safari（特にiPhone）にはposition:fixedの要素を
-   印刷対象から除外してしまう既知の不具合があり、@media printでpositionをstaticに上書きしても
-   内容が印刷・PDFに反映されない（真っ白になる）ことがあったため。absoluteならこの問題を回避できる。
-   印刷時だけ通常配置に戻し、#ds-print-only-root以外の要素をすべて隠して納品書の内容だけを印刷する。 */
-#ds-print-only-root { position: absolute; left: -9999px; top: 0; width: 794px; background: #fff; padding: 24px; font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif; color: #1a1a1a; z-index: -1; }
-/* marginを0にすると、一部のブラウザ（Chromeなど）では印刷時のヘッダー・フッター（日時・URL・ページ番号）が
-   表示されなくなる（iPhoneのSafariには効果がないが、他の環境向けに残しておく） */
-@page { size: auto; margin: 0; }
-@media print {
-  body > *:not(#ds-print-only-root) { display: none !important; }
-  #ds-print-only-root { position: static !important; left: auto !important; width: auto !important; z-index: auto !important; padding: 14mm 10mm !important; }
-}
+/* 納品書の印刷・PDF保存は、隠しiframeの中に納品書だけの独立したHTML文書を書き出し、
+   そのiframeに対してprint()を呼ぶ方式にしている（openDeliverySlipPrint関数を参照）。
+   以前は今表示しているページ自体をprint()し、CSSで納品書以外の要素を隠す方式にしていたが、
+   アプリの他の要素との兼ね合いで環境（特にiPhoneのSafari）によって中身が空白になってしまう
+   不具合があったため、印刷対象を完全に独立した文書に分離するこちらの方式に変更した。
+   なお、印刷時に画面下部などに表示される日時・URL・ページ番号は、ブラウザ（Chromeなど）が
+   印刷ダイアログの設定に応じて自動的に付け足しているもので、アプリ側では消せない。
+   消したい場合は印刷ダイアログの「詳細設定」内にある「ヘッダーとフッター」のチェックを
+   外していただく必要がある。 */
 </style>
 </head>
 <body>
-
-<div id="ds-print-only-root"></div>
 
 <div class="login-screen" id="login-screen">
   <div class="login-box">
@@ -3127,16 +3118,46 @@ function renderDeliverySlipColumns(root, items) {
 // 追加したPWAとして使っている場合）ではこのwindow.open自体がブロックされてしまい、ボタンをタップしても
 // 何も起こらないことがあると分かったため、新しいタブ・ウィンドウを一切開かず、今表示している画面自体を
 // 印刷する方式に変更した（ポップアップブロックの影響を受けない、最も基本的な印刷手法）。
+// 納品書の印刷・PDF保存：window.open()は使わない（iOSでポップアップブロックの影響を受けることが
+// あったため）。以前は今表示しているページ自体をprint()し、納品書以外の要素をCSSで隠す方式に
+// していたが、アプリの他の要素との兼ね合いで環境（特にiPhoneのSafari）によって中身が空白のまま
+// 印刷・PDF保存されてしまう不具合があった。そのため、隠しiframeの中に納品書だけの完全に独立した
+// HTML文書を書き出し、そのiframe自体に対してprint()を呼ぶ方式に変更した。ページ本体の見た目や
+// 他の要素と一切干渉しないため、より確実に印刷・PDFの中身が表示される。
 function openDeliverySlipPrint(client, date, items, subject) {
-  const root = document.getElementById('ds-print-only-root');
-  if (!root) return;
-  root.innerHTML = dsSlipBodyHtml(client, date, subject);
-  renderDeliverySlipColumns(root, items);
-
   const fileName = `納品書_${client}_${date}`.replace(/[\\/:*?"<>|]/g, '_');
+
+  let iframe = document.getElementById('ds-print-iframe');
+  if (!iframe) {
+    iframe = document.createElement('iframe');
+    iframe.id = 'ds-print-iframe';
+    iframe.setAttribute('aria-hidden', 'true');
+    // 幅をA4用紙相当（96dpiで約794px）に固定しておく。0のままだと内部の文書がほぼ幅0で
+    // レイアウトされてしまい、renderDeliverySlipColumns内の高さ計測（getBoundingClientRect）が
+    // 実際に印刷される見た目と大きくズレてしまうため
+    iframe.style.cssText = 'position:absolute; left:-9999px; top:0; width:794px; height:1123px; border:0;';
+    document.body.appendChild(iframe);
+  }
+
+  const idoc = iframe.contentDocument || iframe.contentWindow.document;
+  idoc.open();
+  idoc.write(`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
+<title>${fileName}</title>
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; padding:24px; font-family:'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif; color:#1a1a1a; background:#fff; }
+  @page { size:auto; margin:10mm; }
+</style>
+</head><body><div id="ds-print-root"></div></body></html>`);
+  idoc.close();
+
+  const rootEl = idoc.getElementById('ds-print-root');
+  rootEl.innerHTML = dsSlipBodyHtml(client, date, subject);
+  renderDeliverySlipColumns(rootEl, items);
+
   const prevTitle = document.title;
-  // 印刷ダイアログから「PDFとして保存」した場合などに、ファイル名の候補としてページタイトルが
-  // 使われることがあるため、印刷中だけタイトルを一時的に差し替える
+  // 印刷ダイアログから「PDFとして保存」した場合などに、ファイル名の候補としてページ（iframe）の
+  // タイトルが使われることがあるため、念のためメインページ側のタイトルも印刷中だけ差し替えておく
   document.title = fileName;
 
   let cleaned = false;
@@ -3144,14 +3165,20 @@ function openDeliverySlipPrint(client, date, items, subject) {
     if (cleaned) return;
     cleaned = true;
     document.title = prevTitle;
-    root.innerHTML = '';
-    window.removeEventListener('afterprint', cleanup);
+    try { iframe.contentWindow.removeEventListener('afterprint', cleanup); } catch(e) {}
   };
-  window.addEventListener('afterprint', cleanup);
-  // 'afterprint'イベントが発火しない環境でもタイトル・内容が残り続けないよう、念のため保険をかけておく
+  try { iframe.contentWindow.addEventListener('afterprint', cleanup); } catch(e) {}
+  // 'afterprint'イベントが発火しない環境でもタイトルが元に戻らないままにならないよう、念のため保険をかけておく
   setTimeout(cleanup, 60000);
 
-  window.print();
+  // iframeに書き出した内容を実際に描画（ペイント）し終えてからprint()を呼ぶことで、
+  // 環境によって中身が空白のまま印刷・PDF保存されてしまうのを防ぐ
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    });
+  });
 }
 
 // 発行済みの納品書について、保存されている出庫記録から取引先・日付・明細を再構成する
