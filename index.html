@@ -213,10 +213,13 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 .ds-preview-page { width: 794px; background: #fff; padding: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.15); transform-origin: top center; flex-shrink: 0; position: relative; overflow: hidden; }
 /* 納品書の「従来の印刷機能を使う」：新しいタブ・ウィンドウを開かず、今表示しているページ自体を
    印刷する方式（window.open()を一切使わないため、iOSのポップアップブロックの影響を受けない）。
-   普段はposition:fixedで画面外に置いておく（display:noneにすると寸法が0になり、縦線の位置・高さの
+   普段はposition:absoluteで画面外に置いておく（display:noneにすると寸法が0になり、縦線の位置・高さの
    計算(getBoundingClientRect)が狂ってしまうため、オフスクリーンPDF書き出し用のコンテナと同じ方式にする）。
+   position:fixedではなくabsoluteにしているのは、Safari（特にiPhone）にはposition:fixedの要素を
+   印刷対象から除外してしまう既知の不具合があり、@media printでpositionをstaticに上書きしても
+   内容が印刷・PDFに反映されない（真っ白になる）ことがあったため。absoluteならこの問題を回避できる。
    印刷時だけ通常配置に戻し、#ds-print-only-root以外の要素をすべて隠して納品書の内容だけを印刷する。 */
-#ds-print-only-root { position: fixed; left: -9999px; top: 0; width: 794px; background: #fff; padding: 24px; font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif; color: #1a1a1a; z-index: -1; }
+#ds-print-only-root { position: absolute; left: -9999px; top: 0; width: 794px; background: #fff; padding: 24px; font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif; color: #1a1a1a; z-index: -1; }
 /* marginを0にすると、一部のブラウザ（Chromeなど）では印刷時のヘッダー・フッター（日時・URL・ページ番号）が
    表示されなくなる（iPhoneのSafariには効果がないが、他の環境向けに残しておく） */
 @page { size: auto; margin: 0; }
