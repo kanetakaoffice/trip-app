@@ -11,10 +11,6 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<!-- 納品書PDFの直接作成（ブラウザの印刷機能を経由すると、特にiPhoneのSafariで日時・URL・ページ番号が
-     自動的に付いてしまい消せないため、アプリ内でPDFファイルそのものを作って保存・共有できるようにする） -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -221,6 +217,9 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
    計算(getBoundingClientRect)が狂ってしまうため、オフスクリーンPDF書き出し用のコンテナと同じ方式にする）。
    印刷時だけ通常配置に戻し、#ds-print-only-root以外の要素をすべて隠して納品書の内容だけを印刷する。 */
 #ds-print-only-root { position: fixed; left: -9999px; top: 0; width: 794px; background: #fff; padding: 24px; font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif; color: #1a1a1a; z-index: -1; }
+/* marginを0にすると、一部のブラウザ（Chromeなど）では印刷時のヘッダー・フッター（日時・URL・ページ番号）が
+   表示されなくなる（iPhoneのSafariには効果がないが、他の環境向けに残しておく） */
+@page { size: auto; margin: 0; }
 @media print {
   body > *:not(#ds-print-only-root) { display: none !important; }
   #ds-print-only-root { position: static !important; left: auto !important; width: auto !important; z-index: auto !important; padding: 14mm 10mm !important; }
@@ -1473,10 +1472,9 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     </div>
     <div id="wh-deliv-preview-status" style="display:none;font-size:12px;padding:8px 10px;border-radius:8px;margin-top:10px;flex-shrink:0"></div>
     <div style="display:flex;gap:10px;margin-top:14px;flex-shrink:0">
-      <button id="wh-deliv-preview-pdf-btn" onclick="pdfFromDeliverySlipPreview()" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8d8d8,#a8a8a8);color:#1a1a1a;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">📄 PDFを保存・共有する</button>
+      <button id="wh-deliv-preview-pdf-btn" onclick="printFromDeliverySlipPreview()" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8d8d8,#a8a8a8);color:#1a1a1a;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">🖨 PDFを保存・共有する</button>
       <button onclick="closeDeliverySlipPreview()" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">閉じる</button>
     </div>
-    <button onclick="printFromDeliverySlipPreview()" style="display:block;width:100%;margin-top:8px;background:none;border:none;color:var(--text-muted);font-size:11px;text-decoration:underline;cursor:pointer;padding:4px;flex-shrink:0">従来の印刷機能を使う（ブラウザの印刷ダイアログ）</button>
   </div>
 </div>
 
@@ -3104,8 +3102,8 @@ function renderDeliverySlipColumns(root, items) {
   }
 }
 
-// 納品書の印刷（従来のブラウザ印刷機能を使う場合。実際に紙のプリンターに送りたい場合や、
-// アプリ内PDF作成（exportDeliverySlipPdf）がうまくいかない場合の代替手段として残している）。
+// 納品書の印刷・PDF保存・共有はすべてこの経路を使う（紙のプリンターに送りたい場合も、
+// PDFとして保存・共有したい場合も、ブラウザ標準の印刷機能ひとつにまとめてある）。
 // 以前は新しいタブ（window.open）を開いてそこに印刷用ページを書き出していたが、iOS（特にホーム画面に
 // 追加したPWAとして使っている場合）ではこのwindow.open自体がブロックされてしまい、ボタンをタップしても
 // 何も起こらないことがあると分かったため、新しいタブ・ウィンドウを一切開かず、今表示している画面自体を
@@ -3137,106 +3135,6 @@ function openDeliverySlipPrint(client, date, items, subject) {
   window.print();
 }
 
-// iOS（iPhone・iPad）かどうかを判定する。iOS上はSafariに限らずChrome・Edgeなども含め
-// 納品書をブラウザの印刷機能を経由せず、アプリ内で直接PDFファイルとして作成し、
-// 対応環境では共有シート（AirDrop・保存・送信など）、それ以外ではダウンロードで保存する。
-// html2canvasで実際の表示内容をそのまま画像化してPDFに埋め込むため、ブラウザ・OSが印刷時に
-// 自動で付け足す日時・URL・ページ番号などは一切含まれない。
-async function exportDeliverySlipPdf(client, date, items, statusCb, subject, pdfWindow) {
-  const setStatus = statusCb || function(){};
-  if (typeof html2canvas === 'undefined' || !window.jspdf) {
-    setStatus('PDF作成に必要な機能の読み込みに失敗しました。通信環境をご確認のうえ、しばらくしてからもう一度お試しください。', true);
-    if (pdfWindow && !pdfWindow.closed) pdfWindow.close();
-    return;
-  }
-  const container = document.createElement('div');
-  container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:#fff;padding:24px;font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;color:#1a1a1a;z-index:-1;';
-  container.innerHTML = dsSlipBodyHtml(client, date, subject);
-  document.body.appendChild(container);
-  setStatus('PDFを作成しています…');
-  try {
-    renderDeliverySlipColumns(container, items);
-    const canvas = await html2canvas(container, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
-    const jsPDF = window.jspdf.jsPDF;
-    const pageWmm = 210, pageHmm = 297, marginMm = 6;
-    const usableWmm = pageWmm - marginMm * 2;
-    const usableHmm = pageHmm - marginMm * 2;
-    const pxPerMmW = canvas.width / usableWmm;
-    const pageHeightPx = Math.max(1, Math.floor(usableHmm * pxPerMmW));
-    const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
-    let renderedPx = 0;
-    let first = true;
-    while (renderedPx < canvas.height) {
-      const sliceHeightPx = Math.min(pageHeightPx, canvas.height - renderedPx);
-      const sliceCanvas = document.createElement('canvas');
-      sliceCanvas.width = canvas.width;
-      sliceCanvas.height = sliceHeightPx;
-      sliceCanvas.getContext('2d').drawImage(canvas, 0, renderedPx, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
-      const sliceHmm = sliceHeightPx / pxPerMmW;
-      if (!first) pdf.addPage();
-      pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', marginMm, marginMm, usableWmm, sliceHmm);
-      renderedPx += sliceHeightPx;
-      first = false;
-    }
-    const fileName = `納品書_${client}_${date}`.replace(/[\\/:*?"<>|]/g, '_') + '.pdf';
-    try { pdf.setProperties({ title: fileName }); } catch(e) {}
-    const blob = pdf.output('blob');
-    // blob単体にはファイル名の情報が無く、タブで直接開いて保存・共有すると「unknown」等の
-    // 名無しファイルになってしまうことがあるため、名前付きのFileオブジェクトからURLを作る
-    // （navigator.share向けのFileと同じものを、タブ表示側でも共通で使う）
-    const file = new File([blob], fileName, { type: 'application/pdf' });
-
-    // アプリ内でJSのBlobをnavigator.share()で直接共有すると、機種・OSバージョンや
-    // 送信先アプリによっては共有シートが開いても実際にはファイルが正しく送れないことがある
-    // （「印刷してから共有すると送れる」という報告の通り、ブラウザ標準のPDFビューアー経由の
-    // 共有の方が確実）。そのため、まずはボタンを押した直後（非同期処理が始まる前）に開いておいた
-    // 空のタブへPDFを読み込ませ、ブラウザ標準のPDFビューアーの共有ボタンから送ってもらう方式を優先する。
-    // ポップアップブロックなどでタブが開けなかった場合のみ、従来通りWeb Share API／ダウンロードにフォールバックする。
-    let openedInTab = false;
-    if (pdfWindow && !pdfWindow.closed) {
-      try {
-        // 補足：iOSのSafariでこのタブを介して共有すると、ファイル名の情報が共有シートまで伝わらず
-        // 「Unknown.pdf」という名無しファイルになってしまうことがある（PDF作成ライブラリ側でも
-        // 報告されている既知の挙動）。一度「data:」形式のURLに変換して回避を試みたが、その方式は
-        // Safariが独自にブロックしてしまい、タブが「PDFを作成しています…」の画面のまま固まって
-        // しまうという、より重大な問題が判明したため撤回した。現状はblob: URL方式のままとし、
-        // 「開けない・固まる」よりは「開けるが名前がUnknownになる場合がある」を優先している。
-        pdfWindow.location.href = URL.createObjectURL(file);
-        openedInTab = true;
-        setStatus('PDFを開きました。共有ボタンから送信できます');
-      } catch (openErr) {
-        console.error(openErr);
-      }
-    }
-
-    if (!openedInTab) {
-      try {
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: fileName });
-          setStatus('');
-        } else {
-          pdf.save(fileName);
-          setStatus('PDFを保存しました（ダウンロード先をご確認ください）');
-        }
-      } catch (shareErr) {
-        if (shareErr && shareErr.name === 'AbortError') {
-          setStatus('');
-        } else {
-          console.error(shareErr);
-          pdf.save(fileName);
-          setStatus('共有できなかったため、PDFをダウンロードしました');
-        }
-      }
-    }
-  } catch (e) {
-    console.error(e);
-    setStatus('PDFの作成に失敗しました。通信環境をご確認のうえ、もう一度お試しください。', true);
-    if (pdfWindow && !pdfWindow.closed) pdfWindow.close();
-  } finally {
-    document.body.removeChild(container);
-  }
-}
-
 // 発行済みの納品書について、保存されている出庫記録から取引先・日付・明細を再構成する
 // （印刷・PDF保存のどちらからも同じ内容を使えるよう共通化）
 function buildDeliverySlipDataFromSlipId(slipId) {
@@ -3254,18 +3152,14 @@ function buildDeliverySlipDataFromSlipId(slipId) {
   return { client: moves[0].client, date: moves[0].date, subject: moves[0].subject || '', items };
 }
 
-// 発行済みの納品書を、従来のブラウザ印刷機能で開く（紙のプリンターに直接送りたい場合など）
+// 発行済みの納品書をブラウザの印刷機能で開く（紙のプリンターに直接送りたい場合や、
+// PDFとして保存・共有したい場合の両方をこの経路でまかなう。以前はアプリ内で直接PDFファイルを
+// 作る別経路（html2canvas＋jsPDF）もあったが、iOSでファイル名が「Unknown」になってしまう問題が
+// 解消できなかったため、ファイル名も正しく保たれるこちらの印刷機能一本にまとめた）
 function printDeliverySlip(slipId) {
   const data = buildDeliverySlipDataFromSlipId(slipId);
   if (!data) { showToast('対象の納品書が見つかりません'); return; }
   openDeliverySlipPrint(data.client, data.date, data.items, data.subject);
-}
-
-// 発行済みの納品書を、アプリ内で直接PDFファイルとして作成し保存・共有する（通常はこちらを使う）
-async function exportDeliverySlipPdfBySlipId(slipId, statusCb, pdfWindow) {
-  const data = buildDeliverySlipDataFromSlipId(slipId);
-  if (!data) { showToast('対象の納品書が見つかりません'); if (pdfWindow && !pdfWindow.closed) pdfWindow.close(); return; }
-  await exportDeliverySlipPdf(data.client, data.date, data.items, statusCb, data.subject, pdfWindow);
 }
 
 // 実際にPDF・印刷される見た目そのままの印刷プレビューを表示する（「内容を見る」「PDF保存」の
@@ -3316,36 +3210,6 @@ function closeDeliverySlipPreview() {
   _dsPreviewSlipId = null;
 }
 
-// プレビューを見ながら、そのままPDFとして保存・共有する
-async function pdfFromDeliverySlipPreview() {
-  if (!_dsPreviewSlipId) return;
-  const slipId = _dsPreviewSlipId;
-  const btn = document.getElementById('wh-deliv-preview-pdf-btn');
-  const statusEl = document.getElementById('wh-deliv-preview-status');
-  const origLabel = btn ? btn.textContent : '';
-  function setStatus(msg, isError) {
-    if (!statusEl) return;
-    statusEl.textContent = msg || '';
-    statusEl.style.display = msg ? 'block' : 'none';
-    statusEl.style.background = isError ? '#fdecea' : '#fff8e1';
-    statusEl.style.color = isError ? '#b3261e' : '#8a6d00';
-  }
-  // ポップアップブロックされないよう、非同期処理（PDF作成）が始まる前、クリック操作の直後に
-  // 空のタブを開いておく。この時点で開いたタブへは後からPDFの中身を読み込ませる。
-  let pdfWindow = null;
-  try {
-    pdfWindow = window.open('', '_blank');
-    if (pdfWindow) {
-      pdfWindow.document.write('<title>PDFを作成しています…</title><body style="font-family:-apple-system,sans-serif;padding:24px;color:#555">PDFを作成しています…しばらくお待ちください。</body>');
-    }
-  } catch (e) { pdfWindow = null; }
-  if (btn) { btn.disabled = true; btn.textContent = 'PDFを作成しています…'; }
-  try {
-    await exportDeliverySlipPdfBySlipId(slipId, setStatus, pdfWindow);
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = origLabel; }
-  }
-}
 
 // slipIdに紐づく出庫記録を取り消して在庫を戻し、対応する売上記録も削除する（編集・取消の両方から呼ばれる共通処理）
 // 編集（取消→作り直し）から呼ばれた直後にloadInventory()を待たずに新しい在庫数を計算できるよう、
@@ -3473,9 +3337,17 @@ function renderWhDelivHistory() {
     </div>`).join('');
 }
 
-// 従来のブラウザ印刷機能を、印刷プレビューを見ながらでも使えるようにする（紙のプリンターに直接送りたい場合など）
+// プレビューを見ながら、ブラウザの印刷機能でPDFの保存・共有まで行う（納品書のPDF保存・共有はこちらに一本化した）
 function printFromDeliverySlipPreview() {
-  if (_dsPreviewSlipId) printDeliverySlip(_dsPreviewSlipId);
+  if (!_dsPreviewSlipId) return;
+  const statusEl = document.getElementById('wh-deliv-preview-status');
+  if (statusEl) {
+    statusEl.textContent = '印刷画面が開きます。そこから「PDFに保存」または共有をお選びください';
+    statusEl.style.display = 'block';
+    statusEl.style.background = '#fff8e1';
+    statusEl.style.color = '#8a6d00';
+  }
+  printDeliverySlip(_dsPreviewSlipId);
 }
 
 let _whConsignItems = [];
