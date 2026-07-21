@@ -1399,6 +1399,41 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
   </div>
 </div>
 
+<!-- EC売上：日別グラフの下の日付をタップすると開く、その日の売上を編集するモーダル。
+     Amazon側の数字が後から変わっていた、といったケースにその場で気づいて直せるようにする -->
+<div id="ec-day-edit-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px" id="ec-day-edit-title">売上を編集</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">金額の修正や、間違って登録した売上の削除ができます</div>
+    <div id="ec-day-edit-list"></div>
+    <div id="ec-day-edit-empty" style="font-size:12px;color:var(--text-muted);padding:12px 0;text-align:center">この日の売上記録はまだありません</div>
+    <div class="field-divider" style="margin:16px 0"></div>
+    <div class="card-title" style="font-size:13px;margin-bottom:8px">この日の売上を追加</div>
+    <div class="field">
+      <div class="field-label">販路</div>
+      <div style="display:flex;gap:8px">
+        <button type="button" id="ec-day-edit-ch-amazon" onclick="selectEcDayEditChannel('Amazon')" style="flex:1;padding:10px;font-size:13px;font-weight:600;border:1.5px solid #3a3a3a;border-radius:8px;background:#3a3a3a;color:#fff;cursor:pointer">Amazon</button>
+        <button type="button" id="ec-day-edit-ch-jisha" onclick="selectEcDayEditChannel('自社EC')" style="flex:1;padding:10px;font-size:13px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:none;color:#909090;cursor:pointer">自社EC</button>
+      </div>
+      <input type="hidden" id="ec-day-edit-channel" value="Amazon">
+    </div>
+    <div class="field" style="padding-top:12px">
+      <div class="field-label">金額</div>
+      <input type="number" id="ec-day-edit-new-amount" placeholder="例：12800" inputmode="numeric" min="0">
+    </div>
+    <div class="field" style="padding-top:12px">
+      <div class="field-label">メモ</div>
+      <input type="text" id="ec-day-edit-new-note" placeholder="商品名など（任意）">
+    </div>
+    <div style="padding-top:12px">
+      <button class="btn btn-gold" onclick="addEcDayEditEntry()" style="width:100%">追加する</button>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button onclick="closeEcDayEdit()" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">閉じる</button>
+    </div>
+  </div>
+</div>
+
 <!-- 実際にPDF・印刷される見た目そのままの印刷プレビュー（納品書作成の「内容を見る」「PDF保存」から表示） -->
 <div id="wh-deliv-preview-modal" style="display:none;position:fixed;inset:0;z-index:610;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;padding:16px">
   <div style="background:var(--white);border-radius:16px;padding:16px;width:100%;max-width:480px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
@@ -2330,7 +2365,7 @@ async function autoSearchWhQuickRegisterByJan(jan) {
     const r = await fetch(url);
     const d = await r.json();
 
-    const manualLink = `<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-size:12px">📦 価格.comで手動検索する</a>`;
+    const manualLink = `<br>${kakakuLinkHtml(jan, null, '価格.comで手動検索する')}`;
 
     if (!r.ok || d.error) {
       console.error('価格.com検索APIエラー:', r.status, d.error);
@@ -2359,7 +2394,7 @@ async function autoSearchWhQuickRegisterByJan(jan) {
         const makerField = document.getElementById('wh-qr-maker');
         if (guessedMaker && makerField && !makerField.value) { makerField.value = guessedMaker; renderMakerSelectUI('wh-qr'); }
         const guessNote = guessedModel ? '（型番は自動推定のため必ずご確認ください）' : '';
-        if (status) { status.innerHTML = `✅ JANコードから商品名を自動取得しました。確認・修正してから登録してください${guessNote}`; status.style.color = 'var(--success)'; }
+        if (status) { status.innerHTML = `✅ JANコードから商品名を自動取得しました。確認・修正してから登録してください${guessNote}<br>${kakakuLinkHtml(jan, item, '価格.comで詳細を確認')}`; status.style.color = 'var(--success)'; }
       } else {
         if (status) { status.innerHTML = `商品が見つかりませんでした。上の欄に型番を入力して再検索するか、商品名を直接入力してください${manualLink}`; status.style.color = 'var(--text-muted)'; }
       }
@@ -2368,7 +2403,7 @@ async function autoSearchWhQuickRegisterByJan(jan) {
     }
   } catch(e) {
     console.error('価格.com検索リクエスト失敗:', e);
-    if (status) { status.innerHTML = `自動検索に失敗しました（通信エラーの可能性）。上の欄に型番を入力して再検索することもできます<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-size:12px">📦 価格.comで手動検索する</a>`; status.style.color = 'var(--danger)'; }
+    if (status) { status.innerHTML = `自動検索に失敗しました（通信エラーの可能性）。上の欄に型番を入力して再検索することもできます<br>${kakakuLinkHtml(jan, null, '価格.comで手動検索する')}`; status.style.color = 'var(--danger)'; }
   }
 }
 
@@ -2378,7 +2413,7 @@ async function searchWhQuickRegister() {
   const status = document.getElementById('wh-qr-status');
   if (!model) { if (status) status.textContent = '型番を入力してから検索してください'; return; }
   if (status) { status.textContent = '🔍 価格.comで商品情報を検索中...'; status.style.color = 'var(--text-muted)'; }
-  const manualLink = `<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(model)}" target="_blank" style="color:var(--gold-dark);font-size:12px">📦 価格.comで手動検索する</a>`;
+  const manualLink = `<br>${kakakuLinkHtml(model, null, '価格.comで手動検索する')}`;
 
   try {
     const query = encodeURIComponent(model + ' 価格.com');
@@ -2410,7 +2445,7 @@ async function searchWhQuickRegister() {
         const guessedMaker = guessMaker(productName);
         const makerField = document.getElementById('wh-qr-maker');
         if (guessedMaker && makerField) { makerField.value = guessedMaker; renderMakerSelectUI('wh-qr'); }
-        if (status) { status.innerHTML = '✅ 商品名を取得しました。確認・修正してから登録してください'; status.style.color = 'var(--success)'; }
+        if (status) { status.innerHTML = `✅ 商品名を取得しました。確認・修正してから登録してください<br>${kakakuLinkHtml(model, item, '価格.comで詳細を確認')}`; status.style.color = 'var(--success)'; }
       } else {
         if (status) { status.innerHTML = `商品が見つかりませんでした。商品名を手入力してください${manualLink}`; status.style.color = 'var(--text-muted)'; }
       }
@@ -2853,13 +2888,15 @@ const DS_STYLE = `
       .ds-cols-wrap { display:flex; gap:28px; margin-top:12px; border:1.2px solid #999; border-radius:5px; padding:10px 16px; }
       .ds-col { flex:1; min-width:0; position:relative; }
       .ds-col-divider { position:absolute; top:0; width:1px; background:#999; }
-      .ds-row { display:flex; align-items:baseline; gap:6px; padding:6px 0; margin-bottom:5px; border-bottom:1px solid #ccc; font-size:10.5px; }
+      .ds-row { display:flex; align-items:flex-start; gap:6px; padding:6px 0; margin-bottom:5px; border-bottom:1px solid #ccc; font-size:10.5px; }
       .ds-row.ds-headrow { font-weight:700; border-bottom:1.5px solid #999; margin-bottom:8px; background:#ececec; }
       .ds-row-wrap { border-bottom:1px solid #ccc; margin-bottom:3px; padding-bottom:2px; }
       .ds-row-wrap.ds-row-alt { background:#f6f6f6; }
       .ds-row-wrap .ds-row { border-bottom:none; margin-bottom:0; padding-bottom:0; }
       .ds-note { font-size:9px; color:#555; text-align:center; margin-top:-2px; }
-      .ds-model { flex:2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:center; }
+      /* 商品数が多く2列に分かれた時など、列幅が狭くなっても型番が省略記号で見切れないよう、
+         切り詰めずに折り返して全体を表示する（長い英数字の型番でも折り返せるようbreak-allにする） */
+      .ds-model { flex:2; overflow-wrap:break-word; word-break:break-all; text-align:center; }
       .ds-row-wrap .ds-model { text-align:left; }
       .ds-qty { flex:0.6; text-align:center; padding-left:8px; }
       .ds-price { flex:0.9; text-align:center; padding-left:8px; }
@@ -3004,6 +3041,39 @@ function openDeliverySlipPrint(client, date, items, subject) {
   renderDeliverySlipColumns(w.document, items);
 }
 
+// iOS（iPhone・iPad）かどうかを判定する。iOS上はSafariに限らずChrome・Edgeなども含め
+// 全てのブラウザがWebKitベースであり、blob: URLの共有時にファイル名が失われる挙動も共通のため、
+// ブラウザ種別ではなくOSがiOSかどうかで判定する（iPadOSはUAがMacと区別つかない場合があるため、
+// タッチ対応のMacIntelもiPadとして扱う）。
+function isIOSWebKitEnv() {
+  try {
+    const ua = navigator.userAgent || '';
+    if (/iP(hone|od|ad)/.test(ua)) return true;
+    // iPadOSは「Macintosh」を名乗りつつタッチ操作に対応しているMacIntelとして見分ける
+    return navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
+  } catch (e) { return false; }
+}
+
+// PDFのBlobを、iOSで正しくファイル名付きの「保存・共有」対象として扱ってもらうためのURLに変換する。
+// blob: URLのままiOSでタブに開いて共有すると、共有シート側にファイル名の情報が伝わらず
+// 「Unknown.pdf」という名無しファイルとして送られてしまう（PDF作成ライブラリでも報告されている
+// 既知の挙動）。そのためPDF作成ライブラリが内部で使っているのと同じ手法として、
+// Blobを一度data URL化した上で、先頭のMIME部分を「data:attachment/file;...」に書き換える
+// （ページ内でそのまま表示する対象ではなく、保存・共有の対象として扱わせるためのおまじない）。
+function blobToAttachmentDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    try {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = String(reader.result || '');
+        resolve(result.replace(/^data:[^;]*;/, 'data:attachment/file;'));
+      };
+      reader.onerror = () => reject(reader.error || new Error('FileReader error'));
+      reader.readAsDataURL(blob);
+    } catch (e) { reject(e); }
+  });
+}
+
 // 納品書をブラウザの印刷機能を経由せず、アプリ内で直接PDFファイルとして作成し、
 // 対応環境では共有シート（AirDrop・保存・送信など）、それ以外ではダウンロードで保存する。
 // html2canvasで実際の表示内容をそのまま画像化してPDFに埋め込むため、ブラウザ・OSが印刷時に
@@ -3047,6 +3117,10 @@ async function exportDeliverySlipPdf(client, date, items, statusCb, subject, pdf
     const fileName = `納品書_${client}_${date}`.replace(/[\\/:*?"<>|]/g, '_') + '.pdf';
     try { pdf.setProperties({ title: fileName }); } catch(e) {}
     const blob = pdf.output('blob');
+    // blob単体にはファイル名の情報が無く、タブで直接開いて保存・共有すると「unknown」等の
+    // 名無しファイルになってしまうことがあるため、名前付きのFileオブジェクトからURLを作る
+    // （navigator.share向けのFileと同じものを、タブ表示側でも共通で使う）
+    const file = new File([blob], fileName, { type: 'application/pdf' });
 
     // アプリ内でJSのBlobをnavigator.share()で直接共有すると、機種・OSバージョンや
     // 送信先アプリによっては共有シートが開いても実際にはファイルが正しく送れないことがある
@@ -3054,11 +3128,25 @@ async function exportDeliverySlipPdf(client, date, items, statusCb, subject, pdf
     // 共有の方が確実）。そのため、まずはボタンを押した直後（非同期処理が始まる前）に開いておいた
     // 空のタブへPDFを読み込ませ、ブラウザ標準のPDFビューアーの共有ボタンから送ってもらう方式を優先する。
     // ポップアップブロックなどでタブが開けなかった場合のみ、従来通りWeb Share API／ダウンロードにフォールバックする。
-    const blobUrl = URL.createObjectURL(blob);
     let openedInTab = false;
     if (pdfWindow && !pdfWindow.closed) {
       try {
-        pdfWindow.location.href = blobUrl;
+        // iOS（Safari・iOS版Chromeなど、iOS上は全てWebKitベース）では、blob: URLをそのままタブに
+        // 開いて共有すると、ファイル名の情報が共有シートまで伝わらず「Unknown.pdf」という
+        // 名無しファイルとして送られてしまう（PDF作成ライブラリ側でも報告されている既知の挙動）。
+        // そのためiOSの場合のみ、PDF作成ライブラリ内部が使っているのと同じ手法
+        // （Blob→data URL化した上でMIME部分を「attachment/file」に書き換え、ページ内表示ではなく
+        // 「保存・共有」対象として扱わせる）でURLを作る。タブのタイトルにもファイル名を設定しておき、
+        // Safari側がファイル名を推測する手がかりを少しでも増やす。
+        // iOS以外（Android・パソコンなど）は、これまで通りのblob: URL方式のままとする
+        // （data:attachment/file形式は環境によってはプレビューでなく強制ダウンロードになってしまうため）。
+        if (isIOSWebKitEnv()) {
+          try { pdfWindow.document.title = fileName; } catch (titleErr) {}
+          const dataUrl = await blobToAttachmentDataUrl(file);
+          pdfWindow.location.href = dataUrl;
+        } else {
+          pdfWindow.location.href = URL.createObjectURL(file);
+        }
         openedInTab = true;
         setStatus('PDFを開きました。共有ボタンから送信できます');
       } catch (openErr) {
@@ -3068,7 +3156,6 @@ async function exportDeliverySlipPdf(client, date, items, statusCb, subject, pdf
 
     if (!openedInTab) {
       try {
-        const file = new File([blob], fileName, { type: 'application/pdf' });
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           await navigator.share({ files: [file], title: fileName });
           setStatus('');
@@ -3706,6 +3793,16 @@ const YAHOO_CLIENT_ID = "dmVyPTIwMjUwNyZpZD1oZWl6dUs1MUZSJmhhc2g9TXpOak5qSTNNREk
 const GOOGLE_API_KEY = "AIzaSyCvomRZSZkM-vdvVLwCM3j8ktt7Xfkc7YM";
 const SEARCH_ENGINE_ID = "f4008bcf1a11f4fbd";
 
+// Google Custom Search（価格.com限定）の検索結果には、価格.comの実際の商品ページURL（item.link）が
+// 含まれている。これまではJANコード自体をキーワード検索結果ページ（search_results）にリンクしていたため、
+// 価格.comアプリでバーコードをスキャンした時のような「その商品個別のページ」ではなく、一覧ページが開いてしまっていた。
+// 検索でヒットした商品があれば、そのitem.linkを使って個別ページへ直接リンクする。
+// （該当が無かった・検索自体が失敗した場合のみ、従来通りキーワード検索結果ページへのリンクにフォールバックする）
+function kakakuLinkHtml(query, item, label) {
+  const url = (item && item.link) ? item.link : `https://kakaku.com/search_results/?query=${encodeURIComponent(query)}`;
+  return `<a href="${url}" target="_blank" style="color:var(--gold-dark);font-size:12px">📦 ${label}</a>`;
+}
+
 // 価格.com検索（Google Custom Search）がエラーを返した際、原因を画面上にも表示できるようにする補助関数。
 // これまでは console.error にしか詳細が出ておらず、利用者側からは原因（クォータ超過／キー制限など）が分からなかったため追加。
 function formatSearchApiError(r, d) {
@@ -3837,7 +3934,7 @@ async function lookupJan() {
     // 「見つからなかった」と区別してその旨を表示する（原因の切り分けをしやすくするため）
     if (!r.ok || d.error) {
       console.error('価格.com検索APIエラー:', r.status, d.error);
-      status.innerHTML = `商品情報の検索でエラーが発生しました${formatSearchApiError(r, d)}（検索機能自体が一時的に利用できない可能性があります）。お手数ですが商品名・型番・メーカーは手入力をお願いします。<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-size:12px">📦 価格.comで手動検索する</a>`;
+      status.innerHTML = `商品情報の検索でエラーが発生しました${formatSearchApiError(r, d)}（検索機能自体が一時的に利用できない可能性があります）。お手数ですが商品名・型番・メーカーは手入力をお願いします。<br>${kakakuLinkHtml(jan, null, '価格.comで手動検索する')}`;
       status.style.color = 'var(--danger)';
       return;
     }
@@ -3873,19 +3970,19 @@ async function lookupJan() {
         }
         const guessNote = notes.length ? `（${notes.join('・')}は自動推定です。必ずご確認ください）` : '';
 
-        status.innerHTML = `✅ 商品名を取得しました！確認・修正してから登録してください。${guessNote}<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-size:12px">📦 価格.comで詳細を確認</a>`;
+        status.innerHTML = `✅ 商品名を取得しました！確認・修正してから登録してください。${guessNote}<br>${kakakuLinkHtml(jan, item, '価格.comで詳細を確認')}`;
         status.style.color = 'var(--success)';
       } else {
-        status.innerHTML = `商品が見つかりませんでした。<a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-weight:600;text-decoration:underline">📦 価格.comで検索する</a>`;
+        status.innerHTML = `商品が見つかりませんでした。${kakakuLinkHtml(jan, null, '価格.comで検索する')}`;
         status.style.color = 'var(--text-muted)';
       }
     } else {
-      status.innerHTML = `新規商品です。<a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-weight:600;text-decoration:underline">📦 価格.comで検索する</a>`;
+      status.innerHTML = `新規商品です。${kakakuLinkHtml(jan, null, '価格.comで検索する')}`;
       status.style.color = 'var(--text-muted)';
     }
   } catch(e) {
     console.error('価格.com検索リクエスト失敗:', e);
-    status.innerHTML = `商品情報の検索に失敗しました（通信エラーの可能性があります）。お手数ですが商品名・型番・メーカーは手入力をお願いします。<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-weight:600;text-decoration:underline">📦 価格.comで手動検索する</a>`;
+    status.innerHTML = `商品情報の検索に失敗しました（通信エラーの可能性があります）。お手数ですが商品名・型番・メーカーは手入力をお願いします。<br>${kakakuLinkHtml(jan, null, '価格.comで手動検索する')}`;
     status.style.color = 'var(--danger)';
   }
 }
@@ -6992,6 +7089,136 @@ async function deleteECSales(key) {
   } catch(e) { showToast('削除に失敗しました'); }
 }
 
+// ── EC売上：日別グラフの下の日付をタップして開く、その日の売上編集モーダル ──
+// Amazon・自社ECの数字はあとから変わっていることがあるため、過去の日付でもその場で
+// 金額・販路・メモを直接修正したり、間違って登録した分を削除したりできるようにする。
+let _ecDayEditDate = null;
+let _ecDayEditDrafts = {}; // key: ecSalesの_key、value: {channel, amount, note}（保存前の編集内容を保持）
+
+function openEcDayEdit(date) {
+  _ecDayEditDate = date;
+  _ecDayEditDrafts = {};
+  const title = document.getElementById('ec-day-edit-title');
+  if (title) title.textContent = fmtDateJP(date) + 'の売上を編集';
+  const amountInput = document.getElementById('ec-day-edit-new-amount');
+  if (amountInput) amountInput.value = '';
+  const noteInput = document.getElementById('ec-day-edit-new-note');
+  if (noteInput) noteInput.value = '';
+  selectEcDayEditChannel('Amazon');
+  renderEcDayEditList();
+  const modal = document.getElementById('ec-day-edit-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeEcDayEdit() {
+  const modal = document.getElementById('ec-day-edit-modal');
+  if (modal) modal.style.display = 'none';
+  _ecDayEditDate = null;
+  _ecDayEditDrafts = {};
+}
+
+// 追加フォーム側の販路選択（既存のselectECChannelと同じ見た目の切り替え）
+function selectEcDayEditChannel(ch) {
+  const hidden = document.getElementById('ec-day-edit-channel');
+  if (hidden) hidden.value = ch;
+  const amazonBtn = document.getElementById('ec-day-edit-ch-amazon');
+  const jishaBtn = document.getElementById('ec-day-edit-ch-jisha');
+  if (amazonBtn && jishaBtn) {
+    const activeStyle = 'border:1.5px solid #3a3a3a;background:#3a3a3a;color:#fff';
+    const inactiveStyle = 'border:1.5px solid var(--border);background:none;color:#909090';
+    amazonBtn.style.cssText = 'flex:1;padding:10px;font-size:13px;font-weight:600;border-radius:8px;cursor:pointer;' + (ch==='Amazon'?activeStyle:inactiveStyle);
+    jishaBtn.style.cssText = 'flex:1;padding:10px;font-size:13px;font-weight:600;border-radius:8px;cursor:pointer;' + (ch==='自社EC'?activeStyle:inactiveStyle);
+  }
+}
+
+function renderEcDayEditList() {
+  const container = document.getElementById('ec-day-edit-list');
+  const empty = document.getElementById('ec-day-edit-empty');
+  if (!container || !empty) return;
+  const items = (_ecAllItems || []).filter(i => i.date === _ecDayEditDate).sort((a,b)=>(a.createdAt||'')<(b.createdAt||'')?-1:1);
+  if (!items.length) { container.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  container.innerHTML = items.map(item => {
+    const draft = _ecDayEditDrafts[item._key] || { channel: item.channel, amount: item.amount, note: item.note || '' };
+    _ecDayEditDrafts[item._key] = draft;
+    const activeStyle = 'border:1.5px solid #3a3a3a;background:#3a3a3a;color:#fff';
+    const inactiveStyle = 'border:1.5px solid var(--border);background:none;color:#909090';
+    return `
+    <div style="border:1.5px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <button type="button" onclick="setEcDayEditRowChannel('${item._key}','Amazon')" style="flex:1;padding:8px;font-size:12px;font-weight:600;border-radius:8px;cursor:pointer;${draft.channel==='Amazon'?activeStyle:inactiveStyle}">Amazon</button>
+        <button type="button" onclick="setEcDayEditRowChannel('${item._key}','自社EC')" style="flex:1;padding:8px;font-size:12px;font-weight:600;border-radius:8px;cursor:pointer;${draft.channel==='自社EC'?activeStyle:inactiveStyle}">自社EC</button>
+      </div>
+      <input type="number" min="0" value="${draft.amount}" oninput="updateEcDayEditRow('${item._key}','amount',this.value)" style="width:100%;padding:8px;font-size:13px;border:1.5px solid var(--border);border-radius:6px;margin-bottom:6px;box-sizing:border-box">
+      <input type="text" value="${draft.note}" placeholder="メモ" oninput="updateEcDayEditRow('${item._key}','note',this.value)" style="width:100%;padding:8px;font-size:13px;border:1.5px solid var(--border);border-radius:6px;margin-bottom:8px;box-sizing:border-box">
+      <div style="display:flex;gap:8px">
+        <button onclick="saveEcDayEditRow('${item._key}')" style="flex:1;padding:8px;font-size:12px;font-weight:700;border:none;border-radius:6px;background:linear-gradient(135deg,#d8d8d8,#a8a8a8);color:#1a1a1a;cursor:pointer">保存</button>
+        <button onclick="deleteEcDayEditEntry('${item._key}')" class="delete-btn" style="flex:0.6">削除</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function setEcDayEditRowChannel(key, ch) {
+  if (!_ecDayEditDrafts[key]) return;
+  _ecDayEditDrafts[key].channel = ch;
+  renderEcDayEditList();
+}
+
+function updateEcDayEditRow(key, field, value) {
+  if (!_ecDayEditDrafts[key]) return;
+  if (field === 'amount') _ecDayEditDrafts[key].amount = parseInt(value) || 0;
+  else _ecDayEditDrafts[key].note = value;
+}
+
+async function saveEcDayEditRow(key) {
+  const draft = _ecDayEditDrafts[key];
+  if (!draft) return;
+  if (!draft.amount || draft.amount < 1) { showToast('金額を入力してください'); return; }
+  try {
+    await fetch(authedUrl('/ecSales/'+key+'.json'), { method:'PATCH', body: JSON.stringify({
+      channel: draft.channel, amount: draft.amount, note: draft.note
+    })});
+    await loadECSales();
+    renderEcDayEditList();
+    renderECListSP();
+    showToast('売上を修正しました');
+  } catch(e) { showToast('修正に失敗しました'); console.error(e); }
+}
+
+async function deleteEcDayEditEntry(key) {
+  if (!await showConfirm('この売上記録を削除しますか？')) return;
+  try {
+    await fetch(authedUrl('/ecSales/'+key+'.json'), {method:'DELETE'});
+    delete _ecDayEditDrafts[key];
+    await loadECSales();
+    renderEcDayEditList();
+    renderECListSP();
+    showToast('削除しました');
+  } catch(e) { showToast('削除に失敗しました'); console.error(e); }
+}
+
+async function addEcDayEditEntry() {
+  if (!_ecDayEditDate) return;
+  const channel = document.getElementById('ec-day-edit-channel')?.value || 'Amazon';
+  const amount  = parseInt(document.getElementById('ec-day-edit-new-amount')?.value) || 0;
+  const note    = (document.getElementById('ec-day-edit-new-note')?.value || '').trim();
+  if (!amount) { showToast('金額を入力してください'); return; }
+  try {
+    await fetch(authedUrl('/ecSales.json'), { method:'POST', body: JSON.stringify({
+      channel, amount, note, date: _ecDayEditDate, createdAt: new Date().toISOString()
+    })});
+    const amountInput = document.getElementById('ec-day-edit-new-amount');
+    if (amountInput) amountInput.value = '';
+    const noteInput = document.getElementById('ec-day-edit-new-note');
+    if (noteInput) noteInput.value = '';
+    await loadECSales();
+    renderEcDayEditList();
+    renderECListSP();
+    showToast(fmtDateJP(_ecDayEditDate) + 'の売上として追加しました');
+  } catch(e) { showToast('追加に失敗しました'); console.error(e); }
+}
+
 // ── スマホ用梱包・EC売上 ──
 const PACK_CAT_COLORS = {
   '家電':             { bg:'#dbeafe', border:'#93c5fd', text:'#1e40af' },
@@ -7116,9 +7343,12 @@ function renderECListSP() {
     const dGridSvg = dTicks.map(t=>`<line x1="0" y1="${dBaselineY - t.frac*dDrawH}" x2="${dTotalW}" y2="${dBaselineY - t.frac*dDrawH}" stroke="#e5e7eb" stroke-width="0.8"/>`).join('');
     // 棒の上に金額を書くと、値が大きい日はグラフ枠の上端で見切れてしまうため、
     // 金額は一覧グラフと同じように棒の下（リスト形式）にまとめて表示する
+    // 日付をタップすると、その日の売上明細を確認・修正できるようにする
+    // （Amazon側の数字が後から変わっていた、といった食い違いにその場で気づいて直せるように）
     const dSummaryRows = dailyData.map((v,i)=>{
       const isToday = i+1===today;
-      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;font-size:12px;border-bottom:1px solid var(--border)">
+      const dateStr = ym+'-'+String(i+1).padStart(2,'0');
+      return `<div onclick="openEcDayEdit('${dateStr}')" style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;font-size:12px;border-bottom:1px solid var(--border);cursor:pointer">
         <span style="font-weight:600;color:${isToday?'#f43f5e':'var(--text)'}">${i+1}日${isToday?'（今日）':''}</span>
         <span style="font-weight:700;color:#4a4a4a">${yen(v)}</span>
       </div>`;
