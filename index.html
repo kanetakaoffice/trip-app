@@ -3147,6 +3147,11 @@ function preparePrintIframeDoc(fileName) {
   * { box-sizing:border-box; }
   body { margin:0; padding:24px; font-family:'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif; color:#1a1a1a; background:#fff; }
   @page { size:auto; margin:10mm; }
+  /* ブラウザは印刷・PDF化の際、インク節約のため既定で背景色を描画しない（ユーザーが印刷設定の
+     「背景のグラフィック」を有効にしない限り消えてしまう）。プレビューでは見えていた行の交互の
+     背景色（縞模様）が印刷・PDFだけ消えてしまう不具合はこれが原因のため、印刷時も背景色を必ず
+     反映させるよう明示的に指定しておく */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
 </style>
 </head><body><div id="ds-print-root"></div></body></html>`);
   idoc.close();
