@@ -3515,19 +3515,23 @@ async function shareDeliverySlipPdfDirect() {
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
     const pageWmm = 210, pageHmm = 297;
-    const imgWmm = pageWmm;
+    // ブラウザの印刷（@page margin:10mm）と見た目を揃えるため、PDF側にも同じ余白を持たせる。
+    // 余白なしで用紙いっぱいに描画すると、印刷プレビューに比べて画面がぎちぎちに見えてしまうため
+    const marginMm = 10;
+    const imgWmm = pageWmm - marginMm * 2;
+    const usableHmm = pageHmm - marginMm * 2;
     const imgHmm = canvas.height * imgWmm / canvas.width;
     const imgData = canvas.toDataURL('image/png');
-    if (imgHmm <= pageHmm) {
-      pdf.addImage(imgData, 'PNG', 0, 0, imgWmm, imgHmm);
+    if (imgHmm <= usableHmm) {
+      pdf.addImage(imgData, 'PNG', marginMm, marginMm, imgWmm, imgHmm);
     } else {
       // 品目数が非常に多く、1ページに収まらない場合は複数ページに分割する
       let renderedHmm = 0, first = true;
       while (renderedHmm < imgHmm) {
         if (!first) pdf.addPage();
         first = false;
-        pdf.addImage(imgData, 'PNG', 0, -renderedHmm, imgWmm, imgHmm);
-        renderedHmm += pageHmm;
+        pdf.addImage(imgData, 'PNG', marginMm, marginMm - renderedHmm, imgWmm, imgHmm);
+        renderedHmm += usableHmm;
       }
     }
     const blob = pdf.output('blob');
