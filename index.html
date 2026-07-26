@@ -11,6 +11,11 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- 納品書プレビューの共有アイコンから、LINE・メール等を直接選べる共有シートを開くためのPDF生成用。
+     読み込みに失敗した場合や生成に失敗した場合は、従来の確実な「ブラウザの印刷機能」経由の
+     共有・PDF保存にその場で自動的に切り替わる（printRenderedDeliverySlipへのフォールバック） -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -1462,7 +1467,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
   <div style="background:var(--white);border-radius:16px;padding:16px;width:100%;max-width:900px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-shrink:0">
       <div style="font-size:15px;font-weight:700;color:var(--text)">印刷プレビュー</div>
-      <button onclick="printFromDeliverySlipPreview()" aria-label="共有" title="共有" style="background:none;border:none;padding:6px;margin:-6px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text)">
+      <button onclick="shareDeliverySlipPdfDirect()" aria-label="共有" title="共有" style="background:none;border:none;padding:6px;margin:-6px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text)">
         <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
       </button>
     </div>
@@ -3436,6 +3441,111 @@ function printFromDeliverySlipPreview() {
     statusEl.style.color = '#8a6d00';
   }
   printRenderedDeliverySlip(pageEl.innerHTML, data.client, data.date);
+}
+
+// プレビュー画面の共有アイコンから呼ばれる。ブラウザの印刷機能を経由すると、印刷・PDF化の際に
+// ブラウザ・OS側でURL・日時・ページ番号のフッターが自動で付け足されてしまい、これはアプリ側の
+// コードからは消せない（特にiPhoneのSafariでは、パソコンのChromeと違って印刷設定にそれを消す
+// 項目自体が無い）。フッターなしでLINE・メールなどにそのまま共有できるようにするため、
+// こちらは印刷機能を経由せず、プレビューに表示されている内容から実際のPDFファイルをその場で
+// 作成し、OS標準の共有シート（印刷・LINE・メール・AirDrop等をまとめて選べるメニュー）に
+// そのファイルを直接渡す。PDF作成やファイル共有に対応していない環境（パソコンのブラウザなど）や、
+// 何らかの理由で失敗した場合は、これまで通り確実に動くprintFromDeliverySlipPreview（ブラウザの
+// 印刷機能）に自動的に切り替える。
+async function shareDeliverySlipPdfDirect() {
+  if (!_dsPreviewSlipId) return;
+  const data = buildDeliverySlipDataFromSlipId(_dsPreviewSlipId);
+  const pageEl = document.getElementById('ds-preview-page');
+  if (!data || !pageEl || !pageEl.innerHTML) { showToast('印刷対象が見つかりません'); return; }
+  const htmlContent = pageEl.innerHTML;
+  const client = data.client, date = data.date;
+  const fileName = `納品書_${client}_${date}`.replace(/[\\/:*?"<>|]/g, '_');
+
+  const statusEl = document.getElementById('wh-deliv-preview-status');
+  const showStatus = (msg, isError) => {
+    if (!statusEl) return;
+    statusEl.textContent = msg;
+    statusEl.style.display = msg ? 'block' : 'none';
+    statusEl.style.background = isError ? '#ffebee' : '#fff8e1';
+    statusEl.style.color = isError ? '#b00020' : '#8a6d00';
+  };
+  const fallbackToPrint = (msg) => {
+    if (msg) showStatus(msg, false);
+    else {
+      showStatus('印刷画面が開きます。そこから「PDFに保存」または共有をお選びください', false);
+    }
+    printRenderedDeliverySlip(htmlContent, client, date);
+  };
+
+  // ライブラリが読み込めていない場合（オフライン等でCDNから取得できなかった場合を含む）は、
+  // その場で確実な方式にフォールバックする
+  if (!window.html2canvas || !window.jspdf || !window.jspdf.jsPDF) {
+    fallbackToPrint();
+    return;
+  }
+  // ファイル共有（navigator.share({files})）に対応していない環境（多くのパソコン用ブラウザなど）では
+  // PDFを作っても渡す先がないため、最初から確実な印刷方式を使う
+  if (!navigator.canShare || !navigator.share) {
+    fallbackToPrint();
+    return;
+  }
+
+  showStatus('PDFを作成しています…', false);
+  let host = null;
+  try {
+    // 実際に印刷・PDF保存されるものと完全に同じHTML（プレビューに今表示されている内容）を
+    // 画面外の隠しコンテナに実寸(794px)で描画し、それをキャプチャしてPDF化する
+    host = document.getElementById('ds-pdf-capture-host');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'ds-pdf-capture-host';
+      host.setAttribute('aria-hidden', 'true');
+      host.style.cssText = 'position:absolute; left:-9999px; top:0; width:794px; background:#fff;';
+      document.body.appendChild(host);
+    }
+    host.innerHTML = htmlContent;
+
+    // フォント・画像の読み込みと描画が完了するのを待つ
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
+
+    const canvas = await window.html2canvas(host, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+    if (!canvas || !canvas.width || !canvas.height) throw new Error('canvas capture failed');
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+    const pageWmm = 210, pageHmm = 297;
+    const imgWmm = pageWmm;
+    const imgHmm = canvas.height * imgWmm / canvas.width;
+    const imgData = canvas.toDataURL('image/png');
+    if (imgHmm <= pageHmm) {
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWmm, imgHmm);
+    } else {
+      // 品目数が非常に多く、1ページに収まらない場合は複数ページに分割する
+      let renderedHmm = 0, first = true;
+      while (renderedHmm < imgHmm) {
+        if (!first) pdf.addPage();
+        first = false;
+        pdf.addImage(imgData, 'PNG', 0, -renderedHmm, imgWmm, imgHmm);
+        renderedHmm += pageHmm;
+      }
+    }
+    const blob = pdf.output('blob');
+    const file = new File([blob], fileName + '.pdf', { type: 'application/pdf' });
+
+    if (!navigator.canShare({ files: [file] })) throw new Error('file sharing not supported');
+
+    showStatus('', false);
+    await navigator.share({ files: [file], title: fileName });
+  } catch (e) {
+    // ユーザーが共有シートを自分でキャンセルした場合（AbortError）は、失敗ではないので
+    // 印刷画面へのフォールバックは行わず、単に何もしない
+    if (e && e.name === 'AbortError') { showStatus('', false); return; }
+    console.error('shareDeliverySlipPdfDirect failed, falling back to print:', e);
+    fallbackToPrint('直接共有できなかったため、印刷画面を開きます。そこから「PDFに保存」または共有をお選びください');
+  } finally {
+    if (host) host.innerHTML = '';
+  }
 }
 
 let _whConsignItems = [];
