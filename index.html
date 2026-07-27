@@ -3195,6 +3195,34 @@ function triggerPrintOnIframe(iframe, fileName) {
   });
 }
 
+// html2canvasによるPDF直接生成用に、キャプチャ対象を完全に独立したiframe文書の中に用意する。
+// 以前はメイン文書に直接ぶら下げた画面外div（left:-9999px）にHTMLを流し込んでいたが、
+// 共有ボタンを使った直後にプレビューの縮小表示が崩れてしまう不具合が報告された。html2canvasは
+// キャプチャの過程でscroll位置や各種スタイルを内部的に測定・操作することがあり、それがメイン文書
+// （＝プレビューのモーダルも含む同じ文書）に影響してしまっていた可能性があるため、印刷機能と同様に
+// 完全に独立したiframe文書の中でキャプチャすることで、メイン文書側に一切影響が及ばないようにする。
+function preparePdfCaptureIframeDoc() {
+  let iframe = document.getElementById('ds-pdf-capture-iframe');
+  if (!iframe) {
+    iframe = document.createElement('iframe');
+    iframe.id = 'ds-pdf-capture-iframe';
+    iframe.setAttribute('aria-hidden', 'true');
+    // 幅をA4用紙相当（96dpiで約794px）に固定。印刷用iframeと同じ考え方
+    iframe.style.cssText = 'position:absolute; left:-9999px; top:0; width:794px; height:1123px; border:0;';
+    document.body.appendChild(iframe);
+  }
+  const idoc = iframe.contentDocument || iframe.contentWindow.document;
+  idoc.open();
+  idoc.write(`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; padding:0; font-family:'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif; color:#1a1a1a; background:#fff; }
+</style>
+</head><body><div id="ds-pdf-capture-root"></div></body></html>`);
+  idoc.close();
+  return { iframe, idoc };
+}
+
 // プレビュー画面（#ds-preview-page）で実際に表示されている、組み立て済みのHTMLをそのまま印刷・PDF保存する。
 // 印刷側で列分割を独自に再計算すると、環境によってプレビューと印刷とで見た目が変わってしまうことが
 // あったため、プレビューで確認した内容をそのまま流用することで、必ず同じ見た目になるようにしている。
@@ -3489,25 +3517,21 @@ async function shareDeliverySlipPdfDirect() {
   }
 
   showStatus('PDFを作成しています…', false);
-  let host = null;
+  let iframe = null;
   try {
-    // 実際に印刷・PDF保存されるものと完全に同じHTML（プレビューに今表示されている内容）を
-    // 画面外の隠しコンテナに実寸(794px)で描画し、それをキャプチャしてPDF化する
-    host = document.getElementById('ds-pdf-capture-host');
-    if (!host) {
-      host = document.createElement('div');
-      host.id = 'ds-pdf-capture-host';
-      host.setAttribute('aria-hidden', 'true');
-      host.style.cssText = 'position:absolute; left:-9999px; top:0; width:794px; background:#fff;';
-      document.body.appendChild(host);
-    }
-    host.innerHTML = htmlContent;
+    // 実際に印刷・PDF保存されるものと完全に同じHTML（プレビューに今表示されている内容）を、
+    // メイン文書とは完全に独立したiframe文書の中に実寸(794px)で描画し、それをキャプチャしてPDF化する
+    const prepared = preparePdfCaptureIframeDoc();
+    iframe = prepared.iframe;
+    const idoc = prepared.idoc;
+    const captureRoot = idoc.getElementById('ds-pdf-capture-root');
+    captureRoot.innerHTML = htmlContent;
 
     // フォント・画像の読み込みと描画が完了するのを待つ
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
+    if (idoc.fonts && idoc.fonts.ready) { try { await idoc.fonts.ready; } catch (e) {} }
 
-    const canvas = await window.html2canvas(host, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+    const canvas = await window.html2canvas(captureRoot, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
     if (!canvas || !canvas.width || !canvas.height) throw new Error('canvas capture failed');
 
     const { jsPDF } = window.jspdf;
@@ -3550,11 +3574,17 @@ async function shareDeliverySlipPdfDirect() {
     console.error('shareDeliverySlipPdfDirect failed, falling back to print:', e);
     fallbackToPrint('直接共有できなかったため、印刷画面を開きます。そこから「PDFに保存」または共有をお選びください');
   } finally {
-    if (host) host.innerHTML = '';
-    // html2canvasによる実機でのレンダリング処理（オフスクリーンでの描画・計測）が、ごく稀に
-    // プレビューモーダル側のスケール表示に影響を残してしまうことがあるため、共有処理が
-    // 終わった時点でモーダルがまだ開いていれば、プレビューの縮小表示を念のため再計算しておく
-    // （閉じた後の再表示にも影響が残らないようにするための保険）
+    // キャプチャ用iframeの中身は次回また書き換えるので、ここで明示的に空にしておく必要はないが、
+    // メモリを無駄に持ち続けないよう念のため空の文書に戻しておく
+    if (iframe) {
+      try {
+        const idoc2 = iframe.contentDocument || iframe.contentWindow.document;
+        const root2 = idoc2.getElementById('ds-pdf-capture-root');
+        if (root2) root2.innerHTML = '';
+      } catch (e) {}
+    }
+    // html2canvasの処理は独立したiframe文書の中で完結するようにしたが、念のための保険として、
+    // 共有処理が終わった時点でプレビューモーダルがまだ開いていれば、縮小表示を再計算しておく
     const modalEl = document.getElementById('wh-deliv-preview-modal');
     if (modalEl && getComputedStyle(modalEl).display !== 'none') {
       fitDeliverySlipPreviewScale();
