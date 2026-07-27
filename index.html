@@ -3538,7 +3538,11 @@ async function shareDeliverySlipPdfDirect() {
     if (!navigator.canShare({ files: [file] })) throw new Error('file sharing not supported');
 
     showStatus('', false);
-    await navigator.share({ files: [file], title: fileName });
+    // titleを付けるとLINEなど共有先アプリによっては、PDFファイルとは別に「タイトル文字列」を
+    // 独立したテキストメッセージとして先に送ってしまうことがある（iOSのWeb Share APIでtitleが
+    // textのように扱われてしまう既知の挙動）。ファイル名は既にPDF自体に含まれているため、
+    // titleは付けずファイルのみを共有する。
+    await navigator.share({ files: [file] });
   } catch (e) {
     // ユーザーが共有シートを自分でキャンセルした場合（AbortError）は、失敗ではないので
     // 印刷画面へのフォールバックは行わず、単に何もしない
@@ -3547,6 +3551,14 @@ async function shareDeliverySlipPdfDirect() {
     fallbackToPrint('直接共有できなかったため、印刷画面を開きます。そこから「PDFに保存」または共有をお選びください');
   } finally {
     if (host) host.innerHTML = '';
+    // html2canvasによる実機でのレンダリング処理（オフスクリーンでの描画・計測）が、ごく稀に
+    // プレビューモーダル側のスケール表示に影響を残してしまうことがあるため、共有処理が
+    // 終わった時点でモーダルがまだ開いていれば、プレビューの縮小表示を念のため再計算しておく
+    // （閉じた後の再表示にも影響が残らないようにするための保険）
+    const modalEl = document.getElementById('wh-deliv-preview-modal');
+    if (modalEl && getComputedStyle(modalEl).display !== 'none') {
+      fitDeliverySlipPreviewScale();
+    }
   }
 }
 
