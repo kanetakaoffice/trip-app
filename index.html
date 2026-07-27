@@ -1476,7 +1476,6 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     </div>
     <div id="wh-deliv-preview-status" style="display:none;font-size:12px;padding:8px 10px;border-radius:8px;margin-top:10px;flex-shrink:0"></div>
     <div style="display:flex;gap:10px;margin-top:14px;flex-shrink:0">
-      <button id="wh-deliv-preview-pdf-btn" onclick="printFromDeliverySlipPreview()" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8d8d8,#a8a8a8);color:#1a1a1a;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">🖨 PDFを保存・共有する</button>
       <button onclick="closeDeliverySlipPreview()" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">閉じる</button>
     </div>
   </div>
@@ -2988,7 +2987,7 @@ const DS_STYLE = `
       .ds-note { font-size:9px; color:#555; text-align:center; margin-top:-2px; }
       /* 商品数が多く2列に分かれた時など、列幅が狭くなっても型番が省略記号で見切れないよう、
          切り詰めずに折り返して全体を表示する（長い英数字の型番でも折り返せるようbreak-allにする） */
-      .ds-model { flex:2; overflow-wrap:break-word; word-break:break-all; text-align:center; }
+      .ds-model { flex:2; overflow-wrap:break-word; word-break:break-all; text-align:center; padding-right:8px; }
       .ds-row-wrap .ds-model { text-align:left; }
       .ds-qty { flex:0.6; text-align:center; padding-left:8px; }
       .ds-price { flex:0.9; text-align:center; padding-left:8px; }
@@ -3417,7 +3416,6 @@ function renderWhDelivHistory() {
       <div style="color:var(--text-muted);font-size:11px;margin-top:2px">数量合計 ${s.itemQty}個／合計 ¥${s.total.toLocaleString('ja-JP')}</div>
       <div style="display:flex;gap:8px;margin-top:8px">
         <button onclick="showDeliverySlipPreview('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">📄 内容を見る</button>
-        <button onclick="showDeliverySlipPreview('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">📄 PDF保存</button>
         <button onclick="editDeliverySlip('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">編集する</button>
         <button onclick="confirmCancelDeliverySlip('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--danger);cursor:pointer">取り消す</button>
       </div>
