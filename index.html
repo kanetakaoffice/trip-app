@@ -4108,6 +4108,14 @@ function buildConsignClientShareHtml(client, items) {
           <button class="cc-btn cc-btn-outline" onclick="ccRequest(${idx}, 'return')">返却します</button>
         </div>
         <div class="cc-status" id="cc-status-${idx}"></div>
+        <div class="cc-fallback" id="cc-fallback-${idx}" style="display:none">
+          <div class="cc-fallback-label">下のメッセージをLINEやメールに貼り付けてお送りください</div>
+          <textarea class="cc-fallback-text" id="cc-fallback-text-${idx}" readonly rows="6"></textarea>
+          <div class="cc-fallback-btn-row">
+            <button class="cc-btn cc-btn-outline" onclick="ccCopy(${idx})">📋 コピーする</button>
+            <a class="cc-btn cc-btn-outline cc-btn-link" id="cc-mailto-${idx}" href="#">✉️ メールで送る</a>
+          </div>
+        </div>
       </div>`;
   }).join('');
 
@@ -4142,8 +4150,13 @@ function buildConsignClientShareHtml(client, items) {
   .cc-btn-row { display:flex; gap:8px; margin-top:10px; }
   .cc-btn { flex:1; padding:10px; font-size:12px; font-weight:700; border:none; border-radius:8px; background:linear-gradient(135deg,#d8d8d8,#a8a8a8); color:#1a1a1a; cursor:pointer; }
   .cc-btn-outline { background:#fff; border:1.5px solid #ccc; }
+  .cc-btn-link { display:flex; align-items:center; justify-content:center; text-decoration:none; color:#1a1a1a; }
   .cc-status { font-size:11px; color:#8a6d00; margin-top:6px; min-height:14px; }
   .cc-empty { text-align:center; color:#666; font-size:13px; padding:20px; }
+  .cc-fallback { margin-top:10px; padding-top:10px; border-top:1px solid #eee; }
+  .cc-fallback-label { font-size:11px; color:#8a6d00; margin-bottom:6px; }
+  .cc-fallback-text { width:100%; font-size:12px; padding:8px; border:1.5px solid #ccc; border-radius:8px; resize:vertical; font-family:inherit; color:#1a1a1a; background:#fafafa; }
+  .cc-fallback-btn-row { display:flex; gap:8px; margin-top:8px; }
 </style>
 </head>
 <body>
@@ -4157,6 +4170,11 @@ function buildConsignClientShareHtml(client, items) {
   </div>
   <scr${''}ipt>
     const CC_MESSAGES = ${messagesJson};
+
+    // 共有先アプリを選べるnavigator.share（対応環境）をまず試し、使えない・失敗した場合は
+    // 必ず画面上にメッセージ本文を表示する（コピー用ボタン・メール起動リンク付き）。
+    // file://で直接開いた場合やnavigator.share/clipboard自体が使えない環境でも、
+    // 「ボタンを押しても何も起きない」ことがないよう、必ず何らかの反応が見えるようにしてある。
     async function ccRequest(idx, kind) {
       const msg = kind === 'settle' ? CC_MESSAGES[idx].settle : CC_MESSAGES[idx].returnMsg;
       const statusEl = document.getElementById('cc-status-' + idx);
@@ -4169,13 +4187,39 @@ function buildConsignClientShareHtml(client, items) {
           if (e && e.name === 'AbortError') return;
         }
       }
-      // 共有機能が使えない環境では、クリップボードにコピーして手動で貼り付けてもらう
-      try {
-        await navigator.clipboard.writeText(msg);
-        if (statusEl) statusEl.textContent = 'コピーしました。LINEやメールに貼り付けてお送りください';
-      } catch (e) {
-        if (statusEl) statusEl.textContent = 'このメッセージをコピーしてお送りください：' + msg;
+      showCcFallback(idx, kind, msg);
+    }
+
+    function showCcFallback(idx, kind, msg) {
+      const statusEl = document.getElementById('cc-status-' + idx);
+      if (statusEl) statusEl.textContent = 'この端末では自動共有ができないため、下のメッセージをコピーしてお送りください';
+      const panel = document.getElementById('cc-fallback-' + idx);
+      const textarea = document.getElementById('cc-fallback-text-' + idx);
+      const mailtoLink = document.getElementById('cc-mailto-' + idx);
+      if (textarea) textarea.value = msg;
+      if (mailtoLink) {
+        const subject = kind === 'settle' ? '精算のご連絡' : '返却のご連絡';
+        mailtoLink.href = 'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(msg);
       }
+      if (panel) panel.style.display = 'block';
+      if (textarea) { textarea.focus(); textarea.select(); }
+    }
+
+    async function ccCopy(idx) {
+      const textarea = document.getElementById('cc-fallback-text-' + idx);
+      const statusEl = document.getElementById('cc-status-' + idx);
+      if (!textarea) return;
+      textarea.focus();
+      textarea.select();
+      let copied = false;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try { await navigator.clipboard.writeText(textarea.value); copied = true; } catch (e) {}
+      }
+      if (!copied) {
+        // navigator.clipboardが使えない環境（file://で開いた場合など）向けの古い方式へのフォールバック
+        try { copied = document.execCommand('copy'); } catch (e) { copied = false; }
+      }
+      if (statusEl) statusEl.textContent = copied ? 'コピーしました。LINEやメールに貼り付けてお送りください' : '選択済みのメッセージを手動でコピーしてください（Cmd/Ctrl+C）';
     }
   <${''}/script>
 </body>
