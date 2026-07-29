@@ -3177,6 +3177,13 @@ function renderDeliverySlipColumns(root, items) {
     const lastRowEl = rowEls[rowEls.length - 1];
     const bottomRect = (lastRowEl || headRow).getBoundingClientRect();
     const dividerHeight = bottomRect.bottom - colRect.top;
+    // 縦線（.ds-col-divider）はposition:absoluteで列の外の高さを直接指定しているため、列自身の
+    // 実際のコンテンツ（見出し＋各行）の高さがそれよりわずかでも低いと、はみ出した分がhtml2canvasに
+    // よるPDFキャプチャ時にだけ切り取られてしまう不具合があった（ブラウザの通常描画ではoverflowが
+    // そのまま見えるため気づきにくいが、html2canvasは要素自身の計算済みの高さを基準に描画領域を
+    // 確定するため、絶対配置要素がそれを超えてはみ出す分は描画されないことがある）。
+    // 列自身にdividerと同じ高さを明示的に持たせることで、はみ出しそのものが起きないようにする。
+    col.style.minHeight = dividerHeight + 'px';
     [headRow.querySelector('.ds-qty'), headRow.querySelector('.ds-price')].forEach(function(target) {
       if (!target) return;
       const r = target.getBoundingClientRect();
@@ -4092,6 +4099,13 @@ function renderConsignListColumns(root, items) {
     const lastRowEl = rowEls[rowEls.length - 1];
     const bottomRect = (lastRowEl || headRow).getBoundingClientRect();
     const dividerHeight = bottomRect.bottom - colRect.top;
+    // 縦線（.ds-col-divider）はposition:absoluteで列の外の高さを直接指定しているため、列自身の
+    // 実際のコンテンツ（見出し＋各行）の高さがそれよりわずかでも低いと、はみ出した分がhtml2canvasに
+    // よるPDFキャプチャ時にだけ切り取られてしまう不具合があった（ブラウザの通常描画ではoverflowが
+    // そのまま見えるため気づきにくいが、html2canvasは要素自身の計算済みの高さを基準に描画領域を
+    // 確定するため、絶対配置要素がそれを超えてはみ出す分は描画されないことがある）。
+    // 列自身にdividerと同じ高さを明示的に持たせることで、はみ出しそのものが起きないようにする。
+    col.style.minHeight = dividerHeight + 'px';
     [headRow.querySelector('.ds-qty'), headRow.querySelector('.ds-price')].forEach(function(target) {
       if (!target) return;
       const r = target.getBoundingClientRect();
