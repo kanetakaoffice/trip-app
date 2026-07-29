@@ -3177,22 +3177,30 @@ function renderDeliverySlipColumns(root, items) {
     const lastRowEl = rowEls[rowEls.length - 1];
     const bottomRect = (lastRowEl || headRow).getBoundingClientRect();
     const dividerHeight = bottomRect.bottom - colRect.top;
-    // 縦線（.ds-col-divider）はposition:absoluteで列の外の高さを直接指定しているため、列自身の
-    // 実際のコンテンツ（見出し＋各行）の高さがそれよりわずかでも低いと、はみ出した分がhtml2canvasに
-    // よるPDFキャプチャ時にだけ切り取られてしまう不具合があった（ブラウザの通常描画ではoverflowが
-    // そのまま見えるため気づきにくいが、html2canvasは要素自身の計算済みの高さを基準に描画領域を
-    // 確定するため、絶対配置要素がそれを超えてはみ出す分は描画されないことがある）。
-    // 列自身にdividerと同じ高さを明示的に持たせることで、はみ出しそのものが起きないようにする。
     col.style.minHeight = dividerHeight + 'px';
-    [headRow.querySelector('.ds-qty'), headRow.querySelector('.ds-price')].forEach(function(target) {
-      if (!target) return;
-      const r = target.getBoundingClientRect();
-      const divider = doc.createElement('div');
-      divider.className = 'ds-col-divider';
-      divider.style.left = (r.left - colRect.left) + 'px';
-      divider.style.height = dividerHeight + 'px';
-      col.appendChild(divider);
-    });
+    // 縦線は以前、position:absoluteの子要素（.ds-col-divider）として描画していたが、実機での
+    // 共有・PDF化（html2canvasによるキャプチャ）でだけ、線が途中で切れてしまう不具合が報告された。
+    // html2canvasには、絶対配置の子要素が親要素自身の高さを超えてはみ出している場合に、はみ出した
+    // 部分を切り取ってしまう既知の不具合がある（niklasvh/html2canvas issue #2716）。列自身にdividerと
+    // 同じ高さをmin-heightとして持たせる対策だけでは解消しなかったため、そもそも「はみ出す可能性のある
+    // 別要素」を作らない方式に変更する。縦線を子要素ではなく列自身のbackground-image（線形グラデーション）
+    // として描くことで、通常のブラウザ描画・html2canvasどちらでも列自身の箱の中に完全に収まった状態で
+    // 描画され、はみ出し・切り取りが原理的に起こり得なくなる。
+    const dividerTargets = [headRow.querySelector('.ds-qty'), headRow.querySelector('.ds-price')]
+      .filter(function(t) { return !!t; });
+    if (dividerTargets.length) {
+      const bgImages = [], bgSizes = [], bgPositions = [];
+      dividerTargets.forEach(function(target) {
+        const r = target.getBoundingClientRect();
+        bgImages.push('linear-gradient(#999,#999)');
+        bgSizes.push('1px ' + dividerHeight + 'px');
+        bgPositions.push((r.left - colRect.left) + 'px 0px');
+      });
+      col.style.backgroundImage = bgImages.join(',');
+      col.style.backgroundRepeat = 'no-repeat';
+      col.style.backgroundSize = bgSizes.join(',');
+      col.style.backgroundPosition = bgPositions.join(',');
+    }
   });
 
   // 合計数量は、明細の右下に単独で表示するのではなく、数量欄の真下に来るよう最後の列の中に差し込む
@@ -4099,22 +4107,26 @@ function renderConsignListColumns(root, items) {
     const lastRowEl = rowEls[rowEls.length - 1];
     const bottomRect = (lastRowEl || headRow).getBoundingClientRect();
     const dividerHeight = bottomRect.bottom - colRect.top;
-    // 縦線（.ds-col-divider）はposition:absoluteで列の外の高さを直接指定しているため、列自身の
-    // 実際のコンテンツ（見出し＋各行）の高さがそれよりわずかでも低いと、はみ出した分がhtml2canvasに
-    // よるPDFキャプチャ時にだけ切り取られてしまう不具合があった（ブラウザの通常描画ではoverflowが
-    // そのまま見えるため気づきにくいが、html2canvasは要素自身の計算済みの高さを基準に描画領域を
-    // 確定するため、絶対配置要素がそれを超えてはみ出す分は描画されないことがある）。
-    // 列自身にdividerと同じ高さを明示的に持たせることで、はみ出しそのものが起きないようにする。
     col.style.minHeight = dividerHeight + 'px';
-    [headRow.querySelector('.ds-qty'), headRow.querySelector('.ds-price')].forEach(function(target) {
-      if (!target) return;
-      const r = target.getBoundingClientRect();
-      const divider = doc.createElement('div');
-      divider.className = 'ds-col-divider';
-      divider.style.left = (r.left - colRect.left) + 'px';
-      divider.style.height = dividerHeight + 'px';
-      col.appendChild(divider);
-    });
+    // 縦線は以前position:absoluteの子要素として描画していたが、html2canvasには絶対配置の子要素が
+    // 親要素自身の高さを超えてはみ出す場合に切り取ってしまう既知の不具合があるため（niklasvh/html2canvas
+    // issue #2716）、子要素を使わず列自身のbackground-imageとして描く方式に変更した
+    // （renderDeliverySlipColumnsと同じ対策。詳細はそちらのコメントを参照）。
+    const dividerTargets = [headRow.querySelector('.ds-qty'), headRow.querySelector('.ds-price')]
+      .filter(function(t) { return !!t; });
+    if (dividerTargets.length) {
+      const bgImages = [], bgSizes = [], bgPositions = [];
+      dividerTargets.forEach(function(target) {
+        const r = target.getBoundingClientRect();
+        bgImages.push('linear-gradient(#999,#999)');
+        bgSizes.push('1px ' + dividerHeight + 'px');
+        bgPositions.push((r.left - colRect.left) + 'px 0px');
+      });
+      col.style.backgroundImage = bgImages.join(',');
+      col.style.backgroundRepeat = 'no-repeat';
+      col.style.backgroundSize = bgSizes.join(',');
+      col.style.backgroundPosition = bgPositions.join(',');
+    }
   });
 
   const lastCol = cols[cols.length - 1];
