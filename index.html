@@ -240,6 +240,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     </div>
     <div id="portal-loading" style="text-align:center;color:var(--text-muted);font-size:13px;padding:30px 0">読み込み中…</div>
     <div id="portal-error" style="display:none;text-align:center;color:#b33;font-size:13px;padding:30px 0">このページは見つかりませんでした。お手数ですが、株式会社KANETAKAまでご連絡ください。</div>
+    <div id="portal-items-summary" style="display:none;text-align:center;font-size:12.5px;color:var(--text-muted);margin-bottom:12px"></div>
     <div id="portal-search-wrap" style="display:none;margin-bottom:14px">
       <input type="text" id="portal-search" placeholder="型番で検索" oninput="filterPortalItems()" style="width:100%;padding:10px 12px;border:1.2px solid var(--border);border-radius:10px;font-size:14px;box-sizing:border-box">
       <div id="portal-search-count" style="font-size:11.5px;color:var(--text-muted);margin-top:4px"></div>
@@ -10485,15 +10486,23 @@ function renderPortalItems(items) {
   const emptyEl = document.getElementById('portal-items-empty');
   const searchWrap = document.getElementById('portal-search-wrap');
   const itemsRoot = document.getElementById('portal-items');
+  const summaryEl = document.getElementById('portal-items-summary');
   if (!items.length) {
     // 検索で絞り込んだ結果0件になったのではなく、そもそも現在預けている商品が無い状態なので、
     // 「該当する型番が見つかりませんでした」ではなく専用の空状態メッセージを出す
     if (itemsRoot) itemsRoot.innerHTML = '';
     if (emptyEl) emptyEl.style.display = 'block';
     if (searchWrap) searchWrap.style.display = 'none';
+    if (summaryEl) summaryEl.style.display = 'none';
     return;
   }
   if (emptyEl) emptyEl.style.display = 'none';
+  // 取引先が今どれだけ預けているか一目で分かるよう、商品種類数と合計個数をまとめて表示する
+  if (summaryEl) {
+    const totalQty = items.reduce((sum, it) => sum + (it.qty || 0), 0);
+    summaryEl.textContent = `現在お預かり中：${items.length}件／合計${totalQty}個`;
+    summaryEl.style.display = 'block';
+  }
   // 商品の種類が多い取引先向けに、型番での絞り込み検索を表示する（1件だけの場合は不要なので隠す）
   if (searchWrap) searchWrap.style.display = items.length > 1 ? 'block' : 'none';
   const searchInput = document.getElementById('portal-search');
