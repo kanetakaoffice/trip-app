@@ -245,6 +245,17 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       <div id="portal-search-count" style="font-size:11.5px;color:var(--text-muted);margin-top:4px"></div>
     </div>
     <div id="portal-items"></div>
+    <div id="portal-items-empty" style="display:none;text-align:center;color:var(--text-muted);font-size:13px;padding:16px 0">現在お預かりしている商品はありません</div>
+
+    <div id="portal-history-wrap" style="display:none;margin-top:22px;background:var(--surface);border-radius:10px;padding:10px 12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAccordion('portal-history')">
+        <span style="font-size:13px;font-weight:700;color:var(--text)">過去の履歴（精算・返却済み）</span>
+        <span class="accordion-arrow" id="acc-arrow-portal-history">▼</span>
+      </div>
+      <div class="accordion-body" id="acc-body-portal-history" style="margin-top:8px">
+        <div id="portal-history-list"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -3816,6 +3827,36 @@ function renderWhConsignList() {
     .sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
 
   if (summaryEl) summaryEl.textContent = holding.length ? `${holding.length}件` : '';
+
+  // 取引先ポータル（?portal=...）が参照するスナップショットを、この画面を開くたびに
+  // 最新の内容へ更新しておく（バックグラウンドで実行。失敗しても画面表示はブロックしない）。
+  // これにより、店舗側がこの画面を開いている間は取引先ポータルの内容も自動で最新に保たれる。
+  // 現在預けている商品が0件になった取引先（すべて精算・返却済み）にも、過去の履歴だけは
+  // 引き続き取引先ポータルで見られるよう、holding・historyどちらか一方にしか登場しない
+  // 取引先も含めて（holdingしかない・historyしかない・両方ある、いずれのケースも）更新する。
+  {
+    const holdingByClient = {};
+    holding.forEach(m => { const key = m.client || '（取引先未設定）'; (holdingByClient[key] = holdingByClient[key] || []).push(m); });
+    const historyByClient = {};
+    history.forEach(m => { const key = m.client || '（取引先未設定）'; (historyByClient[key] = historyByClient[key] || []).push(m); });
+    const allPortalClients = new Set([...Object.keys(holdingByClient), ...Object.keys(historyByClient)]);
+    allPortalClients.forEach(client => {
+      const snapshotItems = (holdingByClient[client] || []).map(m => ({
+        moveKey: m._key,
+        model: consignItemModel(m),
+        qty: m.qty, date: m.date, memo: m.memo || ''
+      }));
+      const snapshotHistoryItems = (historyByClient[client] || []).map(m => ({
+        model: consignItemModel(m),
+        qty: m.qty, status: m.status,
+        date: m.status === 'settled' ? (m.settledAt || null) : (m.returnedAt || null)
+      })).sort((a,b) => (b.date||0) - (a.date||0));
+      fetch(authedUrl('/consignPortal/' + portalIdForClient(client) + '.json'), {
+        method: 'PUT', body: JSON.stringify({ client, items: snapshotItems, historyItems: snapshotHistoryItems, updatedAt: Date.now() })
+      }).catch(() => {});
+    });
+  }
+
   if (!holding.length) {
     listEl.innerHTML = '';
     if (emptyEl) emptyEl.style.display = 'block';
@@ -3833,21 +3874,6 @@ function renderWhConsignList() {
     // 取引先内は新しい順、取引先の並び順は各取引先の最新の預け入れが新しい順
     order.forEach(key => groups[key].sort((a,b) => (b.createdAt||0) - (a.createdAt||0)));
     order.sort((a,b) => (groups[b][0].createdAt||0) - (groups[a][0].createdAt||0));
-
-    // 取引先ポータル（?portal=...）が参照するスナップショットを、この画面を開くたびに
-    // 最新の内容へ更新しておく（バックグラウンドで実行。失敗しても画面表示はブロックしない）。
-    // これにより、店舗側がこの画面を開いている間は取引先ポータルの内容も自動で最新に保たれる。
-    order.forEach(client => {
-      const items = groups[client];
-      const snapshotItems = items.map(m => ({
-        moveKey: m._key,
-        model: consignItemModel(m),
-        qty: m.qty, date: m.date, memo: m.memo || ''
-      }));
-      fetch(authedUrl('/consignPortal/' + portalIdForClient(client) + '.json'), {
-        method: 'PUT', body: JSON.stringify({ client, items: snapshotItems, updatedAt: Date.now() })
-      }).catch(() => {});
-    });
 
     listEl.innerHTML = order.map(client => {
       const items = groups[client];
@@ -10100,19 +10126,35 @@ async function loadPortalData() {
   const data = await r.json();
   const loadingEl = document.getElementById('portal-loading');
   if (loadingEl) loadingEl.style.display = 'none';
-  if (!data || !Array.isArray(data.items) || !data.items.length) {
+  // 現在預けている商品（items）が0件でも、過去の履歴（historyItems）さえあれば
+  // ポータルは表示する（すべて精算・返却済みの取引先が、過去の履歴だけを見に来るケースのため）。
+  const hasItems = !!(data && Array.isArray(data.items) && data.items.length);
+  const hasHistory = !!(data && Array.isArray(data.historyItems) && data.historyItems.length);
+  if (!data || (!hasItems && !hasHistory)) {
     showPortalError();
     return;
   }
   const nameEl = document.getElementById('portal-client-name');
   if (nameEl) nameEl.textContent = data.client || '';
   window._portalClient = data.client || '';
-  renderPortalItems(data.items);
+  renderPortalItems(data.items || []);
+  renderPortalHistory(data.historyItems || []);
 }
 
 function renderPortalItems(items) {
   window._portalItems = items;
+  const emptyEl = document.getElementById('portal-items-empty');
   const searchWrap = document.getElementById('portal-search-wrap');
+  const itemsRoot = document.getElementById('portal-items');
+  if (!items.length) {
+    // 検索で絞り込んだ結果0件になったのではなく、そもそも現在預けている商品が無い状態なので、
+    // 「該当する型番が見つかりませんでした」ではなく専用の空状態メッセージを出す
+    if (itemsRoot) itemsRoot.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'block';
+    if (searchWrap) searchWrap.style.display = 'none';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
   // 商品の種類が多い取引先向けに、型番での絞り込み検索を表示する（1件だけの場合は不要なので隠す）
   if (searchWrap) searchWrap.style.display = items.length > 1 ? 'block' : 'none';
   const searchInput = document.getElementById('portal-search');
@@ -10120,6 +10162,32 @@ function renderPortalItems(items) {
   const countEl = document.getElementById('portal-search-count');
   if (countEl) countEl.textContent = '';
   renderPortalItemsList(items.map((it, idx) => ({ it, idx })));
+}
+
+// 取引先ポータルの「過去の履歴」セクション。精算・返却どちらも読み取り専用で表示するだけで、
+// 操作ボタンは無い（精算・返却の連絡自体は現在預けている商品側からのみ行う）。
+function renderPortalHistory(historyItems) {
+  const wrapEl = document.getElementById('portal-history-wrap');
+  const listEl = document.getElementById('portal-history-list');
+  if (!wrapEl || !listEl) return;
+  if (!historyItems || !historyItems.length) {
+    wrapEl.style.display = 'none';
+    listEl.innerHTML = '';
+    return;
+  }
+  wrapEl.style.display = 'block';
+  listEl.innerHTML = historyItems.map(it => {
+    const label = it.status === 'settled' ? '精算済み' : '返却済み';
+    const color = it.status === 'settled' ? 'var(--success)' : 'var(--text-muted)';
+    const dateStr = it.date ? fmtDateJP(it.date) : '';
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;display:flex;align-items:center;gap:8px">
+      <div style="flex:1;min-width:0">
+        <div style="color:var(--text);font-weight:600">${escapeHtmlMain(it.model || '商品')}</div>
+        <div style="color:var(--text-muted);font-size:11.5px;margin-top:2px">${it.qty}個${dateStr ? '／' + dateStr : ''}</div>
+      </div>
+      <span style="font-size:11px;font-weight:700;color:${color};flex-shrink:0">${label}</span>
+    </div>`;
+  }).join('');
 }
 
 // 型番検索の入力欄が変わるたびに呼ばれる。元のwindow._portalItems配列でのインデックス（idx）は
