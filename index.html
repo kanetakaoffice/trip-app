@@ -169,6 +169,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 .mode-switch { display: flex; background: rgba(255,255,255,0.4); border-radius: 20px; padding: 2px; margin-left: auto; border: 1px solid #a0a0a0; }
 .mode-btn { padding: 5px 10px; border: none; border-radius: 18px; font-size: 11px; font-weight: 600; cursor: pointer; background: none; color: #505050; -webkit-tap-highlight-color: transparent; }
 .mode-btn.active { background: #c0c0c0; color: #1a1a1a; }
+.mode-badge { display:none; background: var(--danger); color:#fff; font-size:9px; font-weight:700; border-radius:10px; padding:1px 5px; margin-left:4px; vertical-align:middle; }
 .inv-card { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 .inv-card-img { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; background: var(--surface); flex-shrink: 0; }
 .inv-card-body { display: flex; gap: 12px; padding: 12px 14px; }
@@ -309,7 +310,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     </div>
     <div class="mode-switch">
       <button class="mode-btn active" id="mode-btn-biz" onclick="switchMode('biz')">📋 業務</button>
-      <button class="mode-btn" id="mode-btn-inv" onclick="switchMode('inv')">📦 在庫</button>
+      <button class="mode-btn" id="mode-btn-inv" onclick="switchMode('inv')">📦 在庫<span class="mode-badge" id="mode-inv-badge"></span></button>
     </div>
   </div>
 </div>
@@ -1397,6 +1398,10 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       <span style="font-size:13px;font-weight:700;color:#3a3a3a">現在預けている商品</span>
       <span id="wh-consign-summary" style="font-size:12px;color:#909090"></span>
     </div>
+    <div id="wh-consign-notify-prompt" style="display:none;align-items:center;justify-content:space-between;gap:8px;background:var(--surface);border:1.2px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:var(--text-muted)">
+      <span>取引先から精算・返却の連絡が来たとき、このアプリを開いている間だけお知らせできます</span>
+      <button onclick="requestConsignNotifyPermission()" style="flex-shrink:0;padding:6px 10px;font-size:12px;font-weight:700;border:1.5px solid var(--gold-dark);border-radius:8px;background:var(--white);color:var(--gold-dark);cursor:pointer">🔔 通知を有効にする</button>
+    </div>
     <div id="wh-consign-requests-panel" style="display:none;background:#fff8e1;border:1.2px solid #e0c56a;border-radius:10px;padding:10px 12px;margin-bottom:12px">
       <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px">🔔 取引先からのリクエスト <span id="wh-consign-requests-count" style="font-weight:400;color:var(--text-muted)"></span></div>
       <div id="wh-consign-requests-list"></div>
@@ -1664,11 +1669,12 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       出荷管理
     </button>
   </div>
-  <div class="nav-btn-wrap">
+  <div class="nav-btn-wrap" style="position:relative">
     <button class="nav-btn" id="nav-inv-wholesale" onclick="showInvScreen('inv-wholesale')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3h18v4H3z"/><path d="M5 7v13h14V7"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
       卸売管理
     </button>
+    <span class="nav-badge" id="wh-nav-badge"></span>
   </div>
 
 
@@ -1937,6 +1943,98 @@ function flattenConsignRequests(obj) {
     });
   });
   return out;
+}
+
+// ── 取引先からの精算・返却リクエスト通知（軽量版：このアプリを開いている間だけ知らせる） ──
+// 本格的なプッシュ通知（アプリを閉じていても届く）にはFirebase Cloud Functions・FCMなど
+// サーバー側の新規構築が必要になるため、まずはサーバー追加不要なこちらの方式で試す。
+// ・バッジ：未確認の件数を「📦 在庫」ボタンと「卸売管理」タブに表示（既読管理は一覧画面の
+//   nav-badgeと同じ考え方で、端末ごとにlocalStorageへ既読件数を保存する）
+// ・音・ブラウザ通知：30秒ごとの軽量ポーリングで新規リクエストの増加を検知した瞬間だけ鳴らす
+//   （すでに未読として表示されている分については、ポーリングのたびに繰り返し鳴らさない）
+let _lastSeenConsignCount = parseInt(localStorage.getItem('kanetaka_consign_seen_count') || '0');
+let _consignNotifyBaseline = null;
+
+function updateConsignNavBadge(pendingCount) {
+  const diff = Math.max(0, pendingCount - _lastSeenConsignCount);
+  ['mode-inv-badge', 'wh-nav-badge'].forEach(id => {
+    const b = document.getElementById(id);
+    if (!b) return;
+    if (diff > 0) { b.style.display = 'inline-block'; b.textContent = diff > 99 ? '99+' : String(diff); }
+    else { b.style.display = 'none'; }
+  });
+}
+
+// 卸売管理の預かりリスト（精算・返却タブ）を開いたときに、その時点の件数を「既読」として記録する
+function markConsignRequestsSeen() {
+  const pendingCount = (consignRequests || []).filter(r => r.status === 'pending').length;
+  _lastSeenConsignCount = pendingCount;
+  localStorage.setItem('kanetaka_consign_seen_count', String(pendingCount));
+  updateConsignNavBadge(pendingCount);
+}
+
+function playConsignNotifySound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine'; o.frequency.value = 880;
+    g.gain.value = 0.15;
+    o.connect(g); g.connect(ctx.destination);
+    o.start();
+    setTimeout(() => { o.stop(); ctx.close(); }, 180);
+  } catch (e) { /* 自動再生ポリシー等でブロックされても無視する */ }
+}
+
+function showConsignBrowserNotification(newCount, latestReq) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    const body = (newCount === 1 && latestReq)
+      ? `${latestReq.client || ''}／${latestReq.model || ''}／${latestReq.qty || ''}個（${latestReq.type === 'settle' ? '精算' : '返却'}）`
+      : `${newCount}件の新しい連絡があります`;
+    const n = new Notification('🔔 取引先から連絡が届きました', { body });
+    n.onclick = () => { window.focus(); n.close(); };
+  } catch (e) { console.error('notification error', e); }
+}
+
+// Notification.requestPermission()はユーザー操作（クリック等）をきっかけに呼ぶ必要があるため、
+// 卸売管理画面のボタンから明示的に呼び出す
+async function requestConsignNotifyPermission() {
+  if (!('Notification' in window)) { showToast('お使いのブラウザは通知に対応していません'); return; }
+  try {
+    const perm = await Notification.requestPermission();
+    updateConsignNotifyPromptVisibility();
+    if (perm === 'granted') showToast('通知を有効にしました');
+    else if (perm === 'denied') showToast('通知が許可されませんでした（ブラウザの設定からいつでも変更できます）');
+  } catch (e) { console.error(e); }
+}
+
+function updateConsignNotifyPromptVisibility() {
+  const el = document.getElementById('wh-consign-notify-prompt');
+  if (!el) return;
+  const supported = 'Notification' in window;
+  el.style.display = (supported && Notification.permission === 'default') ? 'flex' : 'none';
+}
+
+// 30秒ごとに（画面を問わず）consignRequestsだけを軽く取得し直し、新着があればバッジ・音・
+// ブラウザ通知で知らせる。既存の画面表示用データ（consignRequests本体）には触れず、あくまで
+// 件数の監視だけを行う（表示の更新は、その画面を開いたときの既存の読み込み処理に任せる）
+async function pollConsignRequestsForNotify() {
+  try {
+    const cr = await fetch(authedUrl('/consignRequests.json')).then(r => r.json()).catch(() => null);
+    const flat = flattenConsignRequests(cr);
+    const pendingCount = flat.filter(r => r.status === 'pending').length;
+    if (_consignNotifyBaseline === null) {
+      _consignNotifyBaseline = pendingCount;
+    } else if (pendingCount > _consignNotifyBaseline) {
+      const pending = flat.filter(r => r.status === 'pending').sort((a,b) => (b.requestedAt||0) - (a.requestedAt||0));
+      playConsignNotifySound();
+      showConsignBrowserNotification(pendingCount - _consignNotifyBaseline, pending[0]);
+      _consignNotifyBaseline = pendingCount;
+    } else if (pendingCount < _consignNotifyBaseline) {
+      _consignNotifyBaseline = pendingCount;
+    }
+    updateConsignNavBadge(pendingCount);
+  } catch (e) { console.error('consign notify poll error', e); }
 }
 // 取引先ポータルのURL（?portal=...）に使うID。取引先名から決定的に生成することで、
 // 同じ取引先なら毎回同じリンクになる（Firebaseのキーとして安全な英数字のみになるよう、
@@ -2433,6 +2531,8 @@ function switchWhTab(tab) {
     const dateEl = document.getElementById('wh-consign-date');
     if (dateEl && !dateEl.value) dateEl.value = todayStr();
     renderWhConsignList();
+    markConsignRequestsSeen();
+    updateConsignNotifyPromptVisibility();
   }
   if (tab === 'deliv') {
     const dateEl = document.getElementById('wh-deliv-date');
@@ -6720,6 +6820,12 @@ window._initApp = async function() {
   applyRoleUI();
   await loadAll();
   setInterval(loadAll, 30000);
+  // 預かりリストの精算・返却連絡は卸売管理（管理者専用画面）向けの機能なので、
+  // 一般ユーザー（倉庫作業員）の端末では余計な通信・通知許可のお願いをしない
+  if (isAdmin()) {
+    pollConsignRequestsForNotify();
+    setInterval(pollConsignRequestsForNotify, 30000);
+  }
   // ログイン直後、静的に表示されているホーム画面の中身を描画しておく（管理者は経営サマリー、
   // 一般ユーザーは倉庫作業向けの簡易版HOMEをそれぞれ表示）
   if (window.renderHomeScreen) renderHomeScreen();
