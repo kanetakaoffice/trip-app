@@ -240,6 +240,10 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     </div>
     <div id="portal-loading" style="text-align:center;color:var(--text-muted);font-size:13px;padding:30px 0">読み込み中…</div>
     <div id="portal-error" style="display:none;text-align:center;color:#b33;font-size:13px;padding:30px 0">このページは見つかりませんでした。お手数ですが、株式会社KANETAKAまでご連絡ください。</div>
+    <div id="portal-search-wrap" style="display:none;margin-bottom:14px">
+      <input type="text" id="portal-search" placeholder="型番で検索" oninput="filterPortalItems()" style="width:100%;padding:10px 12px;border:1.2px solid var(--border);border-radius:10px;font-size:14px;box-sizing:border-box">
+      <div id="portal-search-count" style="font-size:11.5px;color:var(--text-muted);margin-top:4px"></div>
+    </div>
     <div id="portal-items"></div>
   </div>
 </div>
@@ -1391,6 +1395,17 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       </div>
       <div class="accordion-body" id="acc-body-wh-consign-history" style="margin-top:8px">
         <div id="wh-consign-history-list"></div>
+        <button onclick="createConsignInvoiceSlipFromSelection()" style="width:100%;margin-top:10px;padding:10px;background:var(--surface);color:var(--text);border:1.5px dashed var(--border);border-radius:var(--radius-sm);font-size:12.5px;font-weight:600;cursor:pointer">📄 選択した精算済み商品で納品書を作成</button>
+      </div>
+    </div>
+
+    <div style="margin-top:10px;background:var(--surface);border-radius:10px;padding:10px 12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAccordion('wh-consign-invoices')">
+        <span style="font-size:13px;font-weight:700;color:var(--text)">精算分の納品書（請求用）</span>
+        <span class="accordion-arrow" id="acc-arrow-wh-consign-invoices" style="font-size:10px;color:var(--text-muted)">▼</span>
+      </div>
+      <div class="accordion-body" id="acc-body-wh-consign-invoices" style="margin-top:8px">
+        <div id="wh-consign-invoices-list"></div>
       </div>
     </div>
   </div>
@@ -1901,6 +1916,13 @@ function escapeHtmlMain(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+// 預かり品（stockMovesのtype:'consign'レコード）の型番を求める共通ヘルパー。
+// レコード自身にmodelが記録されていればそれを使い、無ければ商品マスタ（products）から
+// 型番を引き、それも無ければ最後の手段として商品名で代用する（預かりリスト・履歴・
+// 取引先ポータルへのスナップショット送信のすべてで同じ優先順位を使う）。
+function consignItemModel(m) {
+  return (m && m.model) || (products.find(p => p._key === (m && m.productKey)) || {}).model || (m && m.productName) || '';
 }
 // ユーザーがその場で追加したサブカテゴリー（Firebaseの/customSubcats.jsonに保存し、他の端末でも使えるようにする）。
 // 形はCATEGORY_SUBCATSと同じ（フラットな配列、またはゴルフウェアのようにグループ化されたオブジェクト）だが、
@@ -3052,7 +3074,7 @@ const DS_STYLE = `
       .ds-issuer .ds-seal-img { width:34px; height:34px; object-fit:contain; margin-left:-7px; position:relative; z-index:1; }
       .ds-cols-wrap { display:flex; gap:28px; margin-top:12px; border:1.2px solid #999; border-radius:5px; padding:10px 16px; }
       .ds-col { flex:1; min-width:0; position:relative; }
-      .ds-col-divider { position:absolute; top:0; width:1px; background:#999; }
+      .ds-col-divider { position:absolute; top:0; width:1px; background:#999; z-index:5; pointer-events:none; }
       .ds-row { display:flex; align-items:flex-start; gap:6px; padding:6px 0; margin-bottom:5px; border-bottom:1px solid #ccc; font-size:10.5px; }
       .ds-row.ds-headrow { font-weight:700; border-bottom:1.5px solid #999; margin-bottom:8px; background:#ececec; }
       .ds-row-wrap { border-bottom:1px solid #ccc; margin-bottom:3px; padding-bottom:2px; }
@@ -3164,44 +3186,11 @@ function renderDeliverySlipColumns(root, items) {
   const totalQty = items.reduce(function(s, it) { return s + (it.qty || 0); }, 0);
   finalEl.innerHTML = '<div class="ds-cols-wrap">' + colsHtml + '</div>';
 
-  // 型番・数量・単価の間の縦線は、行ごとの罫線をつなげるのではなく列全体を貫く1本の線として描画する
-  // （行と行の間の余白のせいで、行ごとの罫線だと線が途切れて見えてしまうため）。
-  // 高さは列全体（bottom:0）ではなく、実際の明細行の下端までの実測値にしておく。
-  // こうしておくと、後で合計数量の行を列の中に追加しても、縦線がそこまで伸びてしまわない。
+  // 型番・数量・単価の間の縦線は、実機の共有・PDF化（html2canvas）で最後まで伸びない・
+  // 見出し行やゼブラ縞の背景に隠れるなど不具合の再現・解消が難航したため、ユーザーの要望により
+  // 一旦廃止した（「一度、縦線をなくすことはできますか？」）。列の区切りは外枠の罫線と
+  // 各行の下線（border-bottom）のみで表現する。
   const cols = Array.from(finalEl.querySelectorAll('.ds-col'));
-  cols.forEach(function(col) {
-    const headRow = col.querySelector('.ds-row.ds-headrow');
-    if (!headRow) return;
-    const colRect = col.getBoundingClientRect();
-    const rowEls = col.querySelectorAll('.ds-measurable');
-    const lastRowEl = rowEls[rowEls.length - 1];
-    const bottomRect = (lastRowEl || headRow).getBoundingClientRect();
-    const dividerHeight = bottomRect.bottom - colRect.top;
-    col.style.minHeight = dividerHeight + 'px';
-    // 縦線は以前、position:absoluteの子要素（.ds-col-divider）として描画していたが、実機での
-    // 共有・PDF化（html2canvasによるキャプチャ）でだけ、線が途中で切れてしまう不具合が報告された。
-    // html2canvasには、絶対配置の子要素が親要素自身の高さを超えてはみ出している場合に、はみ出した
-    // 部分を切り取ってしまう既知の不具合がある（niklasvh/html2canvas issue #2716）。列自身にdividerと
-    // 同じ高さをmin-heightとして持たせる対策だけでは解消しなかったため、そもそも「はみ出す可能性のある
-    // 別要素」を作らない方式に変更する。縦線を子要素ではなく列自身のbackground-image（線形グラデーション）
-    // として描くことで、通常のブラウザ描画・html2canvasどちらでも列自身の箱の中に完全に収まった状態で
-    // 描画され、はみ出し・切り取りが原理的に起こり得なくなる。
-    const dividerTargets = [headRow.querySelector('.ds-qty'), headRow.querySelector('.ds-price')]
-      .filter(function(t) { return !!t; });
-    if (dividerTargets.length) {
-      const bgImages = [], bgSizes = [], bgPositions = [];
-      dividerTargets.forEach(function(target) {
-        const r = target.getBoundingClientRect();
-        bgImages.push('linear-gradient(#999,#999)');
-        bgSizes.push('1px ' + dividerHeight + 'px');
-        bgPositions.push((r.left - colRect.left) + 'px 0px');
-      });
-      col.style.backgroundImage = bgImages.join(',');
-      col.style.backgroundRepeat = 'no-repeat';
-      col.style.backgroundSize = bgSizes.join(',');
-      col.style.backgroundPosition = bgPositions.join(',');
-    }
-  });
 
   // 合計数量は、明細の右下に単独で表示するのではなく、数量欄の真下に来るよう最後の列の中に差し込む
   const lastCol = cols[cols.length - 1];
@@ -3852,7 +3841,7 @@ function renderWhConsignList() {
       const items = groups[client];
       const snapshotItems = items.map(m => ({
         moveKey: m._key,
-        model: m.model || (products.find(p => p._key === m.productKey) || {}).model || m.productName || '',
+        model: consignItemModel(m),
         qty: m.qty, date: m.date, memo: m.memo || ''
       }));
       fetch(authedUrl('/consignPortal/' + portalIdForClient(client) + '.json'), {
@@ -3865,8 +3854,8 @@ function renderWhConsignList() {
       const itemsHtml = items.map(m => `
         <div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:13px">
           <div style="min-width:0">
-            <div style="color:var(--text);font-weight:600">${m.productName || ''}</div>
-            <div style="color:var(--text-muted);font-size:11px;margin-top:2px">${fmtDateJP(m.date)}／${m.qty}個${m.memo ? '／' + m.memo : ''}</div>
+            <div style="color:var(--text);font-weight:600">${escapeHtmlMain(consignItemModel(m))}</div>
+            <div style="color:var(--text-muted);font-size:11px;margin-top:2px">${fmtDateJP(m.date)}／${m.qty}個${m.memo ? '／' + escapeHtmlMain(m.memo) : ''}</div>
           </div>
           <div style="display:flex;gap:8px;margin-top:8px">
             <button onclick="openSettleConsign('${m._key}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">精算（売れた）</button>
@@ -3889,18 +3878,146 @@ function renderWhConsignList() {
     if (!history.length) {
       historyEl.innerHTML = `<div style="font-size:12px;color:var(--text-muted)">まだ精算・返却の記録はありません</div>`;
     } else {
-      historyEl.innerHTML = history.map(m => {
-        const label = m.status === 'settled' ? '精算済み' : '返却済み';
-        const color = m.status === 'settled' ? 'var(--success)' : 'var(--text-muted)';
+      // 精算と返却は見分けやすいよう別々のセクションに分け、それぞれの日付（settledAt／returnedAt）を表示する。
+      // 精算済みの商品は、まだ納品書（請求用）にしていないものだけチェックボックスで選べるようにし、
+      // すでに納品書にした商品は「請求済み」バッジを表示してこれ以上選べないようにする。
+      const renderHistoryRow = (m) => {
         const amountStr = m.status === 'settled' && m.amount != null ? `／¥${m.amount.toLocaleString('ja-JP')}` : '';
-        return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
-          <span style="color:${color};font-weight:700">${label}</span>
-          　${m.productName || ''}／預け先: ${m.client || ''}／${m.qty}個${amountStr}
+        const dateVal = m.status === 'settled' ? m.settledAt : m.returnedAt;
+        const dateStr = dateVal ? fmtDateJP(dateVal) : '';
+        const rowText = `${escapeHtmlMain(consignItemModel(m))}／預け先: ${escapeHtmlMain(m.client || '')}／${m.qty}個${amountStr}${dateStr ? '／' + dateStr : ''}`;
+        if (m.status === 'settled') {
+          if (m.invoicedSlipId) {
+            return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;display:flex;align-items:center;gap:6px">
+              <span style="flex:1">${rowText}</span>
+              <span style="font-size:11px;font-weight:700;color:var(--gold-dark);flex-shrink:0">請求済み</span>
+            </div>`;
+          }
+          return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;display:flex;align-items:center;gap:6px">
+            <input type="checkbox" class="consign-invoice-checkbox" data-key="${m._key}" style="flex-shrink:0;width:16px;height:16px">
+            <span style="flex:1">${rowText}</span>
+          </div>`;
+        }
+        return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">${rowText}</div>`;
+      };
+      const renderHistorySection = (label, color, list) => {
+        if (!list.length) return '';
+        return `<div style="margin-bottom:12px">
+          <div style="font-size:12px;font-weight:700;color:${color};margin-bottom:4px">${label}（${list.length}件）</div>
+          ${list.map(renderHistoryRow).join('')}
         </div>`;
-      }).join('');
+      };
+      const settledHistory = history.filter(m => m.status === 'settled');
+      const returnedHistory = history.filter(m => m.status === 'returned');
+      historyEl.innerHTML = renderHistorySection('精算済み', 'var(--success)', settledHistory)
+        + renderHistorySection('返却済み', 'var(--text-muted)', returnedHistory);
     }
   }
   renderConsignRequestsPanel();
+  renderConsignInvoicesList();
+}
+
+// 精算済みの預かり品から作成した「請求用の納品書」の一覧（発行済みの通常の納品書＝卸売の
+// 出荷とは別に管理する。理由：預かり品はすでに預け入れ時点で在庫が減っているため、この
+// 納品書は在庫・売上のどちらにも触れず、あくまで取引先へ見せる書類として発行するだけのもの。
+// 通常の納品書と混ざると「取り消す」操作が誤って在庫・売上を二重に動かしてしまうため、
+// channelを'卸売（預かり精算）'として区別し、専用の一覧・取り消し処理を用意している）。
+const CONSIGN_INVOICE_CHANNEL = '卸売（預かり精算）';
+function renderConsignInvoicesList() {
+  const listEl = document.getElementById('wh-consign-invoices-list');
+  if (!listEl) return;
+  const moves = (stockMoves || []).filter(m => m.type === 'out' && m.channel === CONSIGN_INVOICE_CHANNEL && m.slipId);
+  const bySlip = {};
+  moves.forEach(m => { (bySlip[m.slipId] = bySlip[m.slipId] || []).push(m); });
+  const slips = Object.keys(bySlip).map(slipId => {
+    const items = bySlip[slipId];
+    const first = items[0];
+    return {
+      slipId, client: first.client, date: first.date,
+      total: items.reduce((s,m) => s + (m.amount || 0), 0),
+      itemQty: items.reduce((s,m) => s + (m.qty || 0), 0),
+      createdAt: Math.max(...items.map(m => m.createdAt || 0)),
+    };
+  }).sort((a,b) => b.createdAt - a.createdAt);
+
+  if (!slips.length) {
+    listEl.innerHTML = `<div style="font-size:12px;color:var(--text-muted)">まだ精算分の納品書はありません</div>`;
+    return;
+  }
+  listEl.innerHTML = slips.map(s => `
+    <div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:13px">
+      <div style="color:var(--text);font-weight:600">${escapeHtmlMain(s.client || '')}／${fmtDateJP(s.date)}</div>
+      <div style="color:var(--text-muted);font-size:11px;margin-top:2px">数量合計 ${s.itemQty}個／合計 ¥${s.total.toLocaleString('ja-JP')}</div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button onclick="showDeliverySlipPreview('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">📄 内容を見る</button>
+        <button onclick="confirmCancelConsignInvoiceSlip('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--danger);cursor:pointer">取り消す</button>
+      </div>
+    </div>`).join('');
+}
+
+// 「精算・返却済みの履歴」内でチェックした精算済み商品（まだ請求書化していないもの）から、
+// 取引先ごとにまとめて納品書（請求用）を作成する。預かり品は預け入れ時点ですでに在庫を
+// 減らしているため、ここでは在庫・売上のどちらも変更しない（すでに精算時に売上として記録済み）。
+async function createConsignInvoiceSlipFromSelection() {
+  const checked = Array.from(document.querySelectorAll('.consign-invoice-checkbox:checked'));
+  if (!checked.length) { showToast('納品書にする精算済みの商品を選んでください'); return; }
+  const keys = checked.map(el => el.dataset.key);
+  const targets = keys.map(k => (stockMoves || []).find(m => m._key === k)).filter(m => m && m.status === 'settled' && !m.invoicedSlipId);
+  if (!targets.length) { showToast('選択した商品が見つかりませんでした'); return; }
+
+  // 取引先ごとにグループ化し、取引先1件につき納品書を1枚作成する
+  const groups = {};
+  const order = [];
+  targets.forEach(m => {
+    const key = m.client || '（取引先未設定）';
+    if (!groups[key]) { groups[key] = []; order.push(key); }
+    groups[key].push(m);
+  });
+
+  try {
+    let seq = 0;
+    for (const client of order) {
+      const items = groups[client];
+      const slipId = 'cslip_' + Date.now() + '_' + (seq++);
+      const date = todayStr();
+      await Promise.all(items.map(m => fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
+        productKey: m.productKey, productName: m.productName || '', model: consignItemModel(m), jan: m.jan || '',
+        type: 'out', channel: CONSIGN_INVOICE_CHANNEL, client, subject: '預かり精算分',
+        qty: m.qty, unitPrice: m.unitPrice, amount: m.amount, slipId, date, memo: '',
+        sourceConsignKey: m._key, createdAt: Date.now()
+      })})));
+      await Promise.all(items.map(m => fetch(authedUrl('/stockMoves/' + m._key + '.json'), { method: 'PATCH', body: JSON.stringify({ invoicedSlipId: slipId }) })));
+    }
+    await loadInventory();
+    renderWhConsignList();
+    showToast(`${order.length}件の取引先へ、精算分の納品書を作成しました`);
+  } catch (e) { showToast('納品書の作成に失敗しました'); console.error(e); }
+}
+
+// 精算分の納品書（請求用）を取り消す。通常の納品書の取り消し（cancelDeliverySlip）とは異なり、
+// 在庫・売上には一切触れず、単にこの納品書のレコードを削除し、元の精算記録を「未請求」に戻すだけ
+// （在庫は預け入れ時点ですでに減っており、売上は精算時点ですでに記録済みのため、どちらもこの
+// 納品書を作成した時点では変更していない＝取り消し時にも変更してはいけない）。
+function confirmCancelConsignInvoiceSlip(slipId) {
+  showConfirm('この納品書を取り消しますか？（在庫・売上は変更されません。元の精算記録は未請求に戻ります）').then(async ok => {
+    if (!ok) return;
+    try {
+      await cancelConsignInvoiceSlip(slipId);
+      await loadInventory();
+      renderWhConsignList();
+      showToast('納品書を取り消しました');
+    } catch (e) { showToast('取り消しに失敗しました'); console.error(e); }
+  });
+}
+
+async function cancelConsignInvoiceSlip(slipId) {
+  const moves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'out' && m.channel === CONSIGN_INVOICE_CHANNEL);
+  if (!moves.length) return;
+  await Promise.all(moves.map(m => fetch(authedUrl('/stockMoves/' + m._key + '.json'), { method: 'DELETE' })));
+  await Promise.all(moves.filter(m => m.sourceConsignKey).map(m =>
+    fetch(authedUrl('/stockMoves/' + m.sourceConsignKey + '.json'), { method: 'PATCH', body: JSON.stringify({ invoicedSlipId: null }) })
+  ));
+  stockMoves = stockMoves.filter(m => !(m.slipId === slipId && m.type === 'out' && m.channel === CONSIGN_INVOICE_CHANNEL));
 }
 
 // 取引先ポータルから届いた精算・返却リクエストの一覧表示。承認は既存の精算・返却の
@@ -4098,36 +4215,8 @@ function renderConsignListColumns(root, items) {
   const totalQty = items.reduce(function(s, it) { return s + (it.qty || 0); }, 0);
   finalEl.innerHTML = '<div class="ds-cols-wrap">' + colsHtml + '</div>';
 
+  // 縦線は廃止（詳細はrenderDeliverySlipColumnsのコメントを参照）
   const cols = Array.from(finalEl.querySelectorAll('.ds-col'));
-  cols.forEach(function(col) {
-    const headRow = col.querySelector('.ds-row.ds-headrow');
-    if (!headRow) return;
-    const colRect = col.getBoundingClientRect();
-    const rowEls = col.querySelectorAll('.ds-measurable');
-    const lastRowEl = rowEls[rowEls.length - 1];
-    const bottomRect = (lastRowEl || headRow).getBoundingClientRect();
-    const dividerHeight = bottomRect.bottom - colRect.top;
-    col.style.minHeight = dividerHeight + 'px';
-    // 縦線は以前position:absoluteの子要素として描画していたが、html2canvasには絶対配置の子要素が
-    // 親要素自身の高さを超えてはみ出す場合に切り取ってしまう既知の不具合があるため（niklasvh/html2canvas
-    // issue #2716）、子要素を使わず列自身のbackground-imageとして描く方式に変更した
-    // （renderDeliverySlipColumnsと同じ対策。詳細はそちらのコメントを参照）。
-    const dividerTargets = [headRow.querySelector('.ds-qty'), headRow.querySelector('.ds-price')]
-      .filter(function(t) { return !!t; });
-    if (dividerTargets.length) {
-      const bgImages = [], bgSizes = [], bgPositions = [];
-      dividerTargets.forEach(function(target) {
-        const r = target.getBoundingClientRect();
-        bgImages.push('linear-gradient(#999,#999)');
-        bgSizes.push('1px ' + dividerHeight + 'px');
-        bgPositions.push((r.left - colRect.left) + 'px 0px');
-      });
-      col.style.backgroundImage = bgImages.join(',');
-      col.style.backgroundRepeat = 'no-repeat';
-      col.style.backgroundSize = bgSizes.join(',');
-      col.style.backgroundPosition = bgPositions.join(',');
-    }
-  });
 
   const lastCol = cols[cols.length - 1];
   if (lastCol) {
@@ -5194,11 +5283,14 @@ function getLowStockThreshold(p) {
 }
 
 // 直近30日間の出庫実績から、1日あたりの平均出庫数と在庫切れまでの予測日数を計算する
+// （預かり精算分の納品書＝CONSIGN_INVOICE_CHANNELは、預け入れ時点ですでに在庫から減っている分の
+// 請求書類にすぎず、発行日に改めて在庫が動くわけではないため、ここではカウントしない。
+// 含めてしまうと、実際の出庫日ではなく請求書発行日を基準に出庫予測が二重にずれてしまう）
 function estimateStockoutForecast(p) {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 30);
   const cutoffStr = ymdKey(cutoff);
-  const recentOut = (stockMoves || []).filter(m => m.productKey === p._key && m.type === 'out' && m.date && m.date >= cutoffStr);
+  const recentOut = (stockMoves || []).filter(m => m.productKey === p._key && m.type === 'out' && m.channel !== CONSIGN_INVOICE_CHANNEL && m.date && m.date >= cutoffStr);
   if (!recentOut.length) return null;
   const totalOut = recentOut.reduce((s, m) => s + (m.qty || 0), 0);
   if (totalOut <= 0) return null;
@@ -5583,7 +5675,9 @@ function renderInvTrendChart() {
   }
   const totals = months.map(m => {
     const inSum  = (stockMoves || []).filter(mv => mv.type === 'in'  && mv.date && mv.date.startsWith(m.key)).reduce((s, mv) => s + (mv.qty || 0), 0);
-    const outSum = (stockMoves || []).filter(mv => mv.type === 'out' && mv.date && mv.date.startsWith(m.key)).reduce((s, mv) => s + (mv.qty || 0), 0);
+    // 預かり精算分の納品書（CONSIGN_INVOICE_CHANNEL）は請求書類にすぎず、預け入れ時点で
+    // すでに出庫済みのため、ここに含めると請求書発行月に実際の出庫が二重計上されてしまう
+    const outSum = (stockMoves || []).filter(mv => mv.type === 'out' && mv.channel !== CONSIGN_INVOICE_CHANNEL && mv.date && mv.date.startsWith(m.key)).reduce((s, mv) => s + (mv.qty || 0), 0);
     return { ...m, inSum, outSum };
   });
   const maxV = Math.max(...totals.map(t => Math.max(t.inSum, t.outSum)), 1);
@@ -5690,7 +5784,7 @@ function selectInvCalDay(dateStr, skipRerenderGrid) {
 
   const detail = document.getElementById('inv-cal-detail');
   if (!detail) return;
-  const moves = (stockMoves || []).filter(m => m.date === dateStr && (m.type === 'in' || m.type === 'out'));
+  const moves = (stockMoves || []).filter(m => m.date === dateStr && (m.type === 'in' || m.type === 'out') && m.channel !== CONSIGN_INVOICE_CHANNEL);
   if (!moves.length) {
     detail.innerHTML = `<div style="font-size:12px;color:var(--text-muted)">${fmtDateJP(dateStr)}の入出庫はありません</div>`;
     return;
@@ -5714,7 +5808,7 @@ function selectInvCalDay(dateStr, skipRerenderGrid) {
 
 // その日の入出庫記録を一覧表示できる印刷用ページを開く（棚卸や月次出力と同じ印刷パターンを利用）
 function printInvCalDayReport(dateStr) {
-  const moves = (stockMoves || []).filter(m => m.date === dateStr && (m.type === 'in' || m.type === 'out'));
+  const moves = (stockMoves || []).filter(m => m.date === dateStr && (m.type === 'in' || m.type === 'out') && m.channel !== CONSIGN_INVOICE_CHANNEL);
   if (!moves.length) { showToast('この日の入出庫記録がありません'); return; }
   const sorted = [...moves].sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
   const totalIn  = sorted.filter(m=>m.type==='in').reduce((s,m)=>s+m.qty,0);
@@ -5771,7 +5865,9 @@ function printOutOnlyReport() {
   if (!from || !to) { showToast('開始日と終了日を入力してください'); return; }
   if (from > to) { showToast('開始日は終了日より前の日付にしてください'); return; }
 
-  let moves = (stockMoves || []).filter(m => m.type === 'out' && m.date && m.date >= from && m.date <= to);
+  // 預かり精算分の納品書（CONSIGN_INVOICE_CHANNEL）は請求書類にすぎず、預け入れ時点ですでに
+  // 出庫済みのため、実際の出庫実績を集計するこのレポートには含めない
+  let moves = (stockMoves || []).filter(m => m.type === 'out' && m.channel !== CONSIGN_INVOICE_CHANNEL && m.date && m.date >= from && m.date <= to);
   if (channelFilter) moves = moves.filter(m => (m.channel || '') === channelFilter);
   if (!moves.length) { showToast('該当する出庫記録がありません'); return; }
 
@@ -10016,9 +10112,37 @@ async function loadPortalData() {
 
 function renderPortalItems(items) {
   window._portalItems = items;
+  const searchWrap = document.getElementById('portal-search-wrap');
+  // 商品の種類が多い取引先向けに、型番での絞り込み検索を表示する（1件だけの場合は不要なので隠す）
+  if (searchWrap) searchWrap.style.display = items.length > 1 ? 'block' : 'none';
+  const searchInput = document.getElementById('portal-search');
+  if (searchInput) searchInput.value = '';
+  const countEl = document.getElementById('portal-search-count');
+  if (countEl) countEl.textContent = '';
+  renderPortalItemsList(items.map((it, idx) => ({ it, idx })));
+}
+
+// 型番検索の入力欄が変わるたびに呼ばれる。元のwindow._portalItems配列でのインデックス（idx）は
+// そのまま維持して絞り込むので、ボタンのonclick（sendPortalRequest(idx, ...)）や
+// 数量入力欄・ステータス表示のidが絞り込み前後で食い違うことはない。
+function filterPortalItems() {
+  const q = (document.getElementById('portal-search')?.value || '').trim().toLowerCase();
+  const all = window._portalItems || [];
+  const pairs = all.map((it, idx) => ({ it, idx }))
+    .filter(({ it }) => !q || String(it.model || '').toLowerCase().includes(q));
+  renderPortalItemsList(pairs);
+  const countEl = document.getElementById('portal-search-count');
+  if (countEl) countEl.textContent = q ? `${pairs.length}件見つかりました` : '';
+}
+
+function renderPortalItemsList(pairs) {
   const root = document.getElementById('portal-items');
   if (!root) return;
-  root.innerHTML = items.map((it, idx) => `
+  if (!pairs.length) {
+    root.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:24px 0">該当する型番が見つかりませんでした</div>';
+    return;
+  }
+  root.innerHTML = pairs.map(({ it, idx }) => `
     <div style="border:1.2px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:var(--white)">
       <div style="font-size:14px;font-weight:700;color:var(--text)">${escapeHtmlMain(it.model || '商品')}</div>
       <div style="font-size:12.5px;color:var(--text-muted);margin-top:2px">${fmtDateJP(it.date)}／預けている数量：${it.qty}個${it.memo ? '／' + escapeHtmlMain(it.memo) : ''}</div>
