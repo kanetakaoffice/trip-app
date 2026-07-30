@@ -815,7 +815,8 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <div class="field-divider"></div>
         <div class="field" style="padding-top:16px">
           <div class="field-label">型番</div>
-          <input type="text" id="inv-model" placeholder="型番・品番">
+          <input type="text" id="inv-model" placeholder="型番・品番" oninput="lookupModel()">
+          <div id="model-lookup-status" style="font-size:12px;margin-top:6px;color:var(--text-muted)"></div>
         </div>
         <div class="field-divider"></div>
         <div class="field" style="padding-top:16px">
@@ -1015,7 +1016,10 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
           <div id="inv-reorder-list"></div>
         </div>
       </div>
-      <input type="text" id="inv-search" placeholder="🔍 商品名・型番で検索" oninput="renderInventoryList()" style="margin-bottom:10px">
+      <div style="position:relative;margin-bottom:10px">
+        <input type="text" id="inv-search" placeholder="🔍 商品名・型番で検索" oninput="renderInventoryList(); toggleInvSearchClearBtn();" style="margin-bottom:0;padding-right:34px;width:100%;box-sizing:border-box">
+        <button type="button" id="inv-search-clear" onclick="clearInvSearch()" aria-label="検索をクリア" style="display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);width:24px;height:24px;border:none;background:transparent;color:var(--text-muted);font-size:16px;line-height:1;cursor:pointer;padding:0">✕</button>
+      </div>
       <div id="inv-list-container"></div>
       <div id="inv-list-empty" class="empty-state" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/><line x1="12" y1="12" x2="12" y2="16"/></svg>
@@ -4891,6 +4895,118 @@ async function lookupJan() {
   }
 }
 
+// タイトル・スニペットの文字列からJANコード（8桁または13桁の数字の並び）らしきものを推定する。
+// 型番のような英数字混在のハイフン区切り文字列と混同しないよう、独立した数字の並びのみを対象にする（あくまで推定）
+function guessJanCode(text) {
+  if (!text) return '';
+  const matches = text.match(/\b\d{13}\b|\b\d{8}\b/g) || [];
+  return matches.length ? matches[0] : '';
+}
+
+// 型番欄に入力があるたびに呼ばれる。まず（ネットワーク不要な）既存商品との一致を即座に確認し、
+// 一致すればJAN入力時と同じ「入荷（在庫追加）」モードに切り替える。一致しない場合は、入力が
+// 一段落してから（キー入力のたびに検索しないよう少し待って）価格.comを型番で検索し、
+// メーカー・商品名・JANコードを推定して自動入力する（すべてあくまで推定のため要確認）。
+let _modelLookupTimer = null;
+async function lookupModel() {
+  const model = document.getElementById('inv-model').value.trim();
+  const status = document.getElementById('model-lookup-status');
+  clearTimeout(_modelLookupTimer);
+  // JAN一致ですでに入荷モードになっている場合、型番欄は読み取り専用のため通常ここには来ないが、念のため
+  if (document.getElementById('inv-existing-key').value) return;
+  if (!model) { if (status) { status.textContent = ''; status.style.color = 'var(--text-muted)'; } return; }
+
+  const found = products.find(p => (p.model || '').trim().toLowerCase() === model.toLowerCase());
+  if (found) {
+    setInvAddExistingMode(found);
+    document.getElementById('inv-jan').value = found.jan || '';
+    if (status) {
+      status.innerHTML = `✅ 登録済み商品です（現在庫: ${found.stock}個）。入力した数量がそのまま入荷として追加されます。`;
+      status.style.color = 'var(--success)';
+    }
+    return;
+  }
+
+  if (status) { status.innerHTML = '入力が終わると自動でメーカー・商品名・JANコードを検索します…'; status.style.color = 'var(--text-muted)'; }
+  _modelLookupTimer = setTimeout(() => { runModelPriceSearch(model); }, 600);
+}
+
+async function runModelPriceSearch(model) {
+  // 検索を開始しようとした時点から型番欄の内容が変わっていれば（入力継続中など）何もしない
+  const current = document.getElementById('inv-model').value.trim();
+  if (current !== model || document.getElementById('inv-existing-key').value) return;
+  const status = document.getElementById('model-lookup-status');
+  if (status) { status.innerHTML = '🔍 価格.comで商品情報を検索中...'; status.style.color = 'var(--text-muted)'; }
+
+  try {
+    const query = encodeURIComponent(model + ' 価格.com');
+    const url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${SEARCH_ENGINE_ID}&q=${query}&num=1`;
+    const r = await fetch(url);
+    const d = await r.json();
+
+    if (!r.ok || d.error) {
+      console.error('価格.com検索APIエラー（型番検索）:', r.status, d.error);
+      if (status) {
+        status.innerHTML = `商品情報の検索でエラーが発生しました${formatSearchApiError(r, d)}（検索機能自体が一時的に利用できない可能性があります）。お手数ですが商品名・メーカー・JANコードは手入力をお願いします。<br>${kakakuLinkHtml(model, null, '価格.comで手動検索する')}`;
+        status.style.color = 'var(--danger)';
+      }
+      return;
+    }
+
+    if (d.items && d.items.length > 0) {
+      const item = d.items[0];
+      const title = item.title || '';
+      const snippet = item.snippet || '';
+
+      let productName = title
+        .replace(/\s*[-|｜]\s*価格\.com.*$/gi, '')
+        .replace(/の\s*価格比較.*$/gi, '')
+        .replace(/の最安値.*$/gi, '')
+        .replace(/\s*[-|｜]\s*$/, '')
+        .trim();
+
+      const notes = [];
+      const nameField = document.getElementById('inv-name');
+      if (productName && nameField && !nameField.value) {
+        nameField.value = productName;
+        notes.push('商品名');
+      }
+      const guessedMaker = guessMaker(productName || title);
+      const makerField = document.getElementById('inv-maker');
+      if (guessedMaker && makerField && !makerField.value) {
+        makerField.value = guessedMaker;
+        renderMakerSelectUI('inv');
+        notes.push('メーカー');
+      }
+      const guessedJan = guessJanCode(title + ' ' + snippet);
+      const janField = document.getElementById('inv-jan');
+      if (guessedJan && janField && !janField.value) {
+        janField.value = guessedJan;
+        notes.push('JANコード');
+      }
+
+      if (status) {
+        if (notes.length) {
+          status.innerHTML = `✅ 商品情報を取得しました！確認・修正してから登録してください。（${notes.join('・')}は自動推定です。必ずご確認ください）<br>${kakakuLinkHtml(model, item, '価格.comで詳細を確認')}`;
+          status.style.color = 'var(--success)';
+        } else {
+          status.innerHTML = `商品が見つかりましたが、自動入力できる項目はありませんでした。お手数ですが手入力をお願いします。<br>${kakakuLinkHtml(model, item, '価格.comで詳細を確認')}`;
+          status.style.color = 'var(--text-muted)';
+        }
+      }
+    } else if (status) {
+      status.innerHTML = `新規商品のようです。お手数ですがメーカー・商品名・JANコードは手入力をお願いします。<br>${kakakuLinkHtml(model, null, '価格.comで検索する')}`;
+      status.style.color = 'var(--text-muted)';
+    }
+  } catch (e) {
+    console.error('型番からの商品情報検索に失敗:', e);
+    if (status) {
+      status.innerHTML = `商品情報の検索に失敗しました（通信エラーの可能性があります）。お手数ですがメーカー・商品名・JANコードは手入力をお願いします。<br>${kakakuLinkHtml(model, null, '価格.comで手動検索する')}`;
+      status.style.color = 'var(--danger)';
+    }
+  }
+}
+
 async function submitProduct() {
   const name  = document.getElementById('inv-name').value.trim();
   const stock = document.getElementById('inv-stock').value;
@@ -5491,6 +5607,23 @@ function buildInvSubcatTabBar(cat, subs, activeSub) {
   const leftover = subs.filter(s => !used.has(s));
   const leftoverRow = leftover.length ? `<div class="inv-subcat-group-row">${leftover.map(tab).join('')}</div>` : '';
   return `<div class="inv-subcat-tabs-grouped">${allTab}${groupRows}${leftoverRow}</div>`;
+}
+
+// 在庫一覧の検索欄：入力があるときだけ✕ボタンを表示する（続けて別の商品を検索する際、
+// 毎回手で型番・商品名を消す手間を無くすため）
+function toggleInvSearchClearBtn() {
+  const input = document.getElementById('inv-search');
+  const btn = document.getElementById('inv-search-clear');
+  if (!input || !btn) return;
+  btn.style.display = input.value ? 'block' : 'none';
+}
+function clearInvSearch() {
+  const input = document.getElementById('inv-search');
+  if (!input) return;
+  input.value = '';
+  toggleInvSearchClearBtn();
+  renderInventoryList();
+  input.focus();
 }
 
 function renderInventoryList() {
