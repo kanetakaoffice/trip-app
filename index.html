@@ -1881,7 +1881,12 @@ async function fbPush(path, data) {
     });
   }
   if (!r.ok) throw new Error('push failed');
+  // 追加したレコードのキーを呼び出し元へ返す（例：預かり精算の取り消し機能が、精算時に自動登録された
+  // 売上レコードを正確に1件だけ削除できるよう、そのキーを覚えておく必要があるため）。
+  // 既存の呼び出し元はこの戻り値を使っていないので、追加しても既存動作に影響はない。
+  const body = await r.json().catch(() => null);
   await loadAll();
+  return body && body.name;
 }
 
 async function fbRemove(path, key) {
@@ -4043,6 +4048,11 @@ function renderWhConsignList() {
       // 精算と返却は見分けやすいよう別々のセクションに分け、それぞれの日付（settledAt／returnedAt）を表示する。
       // 精算済みの商品は、まだ納品書（請求用）にしていないものだけチェックボックスで選べるようにし、
       // すでに納品書にした商品は「請求済み」バッジを表示してこれ以上選べないようにする。
+      // 取引先が誤って精算・返却してしまった、店舗側が入力を間違えたなど、確定後に取り消したい
+      // 場合のための「取り消す」リンク。精算済みですでに精算分の納品書（請求用）を発行済みの
+      // ものだけは、先にその納品書を取り消してもらう必要があるため、取り消すリンクを出さず
+      // 「請求済み」バッジのみ表示する（confirmUndoSettleConsign側でも二重にガードしている）
+      const undoLinkHtml = (m) => `<span onclick="event.stopPropagation(); ${m.status === 'settled' ? `confirmUndoSettleConsign('${m._key}')` : `confirmUndoReturnConsign('${m._key}')`}" style="flex-shrink:0;font-size:11px;color:var(--text-muted);text-decoration:underline;cursor:pointer">取り消す</span>`;
       const renderHistoryRow = (m) => {
         const amountStr = m.status === 'settled' && m.amount != null ? `／¥${m.amount.toLocaleString('ja-JP')}` : '';
         const dateVal = m.status === 'settled' ? m.settledAt : m.returnedAt;
@@ -4058,9 +4068,13 @@ function renderWhConsignList() {
           return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;display:flex;align-items:center;gap:6px">
             <input type="checkbox" class="consign-invoice-checkbox" data-key="${m._key}" style="flex-shrink:0;width:16px;height:16px">
             <span style="flex:1">${rowText}</span>
+            ${undoLinkHtml(m)}
           </div>`;
         }
-        return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">${rowText}</div>`;
+        return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;display:flex;align-items:center;gap:6px">
+          <span style="flex:1">${rowText}</span>
+          ${undoLinkHtml(m)}
+        </div>`;
       };
       const renderHistorySection = (label, color, list) => {
         if (!list.length) return '';
@@ -4802,6 +4816,10 @@ async function confirmSettleConsign() {
   const amount = unitPrice * settleQty;
   const approvalPending = _consignApprovalPending;
   try {
+    // 精算の取り消し（confirmUndoSettleConsign）が、この精算に紐づく売上記録だけを正確に1件削除
+    // できるよう、実際に「精算済み」となるレコードのキー（全数精算ならkey自身、一部精算なら
+    // 新規作成したレコード）を先に特定しておき、あとで売上記録のキー（salesKey）を書き戻す
+    let settledKey = key;
     if (settleQty === m.qty) {
       // 全数量を精算
       await fetch(authedUrl('/stockMoves/' + key + '.json'), { method: 'PATCH', body: JSON.stringify({
@@ -4809,16 +4827,19 @@ async function confirmSettleConsign() {
       })});
     } else {
       // 一部だけ精算：残りは引き続き「預け中」として数量を減らして残す
-      await Promise.all([
-        fetch(authedUrl('/stockMoves/' + key + '.json'), { method: 'PATCH', body: JSON.stringify({ qty: m.qty - settleQty }) }),
-        fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
-          productKey: m.productKey, productName: m.productName, jan: m.jan,
-          type: 'consign', status: 'settled', client: m.client, qty: settleQty, unitPrice, amount,
-          date: m.date, memo: m.memo || '', createdAt: Date.now(), settledAt: Date.now()
-        })})
-      ]);
+      const newMoveResp = await fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
+        productKey: m.productKey, productName: m.productName, jan: m.jan,
+        type: 'consign', status: 'settled', client: m.client, qty: settleQty, unitPrice, amount,
+        date: m.date, memo: m.memo || '', createdAt: Date.now(), settledAt: Date.now()
+      })});
+      const newMoveData = await newMoveResp.json();
+      settledKey = newMoveData.name;
+      await fetch(authedUrl('/stockMoves/' + key + '.json'), { method: 'PATCH', body: JSON.stringify({ qty: m.qty - settleQty }) });
     }
-    await window._fbPushSales({ type: 'sales', date: todayStr(), salesType: '国内（請求書）', client: m.client, amount, due: '', note: `預かり精算（${m.productName || ''}／${settleQty}個）より自動登録`, payStatus: '未入金', submittedAt: new Date().toLocaleDateString('ja-JP') });
+    const salesKey = await window._fbPushSales({ type: 'sales', date: todayStr(), salesType: '国内（請求書）', client: m.client, amount, due: '', note: `預かり精算（${m.productName || ''}／${settleQty}個）より自動登録`, payStatus: '未入金', submittedAt: new Date().toLocaleDateString('ja-JP') });
+    if (salesKey) {
+      await fetch(authedUrl('/stockMoves/' + settledKey + '.json'), { method: 'PATCH', body: JSON.stringify({ salesKey }) });
+    }
     // 取引先ポータルからのリクエストを承認する形で開いた場合は、精算が確定した時点でそのリクエストも消去する
     if (approvalPending) { await clearConsignRequest(approvalPending.portalId, approvalPending.requestId); }
     closeSettleConsign();
@@ -4826,6 +4847,58 @@ async function confirmSettleConsign() {
     renderWhConsignList();
     showToast('精算しました（¥' + amount.toLocaleString('ja-JP') + '）');
   } catch(e) { showToast('処理に失敗しました'); console.error(e); }
+}
+
+// 誤って精算・返却してしまった場合などに、確定済みの精算・返却を取り消して「预け中」に戻す機能。
+// 部分精算・部分返却だった場合も、元の预け中レコードへ数量をマージし直すのではなく、
+// この精算・返却レコード自体をそのまま预け中に戻す（マージ先の特定は元レコードとの結び付けが
+// 無く曖昧になり誤りやすいため、より安全でシンプルな設計とした。結果として同じ商品の预け中行が
+// 複数に分かれることがあるが、表示・操作上は何も問題ない）。
+function confirmUndoSettleConsign(key) {
+  const m = (stockMoves || []).find(x => x._key === key);
+  if (!m) { showToast('対象の記録が見つかりません'); return; }
+  if (m.invoicedSlipId) {
+    showToast('すでに精算分の納品書を発行済みのため取り消せません。先に「精算分の納品書」からその納品書を取り消してください');
+    return;
+  }
+  showConfirm(`${m.client || ''}／${consignItemModel(m)}の精算を取り消し、预け中に戻しますか？`).then(async ok => {
+    if (!ok) return;
+    try {
+      if (m.salesKey) { await fetch(authedUrl('/sales/' + m.salesKey + '.json'), { method: 'DELETE' }); }
+      await fetch(authedUrl('/stockMoves/' + key + '.json'), { method: 'PATCH', body: JSON.stringify({
+        status: 'holding', settledAt: null, unitPrice: null, amount: null, salesKey: null
+      })});
+      await loadInventory();
+      renderWhConsignList();
+      showToast('精算を取り消し、预け中に戻しました');
+    } catch(e) { showToast('取り消しに失敗しました'); console.error(e); }
+  });
+}
+
+// 返却時に在庫へ戻した分を、取り消し時には在庫から差し引く必要があるため、現在の在庫が
+// 返却数量に満たない場合（すでに他の出荷などで在庫が動いている場合）は安全のため取り消しをブロックする。
+function confirmUndoReturnConsign(key) {
+  const m = (stockMoves || []).find(x => x._key === key);
+  if (!m) { showToast('対象の記録が見つかりません'); return; }
+  const prod = products.find(p => p._key === m.productKey);
+  const currentStock = prod ? prod.stock : 0;
+  if (currentStock < m.qty) {
+    showToast(`現在の在庫（${currentStock}個）が返却数量（${m.qty}個）に満たないため取り消せません（すでに在庫が動いている可能性があります）`);
+    return;
+  }
+  showConfirm(`${m.client || ''}／${consignItemModel(m)}の返却を取り消し、预け中に戻しますか？（在庫が${m.qty}個減ります）`).then(async ok => {
+    if (!ok) return;
+    try {
+      const newStock = currentStock - m.qty;
+      await Promise.all([
+        fetch(authedUrl('/products/' + m.productKey + '/stock.json'), { method: 'PUT', body: JSON.stringify(newStock) }),
+        fetch(authedUrl('/stockMoves/' + key + '.json'), { method: 'PATCH', body: JSON.stringify({ status: 'holding', returnedAt: null }) })
+      ]);
+      await loadInventory();
+      renderWhConsignList();
+      showToast('返却を取り消し、预け中に戻しました（在庫: ' + newStock + '個）');
+    } catch(e) { showToast('取り消しに失敗しました'); console.error(e); }
+  });
 }
 
 const YAHOO_CLIENT_ID = "dmVyPTIwMjUwNyZpZD1oZWl6dUs1MUZSJmhhc2g9TXpOak5qSTNNREkzTkRCaVl6UTVaQQ";
