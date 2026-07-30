@@ -1516,9 +1516,17 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
   <div style="background:var(--white);border-radius:16px;padding:16px;width:100%;max-width:900px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-shrink:0">
       <div style="font-size:15px;font-weight:700;color:var(--text)">印刷プレビュー</div>
-      <button onclick="shareDeliverySlipPdfDirect()" aria-label="共有" title="共有" style="background:none;border:none;padding:6px;margin:-6px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text)">
-        <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
-      </button>
+      <div style="display:flex;align-items:center;gap:2px">
+        <button id="ds-preview-edit-btn" onclick="previewEditDeliverySlip()" aria-label="編集する" title="編集する" style="display:none;background:none;border:none;padding:6px;margin:-6px;cursor:pointer;align-items:center;justify-content:center;color:var(--text)">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+        </button>
+        <button id="ds-preview-cancel-btn" onclick="previewCancelDeliverySlip()" aria-label="取り消す" title="取り消す" style="display:none;background:none;border:none;padding:6px;margin:-6px;cursor:pointer;align-items:center;justify-content:center;color:var(--danger)">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>
+        </button>
+        <button onclick="shareDeliverySlipPdfDirect()" aria-label="共有" title="共有" style="background:none;border:none;padding:6px;margin:-6px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text)">
+          <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+        </button>
+      </div>
     </div>
     <div id="ds-preview-scale-wrap" class="ds-preview-scale-wrap" style="flex:0 1 auto;min-height:0;max-height:70vh;overflow-y:auto">
       <div id="ds-preview-page" class="ds-preview-page"></div>
@@ -1660,7 +1668,10 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 
 </div>
 
-<div id="confirm-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:24px">
+<!-- z-indexは他のどのモーダル（プレビュー610・カテゴリ追加650など）よりも高くしてある。
+     showConfirm()は納品書プレビューを開いたまま「取り消す」を確認する場合など、他のモーダルが
+     すでに表示された状態で呼ばれることがあるため、常に一番手前に表示される必要がある -->
+<div id="confirm-modal" style="display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:24px">
   <div style="background:var(--white);border-radius:16px;padding:24px;width:100%;max-width:320px;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div id="confirm-msg" style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:20px;text-align:center"></div>
     <div style="display:flex;gap:10px">
@@ -3367,10 +3378,17 @@ function printDeliverySlip(slipId) {
 // 実際にPDF・印刷される見た目そのままの印刷プレビューを表示する（「内容を見る」「PDF保存」の
 // どちらからもこのプレビューを経由し、保存・共有する前に必ず仕上がりを確認できるようにする）
 let _dsPreviewSlipId = null;
+// プレビュー中の納品書のchannel（'卸売'＝通常の卸売納品書／CONSIGN_INVOICE_CHANNEL＝預かり精算分の
+// 請求用納品書）。ヘッダーの「編集する」「取り消す」ボタンをどちらの操作につなぐか、また編集ボタン
+// 自体を表示するかどうか（預かり精算分には編集機能が無いため）の判定に使う。
+let _dsPreviewChannel = '';
 function showDeliverySlipPreview(slipId) {
   const data = buildDeliverySlipDataFromSlipId(slipId);
   if (!data) { showToast('対象の納品書が見つかりません'); return; }
   _dsPreviewSlipId = slipId;
+  const firstMove = (stockMoves || []).find(m => m.slipId === slipId && m.type === 'out');
+  _dsPreviewChannel = firstMove ? (firstMove.channel || '') : '';
+  updateDsPreviewActionButtons();
   const statusEl = document.getElementById('wh-deliv-preview-status');
   if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
   // レイアウト測定（列の高さ配分・縦線の位置決め）はgetBoundingClientRectに依存しているため、
@@ -3388,6 +3406,53 @@ function showDeliverySlipPreview(slipId) {
     renderDeliverySlipColumns(pageEl, data.items);
   }
   fitDeliverySlipPreviewScale();
+}
+
+// プレビュー右上の「編集する」「取り消す」ボタン（共有ボタンと同じアイコン形式）の表示・非表示を、
+// プレビュー中の納品書の種類に応じて切り替える。預かり精算分の請求用納品書は編集機能自体が無い
+// （在庫・売上のどちらにも触れない特殊な記録のため）ので、その場合は取り消すボタンだけを出す。
+function updateDsPreviewActionButtons() {
+  const editBtn = document.getElementById('ds-preview-edit-btn');
+  const cancelBtn = document.getElementById('ds-preview-cancel-btn');
+  const isConsignInvoice = _dsPreviewChannel === CONSIGN_INVOICE_CHANNEL;
+  if (editBtn) editBtn.style.display = isConsignInvoice ? 'none' : 'flex';
+  if (cancelBtn) cancelBtn.style.display = 'flex';
+}
+
+// プレビューを開いたまま「編集する」を押した場合：プレビューを閉じてから、これまで通り編集フォームへ切り替える
+function previewEditDeliverySlip() {
+  if (!_dsPreviewSlipId) return;
+  const slipId = _dsPreviewSlipId;
+  closeDeliverySlipPreview();
+  editDeliverySlip(slipId);
+}
+
+// プレビューを開いたまま「取り消す」を押した場合：納品書の種類（通常の卸売／預かり精算分）に応じて
+// 正しい取り消し処理を呼び分ける。取り消しが完了したら対象の納品書はもう存在しないため、プレビューも閉じる
+function previewCancelDeliverySlip() {
+  if (!_dsPreviewSlipId) return;
+  const slipId = _dsPreviewSlipId;
+  const isConsignInvoice = _dsPreviewChannel === CONSIGN_INVOICE_CHANNEL;
+  const confirmMsg = isConsignInvoice
+    ? 'この納品書を取り消しますか？（在庫・売上は変更されません。元の精算記録は未請求に戻ります）'
+    : 'この納品書を取り消して、在庫と売上を元に戻しますか？';
+  showConfirm(confirmMsg).then(async ok => {
+    if (!ok) return;
+    try {
+      if (isConsignInvoice) {
+        await cancelConsignInvoiceSlip(slipId);
+        await loadInventory();
+        renderWhConsignList();
+      } else {
+        await cancelDeliverySlip(slipId);
+        if (_editingSlipId === slipId) cancelEditDeliverySlip();
+        await loadInventory();
+        renderWhDelivHistory();
+      }
+      closeDeliverySlipPreview();
+      showToast('納品書を取り消しました');
+    } catch(e) { showToast('取り消しに失敗しました'); console.error(e); }
+  });
 }
 
 // A4想定（794px幅）で組んだプレビューを、実際のモーダル幅に収まるよう縮小表示する
@@ -3415,6 +3480,7 @@ function closeDeliverySlipPreview() {
   const pageEl = document.getElementById('ds-preview-page');
   if (pageEl) pageEl.innerHTML = '';
   _dsPreviewSlipId = null;
+  _dsPreviewChannel = '';
 }
 
 
@@ -3531,15 +3597,13 @@ function renderWhDelivHistory() {
     listEl.innerHTML = `<div style="font-size:12px;color:var(--text-muted)">まだ発行した納品書はありません</div>`;
     return;
   }
+  // 「内容を見る」ボタンは廃止し、取引先名・日付・件名の行自体をタップすると内容（プレビュー）が
+  // 開くようにした。編集する・取り消すは、プレビュー内に共有ボタンと同じ並びのアイコンボタンとして
+  // 用意している（updateDsPreviewActionButtons／previewEditDeliverySlip／previewCancelDeliverySlip）。
   listEl.innerHTML = slips.map(s => `
-    <div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:13px">
+    <div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;cursor:pointer" onclick="showDeliverySlipPreview('${s.slipId}')">
       <div style="color:var(--text);font-weight:600">${s.client || ''}／${fmtDateJP(s.date)}${s.subject ? '／' + s.subject : ''}</div>
       <div style="color:var(--text-muted);font-size:11px;margin-top:2px">数量合計 ${s.itemQty}個／合計 ¥${s.total.toLocaleString('ja-JP')}</div>
-      <div style="display:flex;gap:8px;margin-top:8px">
-        <button onclick="showDeliverySlipPreview('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">📄 内容を見る</button>
-        <button onclick="editDeliverySlip('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">編集する</button>
-        <button onclick="confirmCancelDeliverySlip('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--danger);cursor:pointer">取り消す</button>
-      </div>
     </div>`).join('');
 }
 
@@ -3820,6 +3884,64 @@ async function submitConsign() {
   } catch(e) { showToast('記録に失敗しました'); console.error(e); }
 }
 
+// 取引先ごとの「現在预けている商品」カードの開閉状態・検索文字列を、再描画（精算・返却のたびに
+// renderWhConsignList()が呼ばれる）をまたいで保持する。取引先名をキーにする（並び順が変わっても
+// 開閉状態・検索文字列がズレないように、カードのインデックスではなく取引先名をキーにする）。
+let _whConsignExpandedClients = new Set();
+let _whConsignClientSearchQuery = {}; // { [client]: '検索文字列' }
+let _whConsignClientOrder = [];       // 直近の描画時点のカード並び順（onclick="...(${idx})"からidxで取引先名を逆引きするため）
+
+// 「現在预けている商品」カード内の商品1件分の行（精算・返却・数量編集の操作はここに集約されている）
+function whConsignItemRowHtml(m) {
+  return `
+    <div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:13px">
+      <div style="min-width:0">
+        <div style="color:var(--text);font-weight:600">${escapeHtmlMain(consignItemModel(m))}</div>
+        <div style="color:var(--text-muted);font-size:11px;margin-top:2px">${fmtDateJP(m.date)}／${m.qty}個${m.memo ? '／' + escapeHtmlMain(m.memo) : ''}</div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button onclick="openSettleConsign('${m._key}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">精算（売れた）</button>
+        <button onclick="returnConsign('${m._key}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">返却（在庫に戻す）</button>
+        <button onclick="openEditConsignQty('${m._key}')" style="flex:0.7;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">数量を編集</button>
+      </div>
+    </div>`;
+}
+
+// 取引先カードの開閉（アコーディオン）。取引先名をタップすると、商品が多い取引先でも
+// 常にスクロールしなくて済むよう、普段は閉じた状態（取引先名だけ）にしておける
+function toggleWhConsignClient(idx) {
+  const client = _whConsignClientOrder[idx];
+  if (client == null) return;
+  if (_whConsignExpandedClients.has(client)) _whConsignExpandedClients.delete(client);
+  else _whConsignExpandedClients.add(client);
+  renderWhConsignList();
+}
+
+// 取引先カードを開いたまま、型番でその場検索する（検索欄自体は再描画で消えないよう、
+// 商品一覧部分（wh-consign-client-items-idx）だけを差し替える）
+function filterWhConsignClientItems(idx) {
+  const client = _whConsignClientOrder[idx];
+  if (client == null) return;
+  const input = document.getElementById('wh-consign-client-search-' + idx);
+  _whConsignClientSearchQuery[client] = input ? input.value : '';
+  renderWhConsignClientItemsList(idx);
+}
+
+function renderWhConsignClientItemsList(idx) {
+  const client = _whConsignClientOrder[idx];
+  const root = document.getElementById('wh-consign-client-items-' + idx);
+  if (!root || client == null) return;
+  const holding = (stockMoves || []).filter(m => m.type === 'consign' && m.status === 'holding' && (m.client || '（取引先未設定）') === client)
+    .sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
+  const q = (_whConsignClientSearchQuery[client] || '').trim().toLowerCase();
+  const filtered = q ? holding.filter(m => consignItemModel(m).toLowerCase().includes(q)) : holding;
+  const countEl = document.getElementById('wh-consign-client-search-count-' + idx);
+  if (countEl) countEl.textContent = q ? `${filtered.length}件見つかりました` : '';
+  root.innerHTML = filtered.length
+    ? filtered.map(whConsignItemRowHtml).join('')
+    : `<div style="text-align:center;color:var(--text-muted);font-size:12px;padding:16px 0">該当する型番が見つかりませんでした</div>`;
+}
+
 function renderWhConsignList() {
   const listEl = document.getElementById('wh-consign-list');
   const emptyEl = document.getElementById('wh-consign-empty');
@@ -3879,29 +4001,34 @@ function renderWhConsignList() {
     order.forEach(key => groups[key].sort((a,b) => (b.createdAt||0) - (a.createdAt||0)));
     order.sort((a,b) => (groups[b][0].createdAt||0) - (groups[a][0].createdAt||0));
 
-    listEl.innerHTML = order.map(client => {
+    // 取引先が複数いる場合、それぞれの取引先カードは既定では閉じておき（取引先名と件数だけが見える状態）、
+    // 取引先名の行をタップすると開いて中の商品一覧（精算・返却・数量編集の操作込み）が表示される。
+    // これにより、ある取引先の商品数が多くてもスクロールが長くならずに済む。商品が多い取引先向けに、
+    // カードを開いた中に型番でその場検索できる欄も用意している。
+    _whConsignClientOrder = order.slice();
+    listEl.innerHTML = order.map((client, idx) => {
       const items = groups[client];
-      const itemsHtml = items.map(m => `
-        <div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:13px">
-          <div style="min-width:0">
-            <div style="color:var(--text);font-weight:600">${escapeHtmlMain(consignItemModel(m))}</div>
-            <div style="color:var(--text-muted);font-size:11px;margin-top:2px">${fmtDateJP(m.date)}／${m.qty}個${m.memo ? '／' + escapeHtmlMain(m.memo) : ''}</div>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <button onclick="openSettleConsign('${m._key}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">精算（売れた）</button>
-            <button onclick="returnConsign('${m._key}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">返却（在庫に戻す）</button>
-            <button onclick="openEditConsignQty('${m._key}')" style="flex:0.7;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">数量を編集</button>
-          </div>
-        </div>`).join('');
+      const isOpen = _whConsignExpandedClients.has(client);
       return `
         <div style="border:1.2px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-            <div style="font-size:14px;font-weight:700;color:var(--text)">${client}<span style="font-weight:400;color:var(--text-muted);font-size:12px">　${items.length}件</span></div>
-            <button onclick="showConsignListPreview(decodeURIComponent(escape(atob('${btoa(unescape(encodeURIComponent(client)))}'))))" style="flex-shrink:0;padding:6px 10px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">📄 内容を見る</button>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer" onclick="toggleWhConsignClient(${idx})">
+            <div style="display:flex;align-items:center;gap:6px;min-width:0">
+              <span class="accordion-arrow${isOpen ? ' open' : ''}" style="font-size:10px;flex-shrink:0">▼</span>
+              <div style="font-size:14px;font-weight:700;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtmlMain(client)}<span style="font-weight:400;color:var(--text-muted);font-size:12px">　${items.length}件</span></div>
+            </div>
+            <button onclick="event.stopPropagation(); showConsignListPreview(decodeURIComponent(escape(atob('${btoa(unescape(encodeURIComponent(client)))}'))))" style="flex-shrink:0;padding:6px 10px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">📄 内容を見る</button>
           </div>
-          <div style="margin-top:2px">${itemsHtml}</div>
+          <div class="accordion-body${isOpen ? ' open' : ''}" style="margin-top:8px">
+            ${items.length > 1 ? `<div style="margin-bottom:8px">
+              <input type="text" id="wh-consign-client-search-${idx}" placeholder="🔍 型番で検索" value="${escapeHtmlMain(_whConsignClientSearchQuery[client] || '')}" oninput="filterWhConsignClientItems(${idx})" onclick="event.stopPropagation()" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
+              <div id="wh-consign-client-search-count-${idx}" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
+            </div>` : ''}
+            <div id="wh-consign-client-items-${idx}"></div>
+          </div>
         </div>`;
     }).join('');
+    // 商品一覧部分は、開閉状態に関わらず（閉じていても次に開いたときすぐ見えるよう）都度描画しておく
+    order.forEach((client, idx) => renderWhConsignClientItemsList(idx));
   }
 
   if (historyEl) {
