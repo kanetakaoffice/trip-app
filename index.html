@@ -1435,10 +1435,10 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     <div class="field">
       <div class="field-label">精算する数量 <span class="req">*</span></div>
       <input type="number" id="wh-settle-qty" placeholder="0" min="1">
-      <div id="wh-settle-qty-hint" style="font-size:11px;color:var(--text-muted);margin-top:4px">傷・潰れなどで一部だけ単価が違う場合は、数量を減らして精算し、残りは後からもう一度精算してください</div>
+      <div id="wh-settle-qty-hint" style="font-size:11px;color:var(--text-muted);margin-top:4px">傷・潰れなどで一部だけ販売価格が違う場合は、数量を減らして精算し、残りは後からもう一度精算してください</div>
     </div>
     <div class="field" style="padding-top:16px">
-      <div class="field-label">単価（円） <span class="req">*</span></div>
+      <div class="field-label">販売価格（円） <span class="req">*</span></div>
       <input type="number" id="wh-settle-price" placeholder="0" min="0">
       <div id="wh-settle-hint" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
     </div>
@@ -4213,7 +4213,7 @@ function renderConsignRequestsPanel() {
   listEl.innerHTML = pending.map(r => {
     const kindLabel = r.type === 'settle' ? '精算しました（売れました）とのご連絡' : '返却してほしいとのご連絡';
     const dateDisp = r.requestedAt ? fmtDateJP(new Date(r.requestedAt).toISOString().slice(0,10)) : '';
-    const priceDisp = (r.type === 'settle' && r.unitPrice != null) ? `／取引先申告の単価：¥${Number(r.unitPrice).toLocaleString('ja-JP')}` : '';
+    const priceDisp = (r.type === 'settle' && r.unitPrice != null) ? `／取引先申告の販売価格：¥${Number(r.unitPrice).toLocaleString('ja-JP')}` : '';
     return `
       <div style="padding:8px 0;border-bottom:1px solid rgba(0,0,0,0.08);font-size:12.5px">
         <div style="color:var(--text)"><b>${escapeHtmlMain(r.client || '')}</b>／${escapeHtmlMain(r.model || '')}／${r.qty || ''}個${priceDisp}</div>
@@ -4233,7 +4233,7 @@ async function clearConsignRequest(portalId, requestId) {
   consignRequests = (consignRequests || []).filter(r => !(r._portalId === portalId && r._key === requestId));
 }
 
-// 精算リクエストの承認：既存の「精算する」モーダルをそのまま開く（単価の入力など、これまでと
+// 精算リクエストの承認：既存の「精算する」モーダルをそのまま開く（販売価格の入力など、これまでと
 // 全く同じ確認フローを経由させる）。confirmSettleConsign()が成功した時点で、このリクエストも
 // 合わせて消去される（_consignApprovalPendingで紐付ける）。
 // 返却リクエストの承認：確認ダイアログの上でreturnConsign()相当の処理を行う。
@@ -4292,13 +4292,13 @@ async function approveConsignRequest(portalId, requestId) {
     // 実際と違えば店舗側で数量を修正してから確定してもよい）
     const qtyInput = document.getElementById('wh-settle-qty');
     if (qtyInput) qtyInput.value = requestedQty;
-    // 取引先が単価も申告してきた場合は、店舗側の自動提案（前回単価）よりもそれを優先して反映する
+    // 取引先が販売価格も申告してきた場合は、店舗側の自動提案（前回の価格）よりもそれを優先して反映する
     // （実際と違えば店舗側で修正してから確定してもよい）
     if (req.unitPrice != null) {
       const priceInput = document.getElementById('wh-settle-price');
       const hint = document.getElementById('wh-settle-hint');
       if (priceInput) priceInput.value = req.unitPrice;
-      if (hint) hint.textContent = `取引先から申告された単価です（必要なら修正してください）`;
+      if (hint) hint.textContent = `取引先から申告された販売価格です（必要なら修正してください）`;
     }
   }
 }
@@ -4663,7 +4663,7 @@ function openSettleConsign(key) {
   if (qtyInput) { qtyInput.max = m.qty; qtyInput.value = m.qty; }
   const suggested = suggestUnitPrice(m.client, m.productKey);
   if (priceInput) priceInput.value = suggested != null ? suggested : '';
-  if (hint) hint.textContent = suggested != null ? `前回この取引先に販売した単価: ¥${suggested.toLocaleString('ja-JP')}（必要なら修正してください）` : '';
+  if (hint) hint.textContent = suggested != null ? `前回この取引先に販売した価格: ¥${suggested.toLocaleString('ja-JP')}（必要なら修正してください）` : '';
   const modal = document.getElementById('wh-settle-modal');
   if (modal) modal.style.display = 'flex';
 }
@@ -4812,7 +4812,7 @@ async function confirmEditConsignQty() {
 }
 
 // 預かり商品を精算：ステータスを更新し、通常の売上（未入金）としても1件登録して普段の売上集計に反映する。
-// 精算数量が預けている数量より少ない場合（傷・潰れなどで一部だけ単価が違う場合など）は、
+// 精算数量が預けている数量より少ない場合（傷・潰れなどで一部だけ販売価格が違う場合など）は、
 // その数量分だけを精算済みとして切り分け、残りは引き続き「預け中」として残す。
 async function confirmSettleConsign() {
   const key = _settleTargetKey;
@@ -4823,7 +4823,7 @@ async function confirmSettleConsign() {
   const unitPrice = parseInt(document.getElementById('wh-settle-price').value);
   if (!settleQty || settleQty < 1) { showToast('精算する数量を入力してください'); return; }
   if (settleQty > m.qty) { showToast('預けている数量（' + m.qty + '個）を超えています'); return; }
-  if (isNaN(unitPrice)) { showToast('単価を入力してください'); return; }
+  if (isNaN(unitPrice)) { showToast('販売価格を入力してください'); return; }
   const amount = unitPrice * settleQty;
   const approvalPending = _consignApprovalPending;
   try {
@@ -10577,7 +10577,7 @@ function renderPortalItemsList(pairs) {
         <span style="font-size:12px;color:var(--text-muted)">個（${it.qty}個のうち一部だけの場合は数を変えてください）</span>
       </div>
       <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
-        <label for="portal-price-${idx}" style="font-size:12px;color:var(--text-muted)">単価（円）</label>
+        <label for="portal-price-${idx}" style="font-size:12px;color:var(--text-muted)">販売価格（円）</label>
         <input type="number" id="portal-price-${idx}" min="0" placeholder="任意" style="width:88px;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
         <span style="font-size:12px;color:var(--text-muted)">精算の場合のみ（分かれば入力してください）</span>
       </div>
@@ -10610,15 +10610,15 @@ async function sendPortalRequest(idx, type) {
   const qty = qtyInput ? parseInt(qtyInput.value, 10) : it.qty;
   if (!qty || qty < 1) { setStatus('数量を正しく入力してください', true); return; }
   if (qty > it.qty) { setStatus(`預けている数量（${it.qty}個）を超えています`, true); return; }
-  // 単価は精算のときだけ意味を持つ任意項目。取引先が分かる場合だけ入力してもらい、
-  // 空欄なら従来通り店舗側で（前回単価の自動提案などから）入力してもらう。
+  // 販売価格は精算のときだけ意味を持つ任意項目。取引先が分かる場合だけ入力してもらい、
+  // 空欄なら従来通り店舗側で（前回の販売価格の自動提案などから）入力してもらう。
   let unitPrice = null;
   if (type === 'settle') {
     const priceInput = document.getElementById('portal-price-' + idx);
     const rawPrice = priceInput ? priceInput.value.trim() : '';
     if (rawPrice !== '') {
       const parsedPrice = parseInt(rawPrice, 10);
-      if (!Number.isFinite(parsedPrice) || parsedPrice < 0) { setStatus('単価を正しく入力してください', true); return; }
+      if (!Number.isFinite(parsedPrice) || parsedPrice < 0) { setStatus('販売価格を正しく入力してください', true); return; }
       unitPrice = parsedPrice;
     }
   }
@@ -10632,7 +10632,7 @@ async function sendPortalRequest(idx, type) {
       method: 'POST',
       body: JSON.stringify(body)
     });
-    const priceNote = unitPrice != null ? `（単価¥${unitPrice.toLocaleString('ja-JP')}）` : '';
+    const priceNote = unitPrice != null ? `（販売価格¥${unitPrice.toLocaleString('ja-JP')}）` : '';
     setStatus(type === 'settle'
       ? `✓ ${qty}個${priceNote}の精算のご連絡を送信しました。店舗からの確認をお待ちください。`
       : `✓ ${qty}個の返却のご連絡を送信しました。店舗からの確認をお待ちください。`, false);
