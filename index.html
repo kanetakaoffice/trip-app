@@ -249,7 +249,11 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       <input type="text" id="portal-search" placeholder="型番で検索" oninput="filterPortalItems()" style="width:100%;padding:10px 12px;border:1.2px solid var(--border);border-radius:10px;font-size:14px;box-sizing:border-box">
       <div id="portal-search-count" style="font-size:11.5px;color:var(--text-muted);margin-top:4px"></div>
     </div>
-    <div id="portal-grand-total" style="display:none;position:sticky;top:0;z-index:5;text-align:center;font-size:14px;font-weight:800;color:var(--gold-dark);background:var(--white);border:1.2px solid var(--gold-dark);border-radius:10px;padding:9px 12px;margin-bottom:12px"></div>
+    <div id="portal-grand-total" style="display:none;position:sticky;top:0;z-index:5;background:var(--white);border:1.2px solid var(--gold-dark);border-radius:10px;padding:10px 12px;margin-bottom:12px">
+      <div id="portal-grand-total-text" style="text-align:center;font-size:14px;font-weight:800;color:var(--gold-dark)"></div>
+      <button type="button" onclick="submitBatchSettle()" style="width:100%;margin-top:8px;padding:10px 0;border-radius:8px;border:none;background:linear-gradient(135deg,#d8b872,#c8a052);color:#fff;font-size:14px;font-weight:700;cursor:pointer">まとめて精算</button>
+      <div id="portal-batch-status" style="display:none;margin-top:8px;font-size:12px;text-align:center"></div>
+    </div>
     <div id="portal-items"></div>
     <div id="portal-items-empty" style="display:none;text-align:center;color:var(--text-muted);font-size:13px;padding:16px 0">現在お預かりしている商品はありません</div>
 
@@ -1476,9 +1480,14 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       <div id="wh-settle-qty-hint" style="font-size:11px;color:var(--text-muted);margin-top:4px">傷・潰れなどで一部だけ販売価格が違う場合は、数量を減らして精算し、残りは後からもう一度精算してください</div>
     </div>
     <div class="field" style="padding-top:16px">
-      <div class="field-label">販売価格（円） <span class="req">*</span></div>
-      <input type="number" id="wh-settle-price" placeholder="0" min="0">
+      <div class="field-label"><span id="wh-settle-price-label">売値</span> <span class="req">*</span></div>
+      <input type="number" id="wh-settle-price" placeholder="0" min="0" oninput="syncSettleFinalPriceFromSuggested()">
       <div id="wh-settle-hint" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
+    </div>
+    <div class="field" style="padding-top:16px">
+      <div class="field-label">確定価格（円） <span class="req">*</span></div>
+      <input type="number" id="wh-settle-final-price" placeholder="0" min="0" oninput="markSettleFinalPriceEdited()">
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">実際に精算・記録する金額です。売値と異なる場合はこちらを修正してください</div>
     </div>
     <div style="display:flex;gap:10px;margin-top:18px">
       <button onclick="confirmSettleConsign()" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8d8d8,#a8a8a8);color:#1a1a1a;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">精算する</button>
@@ -2157,6 +2166,48 @@ function escapeHtmlMain(s) {
 // 取引先ポータルへのスナップショット送信のすべてで同じ優先順位を使う）。
 function consignItemModel(m) {
   return (m && m.model) || (products.find(p => p._key === (m && m.productKey)) || {}).model || (m && m.productName) || '';
+}
+
+// 取引先ポータル向けのスナップショットを組み立てる際、同じ商品（型番）を複数回に分けて
+// 預けていたり、部分精算の取り消しで同じ商品のholdingレコードが複数に分かれてしまった場合
+// （「同じ商品はまとめて欲しい」という要望）に、取引先の画面ではまとめて1行として見えるように
+// 型番でグループ化する。実際の精算・返却は今まで通りstockMovesの各レコード（moveKey）単位で
+// 行う必要があるため、内訳（moveKeys：各レコードのキーと数量）は残しておき、取引先が申告した
+// 数量を、古い預け入れ分から順（FIFO）に内訳へ割り当てて、レコードごとにリクエストを送る。
+function buildPortalSnapshotItemsForClient(holdingMoves) {
+  const byModel = {};
+  const order = [];
+  holdingMoves.forEach(m => {
+    const norm = normalizeModelStr(consignItemModel(m)) || '__unknown__';
+    if (!byModel[norm]) { byModel[norm] = []; order.push(norm); }
+    byModel[norm].push(m);
+  });
+  return order.map(norm => {
+    // 古い預け入れ分から順に精算・返却を割り当てられるよう、内訳は預け入れ日時の古い順に並べる
+    const moves = [...byModel[norm]].sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+    const memoList = [...new Set(moves.map(m => m.memo).filter(Boolean))];
+    return {
+      model: consignItemModel(moves[0]),
+      qty: moves.reduce((s,m) => s + (m.qty||0), 0),
+      moveKeys: moves.map(m => ({ key: m._key, qty: m.qty })),
+      date: moves[0].date,
+      memo: memoList.join('／')
+    };
+  }).sort((a,b) => (a.date||'').localeCompare(b.date||''));
+}
+
+// 取引先が申告した数量を、古い預け入れ分（moveKeys、古い順）から順に割り当てる。
+// 例：moveKeysが[{key:'a',qty:3},{key:'b',qty:2}]でrequestedQty=4なら、[{key:'a',qty:3},{key:'b',qty:1}]を返す。
+function splitQtyAcrossMoveKeys(moveKeys, requestedQty) {
+  const slices = [];
+  let remaining = requestedQty;
+  for (const mk of (moveKeys || [])) {
+    if (remaining <= 0) break;
+    const take = Math.min(mk.qty, remaining);
+    if (take > 0) slices.push({ key: mk.key, qty: take });
+    remaining -= take;
+  }
+  return slices;
 }
 // 型番の検索・一致判定を、大文字小文字やハイフン・スペース・スラッシュ・カッコの有無に
 // 左右されないようにするための正規化。英数字だけを取り出して小文字化する。
@@ -3429,6 +3480,7 @@ function renderDeliverySlipColumns(root, items) {
   let colsHtml = '<div class="ds-col">' + headerHtml + col1.map(rowHtml).join('') + '</div>';
   if (col2.length) colsHtml += '<div class="ds-col">' + headerHtml + col2.map(rowHtml).join('') + '</div>';
   const totalQty = items.reduce(function(s, it) { return s + (it.qty || 0); }, 0);
+  const totalAmount = items.reduce(function(s, it) { return s + ((it.unitPrice || 0) * (it.qty || 0)); }, 0);
   finalEl.innerHTML = '<div class="ds-cols-wrap">' + colsHtml + '</div>';
 
   // 型番・数量・単価の間の縦線は、実機の共有・PDF化（html2canvas）で最後まで伸びない・
@@ -3437,10 +3489,14 @@ function renderDeliverySlipColumns(root, items) {
   // 各行の下線（border-bottom）のみで表現する。
   const cols = Array.from(finalEl.querySelectorAll('.ds-col'));
 
-  // 合計数量は、明細の右下に単独で表示するのではなく、数量欄の真下に来るよう最後の列の中に差し込む
+  // 合計数量・合計金額は、明細の右下に単独で表示するのではなく、数量欄・単価欄の真下に
+  // それぞれ来るよう最後の列の中に差し込む（預かり精算分の請求用納品書にもこの表示が
+  // そのまま使われるため、「精算済みの商品で納品書を作成する際に合計金額も出してほしい」
+  // という要望にもここで対応できる）
   const lastCol = cols[cols.length - 1];
   if (lastCol) {
-    lastCol.insertAdjacentHTML('beforeend', '<div class="ds-row ds-qty-total"><span class="ds-model">合計数量</span><span class="ds-qty">' + totalQty + '個</span><span class="ds-price"></span></div>');
+    lastCol.insertAdjacentHTML('beforeend', '<div class="ds-row ds-qty-total"><span class="ds-model">合計数量</span><span class="ds-qty">' + totalQty + '個</span><span class="ds-price"></span></div>'
+      + '<div class="ds-row ds-qty-total"><span class="ds-model">合計金額</span><span class="ds-qty"></span><span class="ds-price">¥' + totalAmount.toLocaleString('ja-JP') + '</span></div>');
   }
 }
 
@@ -4190,11 +4246,7 @@ function renderWhConsignList() {
     history.forEach(m => { const key = m.client || '（取引先未設定）'; (historyByClient[key] = historyByClient[key] || []).push(m); });
     const allPortalClients = new Set([...Object.keys(holdingByClient), ...Object.keys(historyByClient)]);
     allPortalClients.forEach(client => {
-      const snapshotItems = (holdingByClient[client] || []).map(m => ({
-        moveKey: m._key,
-        model: consignItemModel(m),
-        qty: m.qty, date: m.date, memo: m.memo || ''
-      }));
+      const snapshotItems = buildPortalSnapshotItemsForClient(holdingByClient[client] || []);
       const snapshotHistoryItems = (historyByClient[client] || []).map(m => ({
         model: consignItemModel(m),
         qty: m.qty, status: m.status,
@@ -4506,13 +4558,16 @@ async function approveConsignRequest(portalId, requestId) {
     // 実際と違えば店舗側で数量を修正してから確定してもよい）
     const qtyInput = document.getElementById('wh-settle-qty');
     if (qtyInput) qtyInput.value = requestedQty;
-    // 取引先が販売価格も申告してきた場合は、店舗側の自動提案（前回の価格）よりもそれを優先して反映する
-    // （実際と違えば店舗側で修正してから確定してもよい）
+    // 取引先が売値も申告してきた場合は、店舗側の自動提案（前回の価格）よりもそれを優先して反映し、
+    // 確定価格欄の初期値にもそのまま使う（実際と違えば店舗側で確定価格欄を修正してから確定してもよい）
     if (req.unitPrice != null) {
       const priceInput = document.getElementById('wh-settle-price');
       const hint = document.getElementById('wh-settle-hint');
+      const finalInput = document.getElementById('wh-settle-final-price');
       if (priceInput) priceInput.value = req.unitPrice;
-      if (hint) hint.textContent = `取引先から申告された販売価格です（必要なら修正してください）`;
+      if (hint) hint.textContent = `取引先から申告された売値です（必要なら修正してください）`;
+      if (finalInput) finalInput.value = req.unitPrice;
+      _settleFinalPriceManuallyEdited = false;
     }
   }
 }
@@ -4797,11 +4852,7 @@ async function shareConsignClientPage() {
   // 念のため、共有直前にも最新のスナップショットを書き込んでおく
   // （通常はrenderWhConsignList()のたびに自動更新されているが、念のためここでも確実にする）
   const holding = (stockMoves || []).filter(m => m.type === 'consign' && m.status === 'holding' && m.client === client);
-  const items = holding.map(m => ({
-    moveKey: m._key,
-    model: m.model || (products.find(p => p._key === m.productKey) || {}).model || m.productName || '',
-    qty: m.qty, date: m.date, memo: m.memo || ''
-  })).sort((a,b) => (a.date||'').localeCompare(b.date||''));
+  const items = buildPortalSnapshotItemsForClient(holding);
 
   try {
     await fetch(authedUrl('/consignPortal/' + portalId + '.json'), {
@@ -4865,19 +4916,38 @@ let _settleTargetKey = null;
 // confirmSettleConsign()が成功したら、このリクエストも合わせて消去する。
 let _consignApprovalPending = null;
 
+// 「売値」欄（取引先名＋売値）は前回この取引先に売った価格や、取引先自身の申告額を
+// 参考情報として表示するための欄。実際に記録される金額は別立ての「確定価格」欄の値で、
+// 通常は売値と同額になるはずなので、確定価格欄をまだ直接編集していない間だけ自動で追随させる。
+let _settleFinalPriceManuallyEdited = false;
+function syncSettleFinalPriceFromSuggested() {
+  if (_settleFinalPriceManuallyEdited) return;
+  const priceInput = document.getElementById('wh-settle-price');
+  const finalInput = document.getElementById('wh-settle-final-price');
+  if (priceInput && finalInput) finalInput.value = priceInput.value;
+}
+function markSettleFinalPriceEdited() {
+  _settleFinalPriceManuallyEdited = true;
+}
+
 function openSettleConsign(key) {
   const m = stockMoves.find(x => x._key === key);
   if (!m) return;
   _settleTargetKey = key;
+  _settleFinalPriceManuallyEdited = false;
   const desc = document.getElementById('wh-settle-desc');
   const qtyInput = document.getElementById('wh-settle-qty');
   const priceInput = document.getElementById('wh-settle-price');
+  const priceLabel = document.getElementById('wh-settle-price-label');
   const hint = document.getElementById('wh-settle-hint');
+  const finalInput = document.getElementById('wh-settle-final-price');
   if (desc) desc.textContent = `${m.productName || ''}／${m.client || ''}／預けている数量: ${m.qty}個`;
   if (qtyInput) { qtyInput.max = m.qty; qtyInput.value = m.qty; }
+  if (priceLabel) priceLabel.textContent = m.client ? `${m.client}の売値` : '売値';
   const suggested = suggestUnitPrice(m.client, m.productKey);
   if (priceInput) priceInput.value = suggested != null ? suggested : '';
   if (hint) hint.textContent = suggested != null ? `前回この取引先に販売した価格: ¥${suggested.toLocaleString('ja-JP')}（必要なら修正してください）` : '';
+  if (finalInput) finalInput.value = suggested != null ? suggested : '';
   const modal = document.getElementById('wh-settle-modal');
   if (modal) modal.style.display = 'flex';
 }
@@ -4887,6 +4957,7 @@ function closeSettleConsign() {
   if (modal) modal.style.display = 'none';
   _settleTargetKey = null;
   _consignApprovalPending = null;
+  _settleFinalPriceManuallyEdited = false;
 }
 
 let _consignEditKey = null;
@@ -5034,10 +5105,10 @@ async function confirmSettleConsign() {
   const m = stockMoves.find(x => x._key === key);
   if (!m) { closeSettleConsign(); return; }
   const settleQty = parseInt(document.getElementById('wh-settle-qty').value);
-  const unitPrice = parseInt(document.getElementById('wh-settle-price').value);
+  const unitPrice = parseInt(document.getElementById('wh-settle-final-price').value);
   if (!settleQty || settleQty < 1) { showToast('精算する数量を入力してください'); return; }
   if (settleQty > m.qty) { showToast('預けている数量（' + m.qty + '個）を超えています'); return; }
-  if (isNaN(unitPrice)) { showToast('販売価格を入力してください'); return; }
+  if (isNaN(unitPrice)) { showToast('確定価格を入力してください'); return; }
   const amount = unitPrice * settleQty;
   const approvalPending = _consignApprovalPending;
   try {
@@ -10951,22 +11022,22 @@ function renderPortalItemsList(pairs) {
         <span style="font-size:12px;color:var(--text-muted)">個（${it.qty}個のうち一部だけの場合は数を変えてください）</span>
       </div>
       <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
-        <label for="portal-price-${idx}" style="font-size:12px;color:var(--text-muted)">販売価格（円）</label>
+        <label for="portal-price-${idx}" style="font-size:12px;color:var(--text-muted)">売値（円）</label>
         <input type="number" id="portal-price-${idx}" min="0" placeholder="任意" oninput="updatePortalItemTotal(${idx})" style="width:88px;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
-        <span style="font-size:12px;color:var(--text-muted)">精算の場合のみ（分かれば入力してください）</span>
+        <span style="font-size:12px;color:var(--text-muted)">精算する場合はこちらに入力してください</span>
       </div>
       <div id="portal-total-${idx}" style="display:none;font-size:12.5px;font-weight:700;color:var(--text);margin-top:6px;text-align:right"></div>
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <button onclick="sendPortalRequest(${idx}, 'settle')" style="flex:1;padding:9px 0;border-radius:8px;border:1.2px solid var(--gold-dark);background:var(--white);color:var(--gold-dark);font-size:13px;font-weight:700;cursor:pointer">精算しました</button>
-        <button onclick="sendPortalRequest(${idx}, 'return')" style="flex:1;padding:9px 0;border-radius:8px;border:1.2px solid var(--border);background:var(--white);color:var(--text);font-size:13px;font-weight:700;cursor:pointer">返却します</button>
+      <div style="margin-top:10px">
+        <button onclick="sendPortalRequest(${idx}, 'return')" style="width:100%;padding:9px 0;border-radius:8px;border:1.2px solid var(--border);background:var(--white);color:var(--text);font-size:13px;font-weight:700;cursor:pointer">返却します</button>
       </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:6px">精算する場合は、上の「売値」を入力すると画面上部の「まとめて精算」ボタンから送信できます</div>
       <div id="portal-item-status-${idx}" style="display:none;margin-top:8px;font-size:12px"></div>
     </div>
   `).join('');
   updatePortalGrandTotal();
 }
 
-// 対象の数量・販売価格のどちらかが変わるたびに呼ばれ、精算しようとしている合計金額を
+// 対象の数量・売値のどちらかが変わるたびに呼ばれ、精算しようとしている合計金額を
 // その場で計算して表示する（送信する前に金額の見込みが分かるように）
 function updatePortalItemTotal(idx) {
   const qtyInput = document.getElementById('portal-qty-' + idx);
@@ -10986,15 +11057,12 @@ function updatePortalItemTotal(idx) {
   updatePortalGrandTotal();
 }
 
-// 複数の商品をまとめて精算しようとしている場合に、今画面に入力されている
-// （数量・販売価格の両方が入力済みの）商品すべての合計金額を集計して表示する。
-// 検索で絞り込まれて非表示の商品は、対応する入力欄自体がDOMに存在しないため自然に除外される。
-function updatePortalGrandTotal() {
-  const grandEl = document.getElementById('portal-grand-total');
-  if (!grandEl) return;
+// 精算しようとしている（数量・売値がどちらも入力済みの）商品を集めて返す。検索で絞り込まれて
+// 非表示の商品は、対応する入力欄自体がDOMに存在しないため自然に除外される。
+// 「まとめて精算」ボタンからの送信も、上部の合計表示も、この判定を共通で使う。
+function getPortalSettleCandidates() {
   const items = window._portalItems || [];
-  let grandTotal = 0;
-  let countedItems = 0;
+  const candidates = [];
   items.forEach((it, idx) => {
     const qtyInput = document.getElementById('portal-qty-' + idx);
     const priceInput = document.getElementById('portal-price-' + idx);
@@ -11002,23 +11070,53 @@ function updatePortalGrandTotal() {
     const qty = parseInt(qtyInput.value, 10);
     const rawPrice = priceInput.value.trim();
     const price = rawPrice !== '' ? parseInt(rawPrice, 10) : NaN;
-    if (Number.isFinite(qty) && qty > 0 && Number.isFinite(price) && price >= 0) {
-      grandTotal += qty * price;
-      countedItems++;
+    if (Number.isFinite(qty) && qty > 0 && qty <= it.qty && Number.isFinite(price) && price >= 0) {
+      candidates.push({ idx, it, qty, price });
     }
   });
-  if (countedItems >= 2) {
-    grandEl.textContent = `精算対象 ${countedItems}件の合計：¥${grandTotal.toLocaleString('ja-JP')}`;
+  return candidates;
+}
+
+// 複数の商品をまとめて精算しようとしている場合に、今画面に入力されている商品すべての
+// 合計金額を集計して、上部の固定バー（「まとめて精算」ボタン）に表示する。
+function updatePortalGrandTotal() {
+  const grandEl = document.getElementById('portal-grand-total');
+  const textEl = document.getElementById('portal-grand-total-text');
+  if (!grandEl) return;
+  const candidates = getPortalSettleCandidates();
+  const grandTotal = candidates.reduce((s, c) => s + c.qty * c.price, 0);
+  if (candidates.length >= 1) {
+    if (textEl) textEl.textContent = `精算対象 ${candidates.length}件の合計：¥${grandTotal.toLocaleString('ja-JP')}`;
     grandEl.style.display = 'block';
   } else {
     grandEl.style.display = 'none';
   }
 }
 
-// 取引先が「精算しました」「返却します」を押したときの処理。実際の在庫・記録を直接
-// 書き換えるのではなく、/consignRequests/{portalId} にリクエストを1件追加するだけ。
-// 店舗側の「🔔 取引先からのリクエスト」欄に表示され、店舗側が内容を確認したうえで
-// 実際の精算・返却処理を行う。
+// 取引先が指定した数量を、内訳（moveKeys：預け入れレコードごとのキーと数量、古い順）に沿って
+// 必要な数だけ割り当て、レコードごとに個別のconsignRequestとして送信する。同じ商品を複数回に
+// 分けて預けていた場合（ポータル上はまとめて1行に表示されている）でも、店舗側は今まで通り
+// レコード単位で内容を確認・精算できる。
+async function postConsignRequestsForItem(it, qty, type, unitPrice) {
+  const slices = splitQtyAcrossMoveKeys(it.moveKeys, qty);
+  if (!slices.length) throw new Error('割り当てできる預け入れ記録が見つかりませんでした');
+  for (const slice of slices) {
+    const body = {
+      moveKey: slice.key, type, qty: slice.qty, model: it.model || '',
+      client: window._portalClient || '', requestedAt: Date.now(), status: 'pending'
+    };
+    if (unitPrice != null) body.unitPrice = unitPrice;
+    await fetch(authedUrl('/consignRequests/' + window._portalId + '.json'), {
+      method: 'POST',
+      body: JSON.stringify(body)
+    });
+  }
+}
+
+// 取引先が「返却します」を押したときの処理。実際の在庫・記録を直接書き換えるのではなく、
+// /consignRequests/{portalId} にリクエストを追加するだけ。店舗側の「🔔 取引先からのリクエスト」欄に
+// 表示され、店舗側が内容を確認したうえで実際の返却処理を行う。
+// （精算は、複数商品をまとめて送信できる「まとめて精算」ボタン＝submitBatchSettle()から行う）
 async function sendPortalRequest(idx, type) {
   const it = (window._portalItems || [])[idx];
   if (!it) return;
@@ -11030,40 +11128,65 @@ async function sendPortalRequest(idx, type) {
     statusEl.style.display = msg ? 'block' : 'none';
   };
   // 同じ商品をまとめて複数預けている場合に、そのうちの一部だけ（例：5個のうち1個）を
-  // 精算・返却したいケースに対応するため、対象の数量を取引先自身に指定してもらう
+  // 返却したいケースに対応するため、対象の数量を取引先自身に指定してもらう
   const qtyInput = document.getElementById('portal-qty-' + idx);
   const qty = qtyInput ? parseInt(qtyInput.value, 10) : it.qty;
   if (!qty || qty < 1) { setStatus('数量を正しく入力してください', true); return; }
   if (qty > it.qty) { setStatus(`預けている数量（${it.qty}個）を超えています`, true); return; }
-  // 販売価格は精算のときだけ意味を持つ任意項目。取引先が分かる場合だけ入力してもらい、
-  // 空欄なら従来通り店舗側で（前回の販売価格の自動提案などから）入力してもらう。
-  let unitPrice = null;
-  if (type === 'settle') {
-    const priceInput = document.getElementById('portal-price-' + idx);
-    const rawPrice = priceInput ? priceInput.value.trim() : '';
-    if (rawPrice !== '') {
-      const parsedPrice = parseInt(rawPrice, 10);
-      if (!Number.isFinite(parsedPrice) || parsedPrice < 0) { setStatus('販売価格を正しく入力してください', true); return; }
-      unitPrice = parsedPrice;
-    }
-  }
   try {
-    const body = {
-      moveKey: it.moveKey, type, qty, model: it.model || '',
-      client: window._portalClient || '', requestedAt: Date.now(), status: 'pending'
-    };
-    if (unitPrice != null) body.unitPrice = unitPrice;
-    await fetch(authedUrl('/consignRequests/' + window._portalId + '.json'), {
-      method: 'POST',
-      body: JSON.stringify(body)
-    });
-    const priceNote = unitPrice != null ? `（販売価格¥${unitPrice.toLocaleString('ja-JP')}／合計¥${(unitPrice * qty).toLocaleString('ja-JP')}）` : '';
-    setStatus(type === 'settle'
-      ? `✓ ${qty}個${priceNote}の精算のご連絡を送信しました。店舗からの確認をお待ちください。`
-      : `✓ ${qty}個の返却のご連絡を送信しました。店舗からの確認をお待ちください。`, false);
+    await postConsignRequestsForItem(it, qty, type, null);
+    setStatus(`✓ ${qty}個の返却のご連絡を送信しました。店舗からの確認をお待ちください。`, false);
   } catch (e) {
     console.error('sendPortalRequest failed:', e);
     setStatus('送信に失敗しました。電波の良い場所でもう一度お試しください。', true);
+  }
+}
+
+// 「まとめて精算」ボタン：数量・売値が入力済みの商品をすべて集めて、それぞれ
+// consignRequestとして送信する。1件ずつ都度ボタンを押す必要がなく、送信前にまとめての
+// 合計金額を確認できる（要望：「毎回精算ボタンを押さずに、商品を検索し、数量・売値を入力し、
+// 最後にまとめて精算ボタンを押して精算することができるようにするのもいい」）。
+async function submitBatchSettle() {
+  const candidates = getPortalSettleCandidates();
+  const batchStatusEl = document.getElementById('portal-batch-status');
+  const setBatchStatus = (msg, isError) => {
+    if (!batchStatusEl) return;
+    batchStatusEl.textContent = msg;
+    batchStatusEl.style.color = isError ? '#b33' : '#2f6b2f';
+    batchStatusEl.style.display = msg ? 'block' : 'none';
+  };
+  if (!candidates.length) { setBatchStatus('数量と売値を入力した商品がありません', true); return; }
+  const btn = document.querySelector('#portal-grand-total button');
+  if (btn) btn.disabled = true;
+  let succeeded = 0;
+  let grandTotal = 0;
+  const failedModels = [];
+  for (const c of candidates) {
+    const itemStatusEl = document.getElementById('portal-item-status-' + c.idx);
+    const setItemStatus = (msg, isError) => {
+      if (!itemStatusEl) return;
+      itemStatusEl.textContent = msg;
+      itemStatusEl.style.color = isError ? '#b33' : '#2f6b2f';
+      itemStatusEl.style.display = msg ? 'block' : 'none';
+    };
+    try {
+      await postConsignRequestsForItem(c.it, c.qty, 'settle', c.price);
+      succeeded++;
+      grandTotal += c.qty * c.price;
+      setItemStatus(`✓ ${c.qty}個（売値¥${c.price.toLocaleString('ja-JP')}／合計¥${(c.qty * c.price).toLocaleString('ja-JP')}）の精算のご連絡を送信しました。店舗からの確認をお待ちください。`, false);
+    } catch (e) {
+      console.error('submitBatchSettle failed for', c.it.model, e);
+      failedModels.push(c.it.model || '商品');
+      setItemStatus('送信に失敗しました。電波の良い場所でもう一度お試しください。', true);
+    }
+  }
+  if (btn) btn.disabled = false;
+  if (succeeded === candidates.length) {
+    setBatchStatus(`✓ ${succeeded}件／合計¥${grandTotal.toLocaleString('ja-JP')} の精算のご連絡を送信しました。店舗からの確認をお待ちください。`, false);
+  } else if (succeeded > 0) {
+    setBatchStatus(`${succeeded}件は送信できましたが、${failedModels.join('／')}の送信に失敗しました。電波の良い場所でもう一度お試しください。`, true);
+  } else {
+    setBatchStatus('送信に失敗しました。電波の良い場所でもう一度お試しください。', true);
   }
 }
 
