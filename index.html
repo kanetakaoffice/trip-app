@@ -828,7 +828,10 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
             <button class="scan-btn" onclick="startScan('inv-jan')" style="flex:1;background:var(--surface);color:var(--text);border:1.5px solid var(--border)">📷 連続スキャン</button>
           </div>
           <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">連続スキャンで読み取れない場合は「写真で読み取る」をお試しください（ピントが合った状態で撮影されるため読み取りやすくなります）</div>
-          <input type="text" id="inv-jan" placeholder="または手入力" oninput="lookupJan()">
+          <div style="position:relative">
+            <input type="text" id="inv-jan" placeholder="または手入力" oninput="lookupJan(); toggleInvJanClearBtn();" style="padding-right:34px">
+            <button type="button" id="inv-jan-clear" onclick="clearInvJan()" aria-label="JANコードをクリア" style="display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);width:24px;height:24px;border:none;background:transparent;color:var(--text-muted);font-size:16px;line-height:1;cursor:pointer;padding:0">✕</button>
+          </div>
           <input type="hidden" id="inv-existing-key">
           <div id="jan-lookup-status" style="font-size:12px;margin-top:6px;color:var(--text-muted)"></div>
         </div>
@@ -5090,6 +5093,36 @@ function clearInvAddExistingMode() {
   if (btn) btn.textContent = '商品を登録する';
 }
 
+// 商品登録のJANコード欄：入力があるときだけ✕ボタンを表示する
+function toggleInvJanClearBtn() {
+  const input = document.getElementById('inv-jan');
+  const btn = document.getElementById('inv-jan-clear');
+  if (!input || !btn) return;
+  btn.style.display = input.value ? 'block' : 'none';
+}
+// JANコードを一発で消す（続けて別の商品を登録する際、既存商品としてすでに表示されている
+// メーカー・商品名・型番も含めて手動で消す手間を無くすため、まとめてクリアする）
+function clearInvJan() {
+  const janInput = document.getElementById('inv-jan');
+  if (!janInput) return;
+  janInput.value = '';
+  const modelInput = document.getElementById('inv-model');
+  if (modelInput) modelInput.value = '';
+  const nameInput = document.getElementById('inv-name');
+  if (nameInput) nameInput.value = '';
+  const makerInput = document.getElementById('inv-maker');
+  if (makerInput) makerInput.value = '';
+  const makerOther = document.getElementById('inv-maker-other');
+  if (makerOther) makerOther.value = '';
+  clearInvAddExistingMode();
+  const janStatus = document.getElementById('jan-lookup-status');
+  if (janStatus) janStatus.textContent = '';
+  const modelStatus = document.getElementById('model-lookup-status');
+  if (modelStatus) modelStatus.textContent = '';
+  toggleInvJanClearBtn();
+  janInput.focus();
+}
+
 // 検索結果のタイトル・スニペットから型番らしき文字列を推定する（ヒューリスティック・要確認）
 function guessModelNumber(text) {
   if (!text) return '';
@@ -5236,6 +5269,7 @@ async function lookupModel() {
   if (found) {
     setInvAddExistingMode(found);
     document.getElementById('inv-jan').value = found.jan || '';
+    toggleInvJanClearBtn();
     if (status) {
       status.innerHTML = `✅ 登録済み商品です（現在庫: ${found.stock}個）。入力した数量がそのまま入荷として追加されます。`;
       status.style.color = 'var(--success)';
@@ -5298,6 +5332,7 @@ async function runModelPriceSearch(model) {
       const janField = document.getElementById('inv-jan');
       if (guessedJan && janField && !janField.value) {
         janField.value = guessedJan;
+        toggleInvJanClearBtn();
         notes.push('JANコード');
       }
 
@@ -5355,6 +5390,7 @@ async function submitProduct() {
       clearInvAddExistingMode();
       renderMakerSelectUI('inv');
       document.getElementById('jan-lookup-status').textContent = '';
+      toggleInvJanClearBtn();
       await loadInventory();
       showToast('入荷を記録しました（在庫: ' + newStock + '個）');
     } catch(e) { showAlert('inv-alert-box','inv-alert-msg','記録に失敗しました','error'); }
@@ -5406,6 +5442,7 @@ async function submitProduct() {
     document.getElementById('inv-image').value = '';
     document.getElementById('inv-img-preview').style.display = 'none';
     renderMakerSelectUI('inv');
+    toggleInvJanClearBtn();
     await loadInventory();
     showToast('商品を登録しました');
   } catch(e) { showAlert('inv-alert-box','inv-alert-msg','登録に失敗しました','error'); }
@@ -6567,7 +6604,7 @@ function handleScanResult(text) {
   document.getElementById(scanTarget).value = text;
   stopScan();
   if (scanTarget === 'move-jan') lookupProduct();
-  if (scanTarget === 'inv-jan') lookupJan();
+  if (scanTarget === 'inv-jan') { lookupJan(); toggleInvJanClearBtn(); }
   if (scanTarget === 'pack-jan-sp') lookupPackJan();
   if (scanTarget === 'wh-item-jan') lookupWhItem();
   if (scanTarget === 'wh-consign-jan') lookupWhConsignItem();
