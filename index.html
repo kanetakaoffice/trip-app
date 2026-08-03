@@ -1029,12 +1029,26 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <input type="text" id="inv-search" placeholder="🔍 商品名・型番で検索" oninput="renderInventoryList(); toggleInvSearchClearBtn();" style="margin-bottom:0;padding-right:34px;width:100%;box-sizing:border-box">
         <button type="button" id="inv-search-clear" onclick="clearInvSearch()" aria-label="検索をクリア" style="display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);width:24px;height:24px;border:none;background:transparent;color:var(--text-muted);font-size:16px;line-height:1;cursor:pointer;padding:0">✕</button>
       </div>
-      <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-bottom:8px;font-size:12px;color:var(--text-muted)">
-        <label for="inv-sort-order">並び順</label>
-        <select id="inv-sort-order" onchange="handleInvSortOrderChange()" style="width:auto;padding:4px 8px;font-size:12px">
-          <option value="stock">在庫が少ない順</option>
-          <option value="name">型番・名前順</option>
-        </select>
+      <div id="inv-status-filter-bar" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap;font-size:12px;color:var(--text-muted)">
+        <div style="display:flex;align-items:center;gap:6px">
+          <label for="inv-sort-order">並び順</label>
+          <select id="inv-sort-order" onchange="handleInvSortOrderChange()" style="width:auto;padding:4px 8px;font-size:12px">
+            <option value="stock">在庫が少ない順</option>
+            <option value="name">型番・名前順</option>
+            <option value="cost">仕入値が高い順</option>
+            <option value="value">在庫金額が高い順</option>
+            <option value="new">登録日が新しい順</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <button type="button" onclick="toggleAllInvCats(true)" style="padding:4px 8px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:var(--white);color:var(--text-muted);cursor:pointer">すべて展開</button>
+          <button type="button" onclick="toggleAllInvCats(false)" style="padding:4px 8px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:var(--white);color:var(--text-muted);cursor:pointer">すべて折りたたむ</button>
+          <div style="display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+            <button type="button" id="inv-view-list-btn" onclick="setInvViewMode('list')" title="リスト表示" style="padding:4px 8px;font-size:12px;border:none;cursor:pointer">📋</button>
+            <button type="button" id="inv-view-grid-btn" onclick="setInvViewMode('grid')" title="グリッド（写真）表示" style="padding:4px 8px;font-size:12px;border:none;cursor:pointer;border-left:1px solid var(--border)">🖼</button>
+          </div>
+        </div>
       </div>
       <div id="inv-list-container"></div>
       <div id="inv-list-empty" class="empty-state" style="display:none">
@@ -4406,7 +4420,9 @@ function renderConsignRequestsPanel() {
   listEl.innerHTML = pending.map(r => {
     const kindLabel = r.type === 'settle' ? '精算しました（売れました）とのご連絡' : '返却してほしいとのご連絡';
     const dateDisp = r.requestedAt ? fmtDateJP(new Date(r.requestedAt).toISOString().slice(0,10)) : '';
-    const priceDisp = (r.type === 'settle' && r.unitPrice != null) ? `／取引先申告の販売価格：¥${Number(r.unitPrice).toLocaleString('ja-JP')}` : '';
+    const priceDisp = (r.type === 'settle' && r.unitPrice != null)
+      ? `／取引先申告の販売価格：¥${Number(r.unitPrice).toLocaleString('ja-JP')}／合計：¥${(Number(r.unitPrice) * (r.qty || 0)).toLocaleString('ja-JP')}`
+      : '';
     return `
       <div style="padding:8px 0;border-bottom:1px solid rgba(0,0,0,0.08);font-size:12.5px">
         <div style="color:var(--text)"><b>${escapeHtmlMain(r.client || '')}</b>／${escapeHtmlMain(r.model || '')}／${r.qty || ''}個${priceDisp}</div>
@@ -5872,6 +5888,13 @@ function getLowStockThreshold(p) {
   return (typeof p.lowStock === 'number') ? p.lowStock : DEFAULT_LOW_STOCK_THRESHOLD;
 }
 
+// 在庫一覧の「在庫あり／残りわずか／在庫切れ」絞り込みで使う、商品の在庫状態区分
+// （buildInvRow・buildInvCardが表示に使っている閾値判定と同じ基準）
+function getInvStockStatus(p) {
+  const threshold = getLowStockThreshold(p);
+  return p.stock <= 0 ? 'zero' : p.stock <= threshold ? 'low' : 'ok';
+}
+
 // 直近30日間の出庫実績から、1日あたりの平均出庫数と在庫切れまでの予測日数を計算する
 // （預かり精算分の納品書＝CONSIGN_INVOICE_CHANNELは、預け入れ時点ですでに在庫から減っている分の
 // 請求書類にすぎず、発行日に改めて在庫が動くわけではないため、ここではカウントしない。
@@ -6074,17 +6097,58 @@ function clearInvSearch() {
   input.focus();
 }
 
-// 在庫一覧の並び順（在庫が少ない順／名前順）は端末ごとに記憶しておき、次回開いたときも同じ並びにする
+// 在庫一覧の並び順（在庫が少ない順／型番・名前順／仕入値順／在庫金額順／登録日順）は
+// 端末ごとに記憶しておき、次回開いたときも同じ並びにする
+const INV_SORT_ORDER_VALUES = ['stock', 'name', 'cost', 'value', 'new'];
 function initInvSortOrderSelect() {
   const sel = document.getElementById('inv-sort-order');
   if (!sel) return;
   const saved = localStorage.getItem('kanetaka_inv_sort_order');
-  if (saved === 'name' || saved === 'stock') sel.value = saved;
+  if (INV_SORT_ORDER_VALUES.includes(saved)) sel.value = saved;
 }
 function handleInvSortOrderChange() {
   const sel = document.getElementById('inv-sort-order');
   if (sel) localStorage.setItem('kanetaka_inv_sort_order', sel.value);
   renderInventoryList();
+}
+
+// 在庫一覧の「在庫あり／残りわずか／在庫切れ」絞り込み
+let _invStatusFilter = '';
+const INV_STATUS_FILTERS = [
+  { value: '', label: 'すべて' },
+  { value: 'ok', label: '在庫あり' },
+  { value: 'low', label: '残りわずか' },
+  { value: 'zero', label: '在庫切れ' },
+];
+function buildInvStatusFilterBar() {
+  return INV_STATUS_FILTERS.map(f =>
+    `<span class="inv-subcat-tab${_invStatusFilter === f.value ? ' active' : ''}" onclick="setInvStatusFilter('${f.value}')">${f.label}</span>`
+  ).join('');
+}
+function setInvStatusFilter(status) {
+  _invStatusFilter = status;
+  renderInventoryList();
+}
+
+// カテゴリーの一括展開・折りたたみ
+function toggleAllInvCats(open) {
+  if (!_invOpenCats) _invOpenCats = {};
+  CATEGORY_LIST.forEach(c => { _invOpenCats[c] = open; });
+  renderInventoryList();
+}
+
+// 在庫一覧の表示形式（リスト／グリッド）は端末ごとに記憶しておく
+let _invViewMode = (localStorage.getItem('kanetaka_inv_view_mode') === 'grid') ? 'grid' : 'list';
+function setInvViewMode(mode) {
+  _invViewMode = (mode === 'grid') ? 'grid' : 'list';
+  localStorage.setItem('kanetaka_inv_view_mode', _invViewMode);
+  renderInventoryList();
+}
+function updateInvViewModeButtons() {
+  const listBtn = document.getElementById('inv-view-list-btn');
+  const gridBtn = document.getElementById('inv-view-grid-btn');
+  if (listBtn) { listBtn.style.background = _invViewMode === 'list' ? 'var(--surface)' : 'var(--white)'; listBtn.style.fontWeight = _invViewMode === 'list' ? '700' : '400'; }
+  if (gridBtn) { gridBtn.style.background = _invViewMode === 'grid' ? 'var(--surface)' : 'var(--white)'; gridBtn.style.fontWeight = _invViewMode === 'grid' ? '700' : '400'; }
 }
 
 function renderInventoryList() {
@@ -6099,10 +6163,16 @@ function renderInventoryList() {
 
   renderInvReorderPanel();
 
+  const statusFilterBar = document.getElementById('inv-status-filter-bar');
+  if (statusFilterBar) statusFilterBar.innerHTML = buildInvStatusFilterBar();
+  updateInvViewModeButtons();
+
   const searching = !!q;
   // 型番はハイフン・スペース・カッコ・大文字小文字の違いを無視して一致させる（商品名・メーカーはそのまま部分一致）
   const qModelNorm = normalizeModelStr(q);
-  const matched = products.filter(p => !q || p.name?.toLowerCase().includes(q) || (qModelNorm && normalizeModelStr(p.model).includes(qModelNorm)) || (p.maker||'').toLowerCase().includes(q));
+  let matched = products.filter(p => !q || p.name?.toLowerCase().includes(q) || (qModelNorm && normalizeModelStr(p.model).includes(qModelNorm)) || (p.maker||'').toLowerCase().includes(q));
+  // 在庫状態（在庫あり／残りわずか／在庫切れ）での絞り込み
+  if (_invStatusFilter) matched = matched.filter(p => getInvStockStatus(p) === _invStatusFilter);
   countEl.textContent = matched.length + '件';
 
   if (!matched.length) { container.innerHTML = ''; empty.style.display = 'block'; return; }
@@ -6114,9 +6184,20 @@ function renderInventoryList() {
     CATEGORY_LIST.forEach((c, i) => { _invOpenCats[c] = i === 0; });
   }
 
-  // 並び順：デフォルトは在庫が少ない順（従来通り）。名前順に切り替えることもできる
+  // 並び順：デフォルトは在庫が少ない順（従来通り）。型番・名前順／仕入値順／在庫金額順／登録日順にも切り替えられる
   const sortOrder = document.getElementById('inv-sort-order')?.value || 'stock';
+  function compareProducts(a, b) {
+    switch (sortOrder) {
+      // 実際にカードの一番上に表示されるラベル（型番。型番が無ければ商品名）を基準に並べる
+      case 'name': return String(a.model || a.name || '').localeCompare(String(b.model || b.name || ''), 'ja');
+      case 'cost': return (b.cost || 0) - (a.cost || 0);
+      case 'value': return ((b.cost || 0) * b.stock) - ((a.cost || 0) * a.stock);
+      case 'new': return (b.createdAt || 0) - (a.createdAt || 0);
+      default: return a.stock - b.stock;
+    }
+  }
 
+  const isGrid = _invViewMode === 'grid';
   const html = CATEGORY_LIST.map(cat => {
     const inCat = matched.filter(p => (p.category || CATEGORY_LIST[0]) === cat);
     if (!inCat.length) return ''; // 該当商品がないカテゴリーは表示しない
@@ -6126,10 +6207,11 @@ function renderInventoryList() {
     const activeSub = _invSubcatTab[cat] || '';
     const rowsSrc = (activeSub && subs.includes(activeSub)) ? inCat.filter(p => p.subcategory === activeSub) : inCat;
     const tabBar = buildInvSubcatTabBar(cat, subs, activeSub);
-    // 名前順の場合は、実際にカードの一番上に表示されるラベル（型番。型番が無ければ商品名）を基準に並べる
-    const sorted = [...rowsSrc].sort((a,b) => sortOrder === 'name'
-      ? String(a.model || a.name || '').localeCompare(String(b.model || b.name || ''), 'ja')
-      : a.stock - b.stock);
+    const sorted = [...rowsSrc].sort(compareProducts);
+    // グリッド（写真）表示のときは、商品登録画面の写真つきカードを流用してカード形式で並べる
+    const itemsHtml = isGrid
+      ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">${sorted.map(p => buildInvCard(p, {editable:true})).join('')}</div>`
+      : sorted.map(buildInvRow).join('');
     return `
       <div class="inv-accordion ${isOpen?'open':''}">
         <div class="inv-accordion-head" onclick="toggleInvCatAccordion('${cat}')">
@@ -6138,7 +6220,7 @@ function renderInventoryList() {
         </div>
         <div class="inv-row-list" style="display:${isOpen?'block':'none'}">
           ${tabBar}
-          ${sorted.map(buildInvRow).join('')}
+          ${itemsHtml}
         </div>
       </div>`;
   }).join('');
@@ -7661,47 +7743,39 @@ function renderList() {
     const byMonth = groupByMonth(items);
     container.innerHTML = byMonth.map(({ month, items: mi }) => {
       const monthTotal = mi.reduce((s,a) => s+a.amount, 0);
-      const byDay = groupByDay(mi);
-      return `<div style="margin-bottom:20px">
-        ${(()=>{ const mid='month_trip_'+month.replace('-',''); return monthHeader(month, monthTotal, '#4a4a4a', mid) + '<div id="'+mid+'" style="display:none">'; })()}
-        ${byDay.map(({ date, items: di }, di_idx) => {
-          const dayTotal = di.reduce((s,a) => s+a.amount, 0);
-          const uid = 'trip_'+month.replace('-','')+'_'+di_idx;
-          return `<div style="margin-bottom:8px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--white)">
-            ${dayHeader(uid, date, dayTotal)}
-            <div id="${uid}" style="display:none">
-              ${di.map(a => {
-                const rid = 'tr_'+a._key;
-                return `<div style="border-top:1px solid var(--border)">
-                  <div id="view_${rid}" style="padding:10px 14px">
-                    <div style="display:flex;justify-content:space-between;align-items:flex-start">
-                      <div>
-                        <div style="font-size:13px;font-weight:600;color:var(--text)">${a.name} → ${a.dest}</div>
-                        <div style="font-size:12px;color:var(--text-sub);margin-top:2px">${a.purpose}</div>
-    
-                      </div>
-                      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
-                        <span style="font-size:16px;font-weight:700;color:#4a4a4a">${yen(a.amount)}</span>
-                        ${actionBtns(`openEditRow('${rid}')`, `deleteTrip('${a._key}')`, '${a.date}')}
-                      </div>
-                    </div>
-                  </div>
-                  <div id="edit_${rid}" style="display:none;padding:12px 14px;background:#fffde7">
-                    <div style="display:grid;gap:8px">
-                      <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">日付</div>${inp(a.date,'et_date_'+rid,'date')}</div>
-                      <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">申請者</div>${sel(NAMES_LIST,a.name,'et_name_'+rid)}</div>
-                      <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">出張先</div>${sel(TRIP_DESTS,a.dest,'et_dest_'+rid)}</div>
-                      <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">目的</div>${sel(TRIP_PURPOSES,a.purpose,'et_purpose_'+rid)}</div>
-                      <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">ステータス</div>${sel(['登録済み'],a.status,'et_status_'+rid)}</div>
-                    </div>
-                    ${editBtnRow(`saveTrip('${a._key}','${rid}')`, `closeEditRow('${rid}')`)}
-                  </div>
-                </div>`;
-              }).join('')}
+      const mid = 'month_trip_'+month.replace('-','');
+      const sorted = [...mi].sort((a,b) => b.date.localeCompare(a.date));
+      const rowsHtml = sorted.map((a, i) => {
+        const rid = 'tr_'+a._key;
+        return `<div style="${i===0?'':'border-top:1px solid var(--border)'}">
+          <div id="view_${rid}" style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px">
+            <div style="min-width:0;flex:1">
+              <div style="font-size:11px;color:var(--text-muted)">${fmtDate(a.date)}</div>
+              <div style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.name} → ${a.dest} <span style="font-weight:400;color:var(--text-sub)">/ ${a.purpose}</span></div>
             </div>
-          </div>`;
-        }).join('')}
-      </div></div>`;
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+              <span style="font-size:14px;font-weight:700;color:#4a4a4a">${yen(a.amount)}</span>
+              ${actionBtns(`openEditRow('${rid}')`, `deleteTrip('${a._key}')`, '${a.date}')}
+            </div>
+          </div>
+          <div id="edit_${rid}" style="display:none;padding:12px 14px;background:#fffde7">
+            <div style="display:grid;gap:8px">
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">日付</div>${inp(a.date,'et_date_'+rid,'date')}</div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">申請者</div>${sel(NAMES_LIST,a.name,'et_name_'+rid)}</div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">出張先</div>${sel(TRIP_DESTS,a.dest,'et_dest_'+rid)}</div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">目的</div>${sel(TRIP_PURPOSES,a.purpose,'et_purpose_'+rid)}</div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">ステータス</div>${sel(['登録済み'],a.status,'et_status_'+rid)}</div>
+            </div>
+            ${editBtnRow(`saveTrip('${a._key}','${rid}')`, `closeEditRow('${rid}')`)}
+          </div>
+        </div>`;
+      }).join('');
+      return `<div style="margin-bottom:20px">
+        ${monthHeader(month, monthTotal, '#4a4a4a', mid)}
+        <div id="${mid}" style="display:none">
+          <div style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--white)">${rowsHtml}</div>
+        </div>
+      </div>`;
     }).join('');
 
   } else if (currentListTab === 'expense') {
@@ -7711,47 +7785,40 @@ function renderList() {
     const byMonth = groupByMonth(items);
     container.innerHTML = byMonth.map(({ month, items: mi }) => {
       const monthTotal = mi.reduce((s,e) => s+e.amount, 0);
-      const byDay = groupByDay(mi);
-      return `<div style="margin-bottom:20px">
-        ${(()=>{ const mid='month_exp_'+month.replace('-',''); return monthHeader(month, monthTotal, '#4a4a4a', mid) + '<div id="'+mid+'" style="display:none">'; })()}
-        ${byDay.map(({ date, items: di }, di_idx) => {
-          const dayTotal = di.reduce((s,e) => s+e.amount, 0);
-          const uid = 'exp_'+month.replace('-','')+'_'+di_idx;
-          return `<div style="margin-bottom:8px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--white)">
-            ${dayHeader(uid, date, dayTotal, '#4a4a4a')}
-            <div id="${uid}" style="display:none">
-              ${di.map(e => {
-                const rid = 'ex_'+e._key;
-                return `<div style="border-top:1px solid var(--border)">
-                  <div id="view_${rid}" style="padding:10px 14px">
-                    <div style="display:flex;justify-content:space-between;align-items:flex-start">
-                      <div>
-                        <div style="font-size:13px;font-weight:600;color:var(--text)">${e.payee}</div>
-                        <div style="font-size:12px;color:var(--text-sub);margin-top:2px">${e.content}</div>
-                        <span style="display:inline-block;margin-top:4px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--purple-bg);color:var(--purple)">${e.category}</span>
-                      </div>
-                      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
-                        <span style="font-size:16px;font-weight:700;color:#4a4a4a">${yen(e.amount)}</span>
-                        ${actionBtns(`openEditRow('${rid}')`, `deleteExpense('${e._key}')`, '${e.date}')}
-                      </div>
-                    </div>
-                  </div>
-                  <div id="edit_${rid}" style="display:none;padding:12px 14px;background:#fffde7">
-                    <div style="display:grid;gap:8px">
-                      <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">日付</div>${inp(e.date,'ee_date_'+rid,'date')}</div>
-                      <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">支払先</div>${inp(e.payee,'ee_payee_'+rid,'text','支払先')}</div>
-                      <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">用途</div>${sel(EXP_CATS,e.category,'ee_cat_'+rid)}</div>
-                      <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">詳細メモ</div>${inp(e.note||'','ee_note_'+rid,'text','メモ')}</div>
-                      <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">金額（円）</div>${inp(e.amount,'ee_amount_'+rid,'number')}</div>
-                    </div>
-                    ${editBtnRow(`saveExpense('${e._key}','${rid}')`, `closeEditRow('${rid}')`)}
-                  </div>
-                </div>`;
-              }).join('')}
+      const mid = 'month_exp_'+month.replace('-','');
+      const sorted = [...mi].sort((a,b) => b.date.localeCompare(a.date));
+      const rowsHtml = sorted.map((e, i) => {
+        const rid = 'ex_'+e._key;
+        return `<div style="${i===0?'':'border-top:1px solid var(--border)'}">
+          <div id="view_${rid}" style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px">
+            <div style="min-width:0;flex:1">
+              <div style="font-size:11px;color:var(--text-muted)">${fmtDate(e.date)}</div>
+              <div style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.payee} <span style="font-weight:400;color:var(--text-sub)">/ ${e.content}</span></div>
+              <span style="display:inline-block;margin-top:3px;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:20px;background:var(--purple-bg);color:var(--purple)">${e.category}</span>
             </div>
-          </div>`;
-        }).join('')}
-      </div></div>`;
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+              <span style="font-size:14px;font-weight:700;color:#4a4a4a">${yen(e.amount)}</span>
+              ${actionBtns(`openEditRow('${rid}')`, `deleteExpense('${e._key}')`, '${e.date}')}
+            </div>
+          </div>
+          <div id="edit_${rid}" style="display:none;padding:12px 14px;background:#fffde7">
+            <div style="display:grid;gap:8px">
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">日付</div>${inp(e.date,'ee_date_'+rid,'date')}</div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">支払先</div>${inp(e.payee,'ee_payee_'+rid,'text','支払先')}</div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">用途</div>${sel(EXP_CATS,e.category,'ee_cat_'+rid)}</div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">詳細メモ</div>${inp(e.note||'','ee_note_'+rid,'text','メモ')}</div>
+              <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">金額（円）</div>${inp(e.amount,'ee_amount_'+rid,'number')}</div>
+            </div>
+            ${editBtnRow(`saveExpense('${e._key}','${rid}')`, `closeEditRow('${rid}')`)}
+          </div>
+        </div>`;
+      }).join('');
+      return `<div style="margin-bottom:20px">
+        ${monthHeader(month, monthTotal, '#4a4a4a', mid)}
+        <div id="${mid}" style="display:none">
+          <div style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--white)">${rowsHtml}</div>
+        </div>
+      </div>`;
     }).join('');
 
   } else if (currentListTab === 'purchase') {
@@ -7759,85 +7826,97 @@ function renderList() {
     countEl.textContent = items.length + '件';
     if (!items.length) { empty.style.display = 'block'; return; }
     const byMonth = groupByMonth(items);
+    function purEditForm(p, rid) {
+      return `<div id="edit_${rid}" style="display:none;padding:12px 14px;background:#fffde7">
+        <div style="display:grid;gap:8px">
+          <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">日付</div>${inp(p.date,'ep_date_'+rid,'date')}</div>
+          <div>
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">仕入先</div>
+            ${(()=>{
+              // 現在の仕入先から基本仕入先と店舗名を判定
+              let baseVal = p.supplier || '';
+              let storeVal = '';
+              let storeOther = '';
+              let supOther = '';
+              const storeMatch = baseVal.match(/^店舗（(.+)）$/);
+              if (storeMatch) {
+                baseVal = '店舗';
+                const storeName = storeMatch[1];
+                const stores = ['ヤマダデンキ','エディオン','ケーズデンキ','ジョーシン'];
+                if (stores.includes(storeName)) { storeVal = storeName; }
+                else { storeVal = 'other'; storeOther = storeName; }
+              } else if (!['店舗','電脳','（株）HAK','（株）GAIN'].includes(baseVal)) {
+                supOther = baseVal; baseVal = 'other';
+              }
+              const supOpts = ['店舗','電脳','（株）HAK','（株）GAIN','other'].map(o=>
+                `<option value="${o}"${o===baseVal?' selected':''}>${o==='other'?'その他':o}</option>`).join('');
+              const storeOpts = ['ヤマダデンキ','エディオン','ケーズデンキ','ジョーシン','other'].map(o=>
+                `<option value="${o}"${o===storeVal?' selected':''}>${o==='other'?'その他':o}</option>`).join('');
+              return `
+              <select id="ep_sup_${rid}" onchange="handleEditPurSupplier('${rid}')" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;background:var(--white);width:100%">
+                <option value="">選択してください</option>${supOpts}
+              </select>
+              <div id="ep_store_wrap_${rid}" style="display:${baseVal==='店舗'?'block':'none'};margin-top:6px">
+                <select id="ep_store_${rid}" onchange="handleEditPurStore('${rid}')" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;background:var(--white);width:100%">
+                  <option value="">店舗を選択</option>${storeOpts}
+                </select>
+                <div id="ep_store_other_wrap_${rid}" style="display:${storeVal==='other'?'block':'none'};margin-top:6px">
+                  <input id="ep_store_other_${rid}" type="text" value="${storeOther}" placeholder="店舗名を入力" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;width:100%;box-sizing:border-box">
+                </div>
+              </div>
+              <div id="ep_sup_other_wrap_${rid}" style="display:${baseVal==='other'?'block':'none'};margin-top:6px">
+                <input id="ep_sup_other_${rid}" type="text" value="${supOther}" placeholder="仕入先名を入力" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;width:100%;box-sizing:border-box">
+              </div>`;
+            })()}
+          </div>
+          <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">金額（円）</div>${inp(p.amount,'ep_amount_'+rid,'number')}</div>
+          <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">メモ</div>${inp(p.note||'','ep_note_'+rid,'text','メモ')}</div>
+        </div>
+        ${editBtnRow(`savePurchase('${p._key}','${rid}')`, `closeEditRow('${rid}')`)}
+      </div>`;
+    }
     container.innerHTML = byMonth.map(({ month, items: mi }) => {
       const monthTotal = mi.reduce((s,p) => s+p.amount, 0);
-      const byDay = groupByDay(mi);
-      return `<div style="margin-bottom:20px">
-        ${(()=>{ const mid='month_pur_'+month.replace('-',''); return monthHeader(month, monthTotal, '#4a4a4a', mid) + '<div id="'+mid+'" style="display:none">'; })()}
-        ${byDay.map(({ date, items: di }, di_idx) => {
-          const dayTotal = di.reduce((s,p) => s+p.amount, 0);
-          const uid = 'pur_'+month.replace('-','')+'_'+di_idx;
+      const mid = 'month_pur_'+month.replace('-','');
+      const bySupplier = {};
+      mi.forEach(p => { const k = p.supplier || '不明'; if (!bySupplier[k]) bySupplier[k] = []; bySupplier[k].push(p); });
+      const supSections = Object.entries(bySupplier)
+        .sort((a,b) => b[1].reduce((s,p)=>s+p.amount,0) - a[1].reduce((s,p)=>s+p.amount,0))
+        .map(([sup, rows], idx) => {
+          const supTotal = rows.reduce((s,p)=>s+p.amount,0);
+          const sorted = [...rows].sort((a,b) => b.date.localeCompare(a.date));
+          const sid = 'pur_sup_'+month.replace('-','')+'_'+idx;
+          const rowsHtml = sorted.map((p, i) => {
+            const rid = 'pu_'+p._key;
+            return `<div style="${i===0?'':'border-top:1px solid var(--border)'}">
+              <div id="view_${rid}" style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px">
+                <div style="min-width:0;flex:1">
+                  <div style="font-size:11px;color:var(--text-muted)">${fmtDate(p.date)}</div>
+                  ${p.note?`<div style="font-size:12.5px;color:var(--text-sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.note}</div>`:''}
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+                  <span style="font-size:14px;font-weight:700;color:#4a4a4a">${yen(p.amount)}</span>
+                  ${actionBtns(`openEditRow('${rid}')`, `deletePurchase('${p._key}')`, '${p.date}')}
+                </div>
+              </div>
+              ${purEditForm(p, rid)}
+            </div>`;
+          }).join('');
           return `<div style="margin-bottom:8px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--white)">
-            ${dayHeader(uid, date, dayTotal, '#4a4a4a')}
-            <div id="${uid}" style="display:none">
-              ${di.map(p => {
-                const rid = 'pu_'+p._key;
-                return `<div style="border-top:1px solid var(--border)">
-                  <div id="view_${rid}" style="padding:10px 14px">
-                    <div style="display:flex;justify-content:space-between;align-items:center">
-                      <div>
-                        <div style="font-size:13px;font-weight:600;color:var(--text)">${p.supplier}</div>
-                        ${p.note?`<div style="font-size:12px;color:var(--text-sub);margin-top:2px">${p.note}</div>`:''}
-                      </div>
-                      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
-                        <span style="font-size:16px;font-weight:700;color:#4a4a4a">${yen(p.amount)}</span>
-                        ${actionBtns(`openEditRow('${rid}')`, `deletePurchase('${p._key}')`, '${p.date}')}
-                      </div>
-                    </div>
-                  </div>
-                  <div id="edit_${rid}" style="display:none;padding:12px 14px;background:#fffde7">
-                    <div style="display:grid;gap:8px">
-                      <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">日付</div>${inp(p.date,'ep_date_'+rid,'date')}</div>
-                      <div>
-                        <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">仕入先</div>
-                        ${(()=>{
-                          // 現在の仕入先から基本仕入先と店舗名を判定
-                          let baseVal = p.supplier || '';
-                          let storeVal = '';
-                          let storeOther = '';
-                          let supOther = '';
-                          const storeMatch = baseVal.match(/^店舗（(.+)）$/);
-                          if (storeMatch) {
-                            baseVal = '店舗';
-                            const storeName = storeMatch[1];
-                            const stores = ['ヤマダデンキ','エディオン','ケーズデンキ','ジョーシン'];
-                            if (stores.includes(storeName)) { storeVal = storeName; }
-                            else { storeVal = 'other'; storeOther = storeName; }
-                          } else if (!['店舗','電脳','（株）HAK','（株）GAIN'].includes(baseVal)) {
-                            supOther = baseVal; baseVal = 'other';
-                          }
-                          const supOpts = ['店舗','電脳','（株）HAK','（株）GAIN','other'].map(o=>
-                            `<option value="${o}"${o===baseVal?' selected':''}>${o==='other'?'その他':o}</option>`).join('');
-                          const storeOpts = ['ヤマダデンキ','エディオン','ケーズデンキ','ジョーシン','other'].map(o=>
-                            `<option value="${o}"${o===storeVal?' selected':''}>${o==='other'?'その他':o}</option>`).join('');
-                          return `
-                          <select id="ep_sup_${rid}" onchange="handleEditPurSupplier('${rid}')" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;background:var(--white);width:100%">
-                            <option value="">選択してください</option>${supOpts}
-                          </select>
-                          <div id="ep_store_wrap_${rid}" style="display:${baseVal==='店舗'?'block':'none'};margin-top:6px">
-                            <select id="ep_store_${rid}" onchange="handleEditPurStore('${rid}')" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;background:var(--white);width:100%">
-                              <option value="">店舗を選択</option>${storeOpts}
-                            </select>
-                            <div id="ep_store_other_wrap_${rid}" style="display:${storeVal==='other'?'block':'none'};margin-top:6px">
-                              <input id="ep_store_other_${rid}" type="text" value="${storeOther}" placeholder="店舗名を入力" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;width:100%;box-sizing:border-box">
-                            </div>
-                          </div>
-                          <div id="ep_sup_other_wrap_${rid}" style="display:${baseVal==='other'?'block':'none'};margin-top:6px">
-                            <input id="ep_sup_other_${rid}" type="text" value="${supOther}" placeholder="仕入先名を入力" style="font-size:13px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;width:100%;box-sizing:border-box">
-                          </div>`;
-                        })()}
-                      </div>
-                      <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">金額（円）</div>${inp(p.amount,'ep_amount_'+rid,'number')}</div>
-                      <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">メモ</div>${inp(p.note||'','ep_note_'+rid,'text','メモ')}</div>
-                    </div>
-                    ${editBtnRow(`savePurchase('${p._key}','${rid}')`, `closeEditRow('${rid}')`)}
-                  </div>
-                </div>`;
-              }).join('')}
+            <div onclick="toggleDayGroup('${sid}')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;cursor:pointer;background:var(--surface)">
+              <span style="font-size:13px;font-weight:700;color:var(--text)">${sup} <span style="font-size:11px;color:var(--text-muted);font-weight:400">${rows.length}件</span></span>
+              <span style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:13px;font-weight:700;color:#4a4a4a">${yen(supTotal)}</span>
+                <span id="arr_${sid}" style="font-size:11px;color:var(--text-muted);transition:transform 0.2s">▼</span>
+              </span>
             </div>
+            <div id="${sid}" style="display:none">${rowsHtml}</div>
           </div>`;
-        }).join('')}
-      </div></div>`;
+        }).join('');
+      return `<div style="margin-bottom:20px">
+        ${monthHeader(month, monthTotal, '#4a4a4a', mid)}
+        <div id="${mid}" style="display:none">${supSections}</div>
+      </div>`;
     }).join('');
 
   } else if (currentListTab === 'sales') {
@@ -7852,24 +7931,21 @@ function renderList() {
     const filtered = activeFilter ? items.filter(s=>s.client===activeFilter) : items;
     const byMonth = groupByMonth(filtered);
 
-    // 明細HTML（日付・区分・金額・編集削除）
+    // 明細HTML（日付・区分・金額・編集削除）※取引先名はグループ見出しに表示するため行内では省略
     function salItemHtml(s) {
       const rid = 'sa_'+s._key;
       const isOvs = s.salesType==='国外（インボイス）';
       const clients2 = isOvs ? getOverseasSalesClients() : getDomesticSalesClients();
       return `<div style="border-top:1px solid var(--border)">
-        <div id="view_${rid}" style="padding:10px 14px">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start">
-            <div>
-              <div style="font-size:13px;font-weight:600;color:var(--text)">${s.client}</div>
-              <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${fmtDate(s.date)}</div>
-              <span style="display:inline-block;margin-top:4px;font-size:11px;padding:2px 8px;border-radius:20px;background:var(--teal-bg);color:var(--teal)">${s.salesType||''}</span>
-              ${s.note?`<div style="font-size:12px;color:var(--text-sub);margin-top:2px">${s.note}</div>`:''}
-            </div>
-            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
-              <span style="font-size:15px;font-weight:700;color:#4a4a4a">${yen(s.amount)}</span>
-              ${actionBtns(`openEditRow('${rid}')`, `deleteSales('${s._key}')`, '${s.date}')}
-            </div>
+        <div id="view_${rid}" style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px">
+          <div style="min-width:0;flex:1">
+            <div style="font-size:11px;color:var(--text-muted)">${fmtDate(s.date)}</div>
+            <span style="display:inline-block;margin-top:3px;font-size:10.5px;padding:1px 7px;border-radius:20px;background:var(--teal-bg);color:var(--teal)">${s.salesType||''}</span>
+            ${s.note?`<div style="font-size:12px;color:var(--text-sub);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.note}</div>`:''}
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+            <span style="font-size:14px;font-weight:700;color:#4a4a4a">${yen(s.amount)}</span>
+            ${actionBtns(`openEditRow('${rid}')`, `deleteSales('${s._key}')`, '${s.date}')}
           </div>
         </div>
         <div id="edit_${rid}" style="display:none;padding:12px 14px;background:#fffde7">
@@ -7895,19 +7971,23 @@ function renderList() {
     const monthHtml = byMonth.map(({ month, items: mi }, m_idx) => {
       const monthTotal = mi.reduce((s,s2) => s+s2.amount, 0);
       const uid = 'sal_'+month.replace('-','')+'_'+m_idx;
-      const byDay = groupByDay([...mi].sort((a,b)=>b.date.localeCompare(a.date)));
-      const dayHtml = byDay.map(({ date, items: di }, di_idx) => {
-        const dayTotal = di.reduce((s,a)=>s+a.amount,0);
-        const duid = 'sal_d_'+month.replace('-','')+'_'+di_idx;
+      const byClient = {};
+      mi.forEach(s => { const k = s.client || '不明'; if (!byClient[k]) byClient[k] = []; byClient[k].push(s); });
+      const clientHtml = Object.entries(byClient)
+        .sort((a,b) => b[1].reduce((s,x)=>s+x.amount,0) - a[1].reduce((s,x)=>s+x.amount,0))
+        .map(([client, rows], c_idx) => {
+        const clientTotal = rows.reduce((s,a)=>s+a.amount,0);
+        const cuid = 'sal_cli_'+month.replace('-','')+'_'+c_idx;
+        const sorted = [...rows].sort((a,b)=>b.date.localeCompare(a.date));
         return `<div style="margin-bottom:8px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--white)">
-          <div onclick="toggleDayGroup('${duid}')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;cursor:pointer;background:var(--surface)">
-            <span style="font-size:13px;font-weight:700;color:var(--text)">${fmtDate(date)}</span>
+          <div onclick="toggleDayGroup('${cuid}')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;cursor:pointer;background:var(--surface)">
+            <span style="font-size:13px;font-weight:700;color:var(--text)">${client} <span style="font-size:11px;color:var(--text-muted);font-weight:400">${rows.length}件</span></span>
             <span style="display:flex;align-items:center;gap:8px">
-              <span style="font-size:13px;font-weight:700;color:#4a4a4a">${yen(dayTotal)}</span>
-              <span id="arr_${duid}" style="font-size:11px;color:var(--text-muted);transition:transform 0.2s">▼</span>
+              <span style="font-size:13px;font-weight:700;color:var(--teal)">${yen(clientTotal)}</span>
+              <span id="arr_${cuid}" style="font-size:11px;color:var(--text-muted);transition:transform 0.2s">▼</span>
             </span>
           </div>
-          <div id="${duid}" style="display:none">${di.map(s=>salItemHtml(s)).join('')}</div>
+          <div id="${cuid}" style="display:none">${sorted.map(s=>salItemHtml(s)).join('')}</div>
         </div>`;
       }).join('');
       return `<div style="margin-bottom:20px">
@@ -7918,7 +7998,7 @@ function renderList() {
             <span id="arr_${uid}" style="font-size:11px;color:#a0a0a0;transition:transform 0.2s">▼</span>
           </span>
         </div>
-        <div id="${uid}" style="display:none">${dayHtml}</div>
+        <div id="${uid}" style="display:none">${clientHtml}</div>
       </div>`;
     }).join('');
 
@@ -10846,14 +10926,15 @@ function renderPortalItemsList(pairs) {
       <div style="font-size:12.5px;color:var(--text-muted);margin-top:2px">${fmtDateJP(it.date)}／預けている数量：${it.qty}個${it.memo ? '／' + escapeHtmlMain(it.memo) : ''}</div>
       <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
         <label for="portal-qty-${idx}" style="font-size:12px;color:var(--text-muted)">対象の数量</label>
-        <input type="number" id="portal-qty-${idx}" min="1" max="${it.qty}" value="${it.qty}" style="width:64px;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
+        <input type="number" id="portal-qty-${idx}" min="1" max="${it.qty}" value="${it.qty}" oninput="updatePortalItemTotal(${idx})" style="width:64px;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
         <span style="font-size:12px;color:var(--text-muted)">個（${it.qty}個のうち一部だけの場合は数を変えてください）</span>
       </div>
       <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
         <label for="portal-price-${idx}" style="font-size:12px;color:var(--text-muted)">販売価格（円）</label>
-        <input type="number" id="portal-price-${idx}" min="0" placeholder="任意" style="width:88px;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
+        <input type="number" id="portal-price-${idx}" min="0" placeholder="任意" oninput="updatePortalItemTotal(${idx})" style="width:88px;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
         <span style="font-size:12px;color:var(--text-muted)">精算の場合のみ（分かれば入力してください）</span>
       </div>
+      <div id="portal-total-${idx}" style="display:none;font-size:12.5px;font-weight:700;color:var(--text);margin-top:6px;text-align:right"></div>
       <div style="display:flex;gap:8px;margin-top:10px">
         <button onclick="sendPortalRequest(${idx}, 'settle')" style="flex:1;padding:9px 0;border-radius:8px;border:1.2px solid var(--gold-dark);background:var(--white);color:var(--gold-dark);font-size:13px;font-weight:700;cursor:pointer">精算しました</button>
         <button onclick="sendPortalRequest(${idx}, 'return')" style="flex:1;padding:9px 0;border-radius:8px;border:1.2px solid var(--border);background:var(--white);color:var(--text);font-size:13px;font-weight:700;cursor:pointer">返却します</button>
@@ -10861,6 +10942,24 @@ function renderPortalItemsList(pairs) {
       <div id="portal-item-status-${idx}" style="display:none;margin-top:8px;font-size:12px"></div>
     </div>
   `).join('');
+}
+
+// 対象の数量・販売価格のどちらかが変わるたびに呼ばれ、精算しようとしている合計金額を
+// その場で計算して表示する（送信する前に金額の見込みが分かるように）
+function updatePortalItemTotal(idx) {
+  const qtyInput = document.getElementById('portal-qty-' + idx);
+  const priceInput = document.getElementById('portal-price-' + idx);
+  const totalEl = document.getElementById('portal-total-' + idx);
+  if (!totalEl) return;
+  const qty = qtyInput ? parseInt(qtyInput.value, 10) : NaN;
+  const rawPrice = priceInput ? priceInput.value.trim() : '';
+  const price = rawPrice !== '' ? parseInt(rawPrice, 10) : NaN;
+  if (Number.isFinite(qty) && qty > 0 && Number.isFinite(price) && price >= 0) {
+    totalEl.textContent = `合計：¥${(qty * price).toLocaleString('ja-JP')}`;
+    totalEl.style.display = 'block';
+  } else {
+    totalEl.style.display = 'none';
+  }
 }
 
 // 取引先が「精算しました」「返却します」を押したときの処理。実際の在庫・記録を直接
@@ -10905,7 +11004,7 @@ async function sendPortalRequest(idx, type) {
       method: 'POST',
       body: JSON.stringify(body)
     });
-    const priceNote = unitPrice != null ? `（販売価格¥${unitPrice.toLocaleString('ja-JP')}）` : '';
+    const priceNote = unitPrice != null ? `（販売価格¥${unitPrice.toLocaleString('ja-JP')}／合計¥${(unitPrice * qty).toLocaleString('ja-JP')}）` : '';
     setStatus(type === 'settle'
       ? `✓ ${qty}個${priceNote}の精算のご連絡を送信しました。店舗からの確認をお待ちください。`
       : `✓ ${qty}個の返却のご連絡を送信しました。店舗からの確認をお待ちください。`, false);
