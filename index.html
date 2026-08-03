@@ -309,7 +309,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       <div class="header-sub" id="sync-status">接続中...</div>
     </div>
     <div class="mode-switch">
-      <button class="mode-btn active" id="mode-btn-biz" onclick="switchMode('biz')">📋 業務</button>
+      <button class="mode-btn active" id="mode-btn-biz" onclick="switchMode('biz')">📋 業務<span class="mode-badge" id="mode-biz-badge"></span></button>
       <button class="mode-btn" id="mode-btn-inv" onclick="switchMode('inv')">📦 在庫<span class="mode-badge" id="mode-inv-badge"></span></button>
     </div>
   </div>
@@ -334,6 +334,10 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <button class="home-action-btn" onclick="showScreen('expense')"><span class="home-icon">💴</span><span class="home-label">経費</span></button>
         <button class="home-action-btn" onclick="showScreen('form')"><span class="home-icon">✈️</span><span class="home-label">出張</span></button>
       </div>
+    </div>
+    <div id="home-notify-prompt" style="display:none;align-items:center;justify-content:space-between;gap:8px;background:var(--surface);border:1.2px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:12px;color:var(--text-muted)">
+      <span>取引先からの連絡や、スタッフによる経費・仕入・売上の登録があったとき、このアプリを開いている間だけお知らせできます</span>
+      <button onclick="requestConsignNotifyPermission()" style="flex-shrink:0;padding:6px 10px;font-size:12px;font-weight:700;border:1.5px solid var(--gold-dark);border-radius:8px;background:var(--white);color:var(--gold-dark);cursor:pointer">🔔 通知を有効にする</button>
     </div>
     <div id="home-summary"></div>
   </div>
@@ -1025,6 +1029,13 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <input type="text" id="inv-search" placeholder="🔍 商品名・型番で検索" oninput="renderInventoryList(); toggleInvSearchClearBtn();" style="margin-bottom:0;padding-right:34px;width:100%;box-sizing:border-box">
         <button type="button" id="inv-search-clear" onclick="clearInvSearch()" aria-label="検索をクリア" style="display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);width:24px;height:24px;border:none;background:transparent;color:var(--text-muted);font-size:16px;line-height:1;cursor:pointer;padding:0">✕</button>
       </div>
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-bottom:8px;font-size:12px;color:var(--text-muted)">
+        <label for="inv-sort-order">並び順</label>
+        <select id="inv-sort-order" onchange="handleInvSortOrderChange()" style="width:auto;padding:4px 8px;font-size:12px">
+          <option value="stock">在庫が少ない順</option>
+          <option value="name">型番・名前順</option>
+        </select>
+      </div>
       <div id="inv-list-container"></div>
       <div id="inv-list-empty" class="empty-state" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/><line x1="12" y1="12" x2="12" y2="16"/></svg>
@@ -1119,8 +1130,8 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       </div>
       <div class="field-divider"></div>
       <div class="field" style="padding-top:16px">
-        <div class="field-label">商品名 <span class="req">*</span></div>
-        <input type="text" id="pack-product-sp" placeholder="商品名を入力（JANスキャンで自動入力されます）">
+        <div class="field-label">型番 <span class="req">*</span></div>
+        <input type="text" id="pack-product-sp" placeholder="型番を入力（JANスキャンで自動入力されます）">
       </div>
       <div class="field-divider"></div>
       <div class="field" style="padding-top:16px">
@@ -1716,7 +1727,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
   <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:16px">梱包リストを編集</div>
     <input type="hidden" id="pack-edit-key">
-    <div class="field"><div class="field-label">商品名 <span class="req">*</span></div>
+    <div class="field"><div class="field-label">型番 <span class="req">*</span></div>
       <input type="text" id="pack-edit-product"></div>
     <div class="field-divider"></div>
     <div class="field" style="padding-top:12px"><div class="field-label">JANコード</div>
@@ -2012,10 +2023,14 @@ async function requestConsignNotifyPermission() {
 }
 
 function updateConsignNotifyPromptVisibility() {
-  const el = document.getElementById('wh-consign-notify-prompt');
-  if (!el) return;
   const supported = 'Notification' in window;
-  el.style.display = (supported && Notification.permission === 'default') ? 'flex' : 'none';
+  const show = supported && Notification.permission === 'default';
+  // 卸売管理（預かりリスト）側とホーム画面側、どちらの案内バナーも同じブラウザ通知許可を
+  // 使うため、まとめて表示・非表示を切り替える
+  ['wh-consign-notify-prompt', 'home-notify-prompt'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = show ? 'flex' : 'none';
+  });
 }
 
 // 30秒ごとに（画面を問わず）consignRequestsだけを軽く取得し直し、新着があればバッジ・音・
@@ -2039,6 +2054,68 @@ async function pollConsignRequestsForNotify() {
     updateConsignNavBadge(pendingCount);
   } catch (e) { console.error('consign notify poll error', e); }
 }
+
+// ── スタッフ（一般ユーザー）による経費・仕入・売上登録の通知 ──
+// 取引先の精算・返却連絡と同じ考え方で、一般ユーザー（倉庫作業員）がQuick Menuから
+// 経費・仕入・売上を登録した際に、管理者側で見落とさないようバッジ・通知でお知らせする。
+// 管理者自身が登録した分と区別するため、登録時に enteredBy（メールアドレス）を記録しておき、
+// それがADMIN_EMAILSに含まれないものだけを「スタッフによる登録」として数える。
+let _lastSeenBizCount = parseInt(localStorage.getItem('kanetaka_biz_seen_count') || '0');
+let _bizNotifyBaseline = null;
+
+// 既にloadAll()で30秒ごとに更新されている経費・仕入・売上の一覧（window._getExpenses等）を
+// そのまま使う。通知監視のためだけに追加の通信は行わない
+function countStaffBizEntries() {
+  const isStaffEntry = e => e && e.enteredBy && !ADMIN_EMAILS.includes(String(e.enteredBy).toLowerCase());
+  const expenses  = window._getExpenses  ? window._getExpenses()  : [];
+  const purchases = window._getPurchases ? window._getPurchases() : [];
+  const sales     = window._getSales     ? window._getSales()     : [];
+  return [...expenses, ...purchases, ...sales].filter(isStaffEntry).length;
+}
+
+function updateBizNavBadge(count) {
+  const diff = Math.max(0, count - _lastSeenBizCount);
+  const b = document.getElementById('mode-biz-badge');
+  if (!b) return;
+  if (diff > 0) { b.style.display = 'inline-block'; b.textContent = diff > 99 ? '99+' : String(diff); }
+  else { b.style.display = 'none'; }
+}
+
+// 業務（HOME）画面を開いたときに、その時点のスタッフ登録件数を「既読」として記録する
+function markBizEntriesSeen() {
+  const count = countStaffBizEntries();
+  _lastSeenBizCount = count;
+  localStorage.setItem('kanetaka_biz_seen_count', String(count));
+  updateBizNavBadge(count);
+}
+
+function showBizBrowserNotification(newCount) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    const body = newCount === 1 ? '経費・仕入・売上のいずれかが1件登録されました' : `${newCount}件の新しい登録があります`;
+    const n = new Notification('🔔 スタッフが経費・仕入・売上を登録しました', { body });
+    n.onclick = () => { window.focus(); n.close(); };
+  } catch (e) { console.error('notification error', e); }
+}
+
+// 30秒ごとに、既に読み込み済みの経費・仕入・売上データからスタッフ登録件数だけを再計算し、
+// 増えていればバッジ・音・ブラウザ通知で知らせる（consignの通知ポーリングと同じ設計）
+async function pollBizEntriesForNotify() {
+  try {
+    const count = countStaffBizEntries();
+    if (_bizNotifyBaseline === null) {
+      _bizNotifyBaseline = count;
+    } else if (count > _bizNotifyBaseline) {
+      playConsignNotifySound();
+      showBizBrowserNotification(count - _bizNotifyBaseline);
+      _bizNotifyBaseline = count;
+    } else if (count < _bizNotifyBaseline) {
+      _bizNotifyBaseline = count;
+    }
+    updateBizNavBadge(count);
+  } catch (e) { console.error('biz notify poll error', e); }
+}
+
 // 取引先ポータルのURL（?portal=...）に使うID。取引先名から決定的に生成することで、
 // 同じ取引先なら毎回同じリンクになる（Firebaseのキーとして安全な英数字のみになるよう、
 // 生の取引先名ではなくハッシュ値を使う）。
@@ -2061,6 +2138,13 @@ function escapeHtmlMain(s) {
 // 取引先ポータルへのスナップショット送信のすべてで同じ優先順位を使う）。
 function consignItemModel(m) {
   return (m && m.model) || (products.find(p => p._key === (m && m.productKey)) || {}).model || (m && m.productName) || '';
+}
+// 型番の検索・一致判定を、大文字小文字やハイフン・スペース・スラッシュ・カッコの有無に
+// 左右されないようにするための正規化。英数字だけを取り出して小文字化する。
+// 例：「55Z875R」と「55z875r」、「RA-B100」と「RAB100」、「FDR-AX45A(B)」と「FDR AX45A B」は
+// すべて同じ型番として扱う（商品登録・入出庫・在庫一覧・納品書作成・預かりリストの型番検索で共通利用）
+function normalizeModelStr(s) {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 // ユーザーがその場で追加したサブカテゴリー（Firebaseの/customSubcats.jsonに保存し、他の端末でも使えるようにする）。
 // 形はCATEGORY_SUBCATSと同じ（フラットな配列、またはゴルフウェアのようにグループ化されたオブジェクト）だが、
@@ -2627,8 +2711,10 @@ function searchWhItemByModel() {
   if (!input || !resultsEl) return;
   const q = input.value.trim().toLowerCase();
   if (!q) { resultsEl.innerHTML = ''; return; }
+  // 型番はハイフン・スペース・カッコ・大文字小文字の違いを無視して一致させる
+  const qNorm = normalizeModelStr(q);
   const matches = products.filter(p =>
-    (p.model && p.model.toLowerCase().includes(q)) ||
+    (p.model && qNorm && normalizeModelStr(p.model).includes(qNorm)) ||
     (p.name && p.name.toLowerCase().includes(q))
   ).slice(0, 8);
   if (!matches.length) {
@@ -3894,8 +3980,10 @@ function searchWhConsignItemByModel() {
   if (!input || !resultsEl) return;
   const q = input.value.trim().toLowerCase();
   if (!q) { resultsEl.innerHTML = ''; return; }
+  // 型番はハイフン・スペース・カッコ・大文字小文字の違いを無視して一致させる
+  const qNorm = normalizeModelStr(q);
   const matches = products.filter(p =>
-    (p.model && p.model.toLowerCase().includes(q)) ||
+    (p.model && qNorm && normalizeModelStr(p.model).includes(qNorm)) ||
     (p.name && p.name.toLowerCase().includes(q))
   ).slice(0, 8);
   if (!matches.length) {
@@ -4048,7 +4136,9 @@ function renderWhConsignClientItemsList(idx) {
   const holding = (stockMoves || []).filter(m => m.type === 'consign' && m.status === 'holding' && (m.client || '（取引先未設定）') === client)
     .sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
   const q = (_whConsignClientSearchQuery[client] || '').trim().toLowerCase();
-  const filtered = q ? holding.filter(m => consignItemModel(m).toLowerCase().includes(q)) : holding;
+  // 型番はハイフン・スペース・カッコ・大文字小文字の違いを無視して一致させる
+  const qNorm = normalizeModelStr(q);
+  const filtered = qNorm ? holding.filter(m => normalizeModelStr(consignItemModel(m)).includes(qNorm)) : holding;
   const countEl = document.getElementById('wh-consign-client-search-count-' + idx);
   if (countEl) countEl.textContent = q ? `${filtered.length}件見つかりました` : '';
   root.innerHTML = filtered.length
@@ -5265,7 +5355,9 @@ async function lookupModel() {
   if (document.getElementById('inv-existing-key').value) return;
   if (!model) { if (status) { status.textContent = ''; status.style.color = 'var(--text-muted)'; } return; }
 
-  const found = products.find(p => (p.model || '').trim().toLowerCase() === model.toLowerCase());
+  // 大文字小文字・ハイフン・スペース・カッコの違いを無視して既存商品と一致させる
+  const modelNorm = normalizeModelStr(model);
+  const found = modelNorm ? products.find(p => normalizeModelStr(p.model) === modelNorm) : null;
   if (found) {
     setInvAddExistingMode(found);
     document.getElementById('inv-jan').value = found.jan || '';
@@ -5563,11 +5655,11 @@ function selectMoveProduct(found) {
   info.style.display = 'block';
   info.dataset.key = found._key;
   if (status) status.textContent = '';
-  // 梱包追加フォームにJANと商品名を自動入力
+  // 梱包追加フォームにJANと型番を自動入力
   const packJan = document.getElementById('pack-jan-sp');
   const packProduct = document.getElementById('pack-product-sp');
   if (packJan) packJan.value = found.jan || '';
-  if (packProduct && !packProduct.value) packProduct.value = found.name;
+  if (packProduct && !packProduct.value) packProduct.value = found.model || found.name;
 }
 
 // JANコードが手元にない・読み取りにくい場合でも、登録済みの商品を型番や商品名の一部から探せるようにする
@@ -5577,8 +5669,10 @@ function searchMoveItemByModel() {
   if (!input || !resultsEl) return;
   const q = input.value.trim().toLowerCase();
   if (!q) { resultsEl.innerHTML = ''; return; }
+  // 型番はハイフン・スペース・カッコ・大文字小文字の違いを無視して一致させる
+  const qNorm = normalizeModelStr(q);
   const matches = products.filter(p =>
-    (p.model && p.model.toLowerCase().includes(q)) ||
+    (p.model && qNorm && normalizeModelStr(p.model).includes(qNorm)) ||
     (p.name && p.name.toLowerCase().includes(q))
   ).slice(0, 8);
   if (!matches.length) {
@@ -5627,7 +5721,7 @@ function lookupProduct() {
   }
 }
 
-// 出荷リストへの追加フォーム：JANコードから商品名・カテゴリーを自動入力する（入出庫を経由しなくてもこの画面だけで完結する）
+// 出荷リストへの追加フォーム：JANコードから型番・カテゴリーを自動入力する（入出庫を経由しなくてもこの画面だけで完結する）
 function lookupPackJan() {
   const jan = document.getElementById('pack-jan-sp').value.trim();
   const status = document.getElementById('pack-jan-status');
@@ -5637,13 +5731,14 @@ function lookupPackJan() {
   const found = products.find(p => p.jan === jan);
   if (found) {
     const productField = document.getElementById('pack-product-sp');
-    if (productField) productField.value = found.name;
+    // 一覧の主表示（在庫一覧など）と同じく、型番を優先して自動入力する（型番未登録の商品は商品名を代用）
+    if (productField) productField.value = found.model || found.name;
     const catField = document.getElementById('pack-category-sp');
     if (catField && found.category) catField.value = found.category;
     status.innerHTML = `✅ ${found.name}（現在庫: ${found.stock}個）`;
     status.style.color = 'var(--success)';
   } else {
-    status.innerHTML = `登録されていない商品です。商品名は手入力してください。<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-size:12px">📦 価格.comで検索する</a>`;
+    status.innerHTML = `登録されていない商品です。型番は手入力してください。<br><a href="https://kakaku.com/search_results/?query=${encodeURIComponent(jan)}" target="_blank" style="color:var(--gold-dark);font-size:12px">📦 価格.comで検索する</a>`;
     status.style.color = 'var(--text-muted)';
   }
 }
@@ -5979,6 +6074,19 @@ function clearInvSearch() {
   input.focus();
 }
 
+// 在庫一覧の並び順（在庫が少ない順／名前順）は端末ごとに記憶しておき、次回開いたときも同じ並びにする
+function initInvSortOrderSelect() {
+  const sel = document.getElementById('inv-sort-order');
+  if (!sel) return;
+  const saved = localStorage.getItem('kanetaka_inv_sort_order');
+  if (saved === 'name' || saved === 'stock') sel.value = saved;
+}
+function handleInvSortOrderChange() {
+  const sel = document.getElementById('inv-sort-order');
+  if (sel) localStorage.setItem('kanetaka_inv_sort_order', sel.value);
+  renderInventoryList();
+}
+
 function renderInventoryList() {
   // 梱包リスト・EC売上は「出荷管理」タブに一本化したため、在庫一覧側では表示しない
   const q = (document.getElementById('inv-search')?.value || '').toLowerCase();
@@ -5992,7 +6100,9 @@ function renderInventoryList() {
   renderInvReorderPanel();
 
   const searching = !!q;
-  const matched = products.filter(p => !q || p.name?.toLowerCase().includes(q) || (p.model||'').toLowerCase().includes(q) || (p.maker||'').toLowerCase().includes(q));
+  // 型番はハイフン・スペース・カッコ・大文字小文字の違いを無視して一致させる（商品名・メーカーはそのまま部分一致）
+  const qModelNorm = normalizeModelStr(q);
+  const matched = products.filter(p => !q || p.name?.toLowerCase().includes(q) || (qModelNorm && normalizeModelStr(p.model).includes(qModelNorm)) || (p.maker||'').toLowerCase().includes(q));
   countEl.textContent = matched.length + '件';
 
   if (!matched.length) { container.innerHTML = ''; empty.style.display = 'block'; return; }
@@ -6004,6 +6114,9 @@ function renderInventoryList() {
     CATEGORY_LIST.forEach((c, i) => { _invOpenCats[c] = i === 0; });
   }
 
+  // 並び順：デフォルトは在庫が少ない順（従来通り）。名前順に切り替えることもできる
+  const sortOrder = document.getElementById('inv-sort-order')?.value || 'stock';
+
   const html = CATEGORY_LIST.map(cat => {
     const inCat = matched.filter(p => (p.category || CATEGORY_LIST[0]) === cat);
     if (!inCat.length) return ''; // 該当商品がないカテゴリーは表示しない
@@ -6013,7 +6126,10 @@ function renderInventoryList() {
     const activeSub = _invSubcatTab[cat] || '';
     const rowsSrc = (activeSub && subs.includes(activeSub)) ? inCat.filter(p => p.subcategory === activeSub) : inCat;
     const tabBar = buildInvSubcatTabBar(cat, subs, activeSub);
-    const sorted = [...rowsSrc].sort((a,b) => a.stock - b.stock);
+    // 名前順の場合は、実際にカードの一番上に表示されるラベル（型番。型番が無ければ商品名）を基準に並べる
+    const sorted = [...rowsSrc].sort((a,b) => sortOrder === 'name'
+      ? String(a.model || a.name || '').localeCompare(String(b.model || b.name || ''), 'ja')
+      : a.stock - b.stock);
     return `
       <div class="inv-accordion ${isOpen?'open':''}">
         <div class="inv-accordion-head" onclick="toggleInvCatAccordion('${cat}')">
@@ -6854,6 +6970,7 @@ function stopScan() {
 
 window._initApp = async function() {
   initYearSelect();
+  initInvSortOrderSelect();
   applyRoleUI();
   await loadAll();
   setInterval(loadAll, 30000);
@@ -6862,6 +6979,8 @@ window._initApp = async function() {
   if (isAdmin()) {
     pollConsignRequestsForNotify();
     setInterval(pollConsignRequestsForNotify, 30000);
+    pollBizEntriesForNotify();
+    setInterval(pollBizEntriesForNotify, 30000);
   }
   // ログイン直後、静的に表示されているホーム画面の中身を描画しておく（管理者は経営サマリー、
   // 一般ユーザーは倉庫作業向けの簡易版HOMEをそれぞれ表示）
@@ -6982,6 +7101,7 @@ let _expDayTotal = 0;
 async function submitExpense() {
   const data = getExpenseData();
   if (!data) { showAlert('exp-alert-box','exp-alert-msg','必須項目をすべて入力してください','error'); return; }
+  data.enteredBy = currentSessionEmail();
   try {
     await window._fbPushExpense(data);
     _expDayCount++;
@@ -7133,7 +7253,7 @@ async function submitPurchase() {
   if (!data) { showAlert('pur-alert-box','pur-alert-msg','必須項目をすべて入力してください（仕入先が「店舗」の場合は店舗名も必須です）','error'); return; }
   try {
     for (const item of data.items) {
-      await window._fbPushPurchase({ type:'purchase', date: data.date, supplier: data.supplier, amount: item.amount, note: item.note, submittedAt: new Date().toLocaleDateString('ja-JP') });
+      await window._fbPushPurchase({ type:'purchase', date: data.date, supplier: data.supplier, amount: item.amount, note: item.note, submittedAt: new Date().toLocaleDateString('ja-JP'), enteredBy: currentSessionEmail() });
       _purDayCount++;
       _purDayTotal += item.amount;
     }
@@ -7213,6 +7333,7 @@ let _salDayTotal = 0;
 async function submitSales() {
   const data = getSalesData();
   if (!data) { showAlert('sal-alert-box','sal-alert-msg','必須項目をすべて入力してください','error'); return; }
+  data.enteredBy = currentSessionEmail();
   try {
     // 国内・国外どちらの卸先も「その他」で新しく入力した場合、次回から選択できるよう取引先リストに保存しておく
     if (data.salesType === '国内（請求書）') await ensureWholesaleClient(data.client);
@@ -8256,7 +8377,7 @@ async function pcSubmitExpense() {
   if (!date||!payee||!category||!amount) { showToast('必須項目を入力してください'); return; }
   const content = category==='その他'?(note||'その他'):category+(note?'（'+note+'）':'');
   try {
-    await window._fbPushExpense({ type:'expense', date, payee, category, note, content, amount, submittedAt: new Date().toLocaleDateString('ja-JP') });
+    await window._fbPushExpense({ type:'expense', date, payee, category, note, content, amount, submittedAt: new Date().toLocaleDateString('ja-JP'), enteredBy: currentSessionEmail() });
     document.getElementById('pc-exp-payee').value = '';
     document.getElementById('pc-exp-category').selectedIndex = 0;
     document.getElementById('pc-exp-note').value = '';
@@ -8288,7 +8409,7 @@ async function pcSubmitPurchase() {
     supplier = other;
   }
   try {
-    await window._fbPushPurchase({ type:'purchase', date, supplier, amount, note, submittedAt: new Date().toLocaleDateString('ja-JP') });
+    await window._fbPushPurchase({ type:'purchase', date, supplier, amount, note, submittedAt: new Date().toLocaleDateString('ja-JP'), enteredBy: currentSessionEmail() });
     document.getElementById('pc-pur-supplier').selectedIndex = 0;
     document.getElementById('pc-pur-store-wrap').style.display = 'none';
     document.getElementById('pc-pur-sup-other-wrap').style.display = 'none';
@@ -8318,7 +8439,7 @@ async function pcSubmitSales() {
     // 国内・国外どちらの卸先も「その他」で新しく入力した場合、次回から選択できるよう取引先リストに保存しておく
     if (typeLabel === '国内（請求書）') await ensureWholesaleClient(clientFinal);
     else if (typeLabel === '国外（インボイス）') await ensureOverseasClient(clientFinal);
-    await window._fbPushSales({ type:'sales', date, salesType:typeLabel, client:clientFinal, amount, due, note, payStatus:'未入金', submittedAt: new Date().toLocaleDateString('ja-JP') });
+    await window._fbPushSales({ type:'sales', date, salesType:typeLabel, client:clientFinal, amount, due, note, payStatus:'未入金', submittedAt: new Date().toLocaleDateString('ja-JP'), enteredBy: currentSessionEmail() });
     document.getElementById('pc-sal-type').selectedIndex = 0;
     document.getElementById('pc-sal-client').innerHTML = '<option value="">先に区分を選択</option>';
     const ow = document.getElementById('pc-sal-client-other-wrap');
@@ -8706,7 +8827,7 @@ async function addPackItemSP() {
   const dest     = (document.getElementById('pack-dest-sp')?.value||'').trim();
   const staff    = (document.getElementById('pack-staff-sp')?.value||'').trim();
   const memo     = (document.getElementById('pack-memo-sp')?.value||'').trim();
-  if (!product) { showToast('商品名を入力してください'); return; }
+  if (!product) { showToast('型番を入力してください'); return; }
   try {
     await fetch(authedUrl('/packList.json'), { method:'POST',
       body: JSON.stringify({product,jan,category,qty,customer,zip,dest,staff,memo,done:false,date:todayStr(),createdAt:new Date().toISOString()})
@@ -8973,6 +9094,9 @@ async function renderHomeScreen() {
   if (!_packItems.length && typeof loadPackItems === 'function') needs.push(loadPackItems());
   if (needs.length) { try { await Promise.all(needs); } catch(e) {} }
   renderHomeSummary();
+  // HOMEを開いた時点のスタッフ登録件数を既読にし、通知許可の案内バナーの表示も更新する
+  markBizEntriesSeen();
+  updateConsignNotifyPromptVisibility();
 }
 
 // 一般ユーザー（倉庫作業員）向けのHOME：在庫整理・Amazon/EC出荷・梱包作業に必要な情報だけに絞り、
@@ -9196,7 +9320,7 @@ async function savePackEdit() {
     staff:    document.getElementById('pack-edit-staff').value.trim(),
     memo:     document.getElementById('pack-edit-memo').value.trim(),
   };
-  if (!patch.product) { showToast('商品名を入力してください'); return; }
+  if (!patch.product) { showToast('型番を入力してください'); return; }
   try {
     await fetch(authedUrl('/packList/'+key+'.json'), {method:'PATCH', body:JSON.stringify(patch)});
     await loadPackItems();
@@ -10131,6 +10255,12 @@ const ADMIN_EMAILS = [
 function isAdmin() {
   const session = JSON.parse(sessionStorage.getItem(AUTH_STORAGE_KEY) || '{}');
   return ADMIN_EMAILS.includes((session.email || '').toLowerCase());
+}
+// 現在ログイン中のメールアドレス（小文字）。経費・仕入・売上の登録者を記録し、
+// 一般ユーザー（管理者以外）による登録を検知するために使う
+function currentSessionEmail() {
+  const session = JSON.parse(sessionStorage.getItem(AUTH_STORAGE_KEY) || '{}');
+  return (session.email || '').toLowerCase();
 }
 function todayStr() { return ymdKey(new Date()); }
 
