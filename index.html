@@ -4502,11 +4502,12 @@ async function cancelConsignInvoiceSlip(slipId) {
     .filter(Boolean);
 
   // まとめて1件になっていた売上記録を削除し、対象だった精算記録それぞれについて、
-  // 精算時点と同じ内容の売上記録を個別に作り直す
-  const combinedSalesKey = sourceRecords.map(m => m.salesKey).find(Boolean);
-  if (combinedSalesKey) {
-    await fetch(authedUrl('/sales/' + combinedSalesKey + '.json'), { method: 'DELETE' });
-  }
+  // 精算時点と同じ内容の売上記録を個別に作り直す。この機能を実装する前に作成された古い
+  // 納品書（対象商品がそれぞれ別々の売上記録を持ったまま）を取り消す場合にも、記録の
+  // 取りこぼし・重複が起きないよう、関連する売上記録をすべて（重複を除いて）削除してから
+  // 個別の記録を作り直す。
+  const salesKeysToDelete = [...new Set(sourceRecords.map(m => m.salesKey).filter(Boolean))];
+  await Promise.all(salesKeysToDelete.map(key => fetch(authedUrl('/sales/' + key + '.json'), { method: 'DELETE' })));
   await Promise.all(sourceRecords.map(async m => {
     const salesKey = await window._fbPushSales({
       type: 'sales', date: todayStr(), salesType: '国内（請求書）', client: m.client, amount: m.amount || 0, due: '',
