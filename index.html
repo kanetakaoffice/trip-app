@@ -244,7 +244,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
    パソコンに比べて小さいので、違う仕様で表示できるととてもいい」）。画面幅が十分にある場合
    （PCなど）は、要望の通り選択中の型番を右側に、履歴へのショートカットを左側に固定表示する。 */
 #portal-selected-chips { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
-#portal-selected-chips .portal-chip { font-size:11px; padding:3px 9px; border-radius:999px; background:#faf3e2; color:var(--gold-dark); border:1px solid var(--gold-dark); white-space:nowrap; max-width:140px; overflow:hidden; text-overflow:ellipsis; }
+#portal-selected-chips .portal-chip { font-size:11px; padding:3px 9px; border-radius:999px; background:#faf3e2; color:var(--gold-dark); border:1px solid var(--gold-dark); white-space:nowrap; max-width:200px; overflow:hidden; text-overflow:ellipsis; }
 #portal-history-nav { display:none; position:fixed; left:0; top:50%; transform:translateY(-50%); z-index:6; }
 #portal-history-nav button { writing-mode:vertical-rl; letter-spacing:0.05em; padding:14px 7px; border:1.2px solid var(--gold-dark); border-left:none; border-radius:0 10px 10px 0; background:var(--white); color:var(--gold-dark); font-size:12px; font-weight:700; cursor:pointer; box-shadow:2px 2px 8px rgba(0,0,0,0.12); }
 @media (min-width: 860px) {
@@ -253,9 +253,9 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
   #portal-history-nav button { writing-mode:horizontal-tb; width:100%; border-left:1.2px solid var(--gold-dark); border-radius:10px; padding:11px 10px; text-align:left; box-shadow:0 2px 8px rgba(0,0,0,0.12); }
 }
 </style>
-<div id="portal-screen" style="display:none;position:fixed;inset:0;z-index:550;background:var(--bg,#f6f5f2);overflow-y:auto;padding:24px 16px 40px">
+<div id="portal-screen" style="display:none;position:fixed;inset:0;z-index:550;background:var(--bg,#f6f5f2);overflow-y:auto;padding:24px 16px 40px" onscroll="updatePortalHistoryNavLabel()">
   <div id="portal-history-nav">
-    <button type="button" onclick="scrollToPortalHistory()">📋 過去の履歴を見る</button>
+    <button type="button" onclick="portalHistoryNavClick()">📋 過去の履歴を見る</button>
   </div>
   <div style="max-width:480px;margin:0 auto">
     <div style="text-align:center;margin-bottom:18px">
@@ -3344,10 +3344,17 @@ async function submitWhDeliverySlip() {
       await fetch(authedUrl('/products/' + pk + '/stock.json'), { method: 'PUT', body: JSON.stringify(newStock) });
     }));
 
-    await Promise.all(_whDelivItems.map(it => fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
+    // 明細を1件ずつPOSTする際、Promise.allで並行して送信しているため、サーバー側への到達順は
+    // 送信した順（＝登録時の並び順）と一致するとは限らない。以前はcreatedAt（Date.now()、
+    // ミリ秒単位）だけで並び替えていたが、同じミリ秒内に複数件POSTされると同着になり、
+    // その場合の並び順が到達順（＝入れ替わりうる）に左右されてしまい、「登録した時と発行した時で
+    // 商品の順番が変わってしまう」不具合の原因になっていた。登録時の並び順（_whDelivItemsの
+    // 配列順）をitemSeqとして明細ごとに明示的に埋め込み、発行・編集時はこちらを優先して
+    // 並び替えることで、常に登録した順を保つようにする。
+    await Promise.all(_whDelivItems.map((it, idx) => fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
       productKey: it.productKey, productName: it.name, model: it.model || '', jan: it.jan,
       type: 'out', channel: '卸売', client, subject, qty: it.qty, unitPrice: it.unitPrice, amount: it.amount,
-      slipId, date, memo: '', stockBefore: stockBeforeByProduct[it.productKey], stockAfter: stockBeforeByProduct[it.productKey] - newQtyByProduct[it.productKey], createdAt: Date.now(),
+      slipId, date, memo: '', stockBefore: stockBeforeByProduct[it.productKey], stockAfter: stockBeforeByProduct[it.productKey] - newQtyByProduct[it.productKey], createdAt: Date.now(), itemSeq: idx,
       // 傷・つぶれの記録：詳細（テキスト）は納品書にも表示されるが、写真は社内記録用のみで納品書には出さない
       damageDetail: it.damageMode === 'detail' ? (it.damageDetail || '') : '',
       damagePhoto: it.damageMode === 'photo' ? (it.damagePhoto || '') : ''
@@ -3663,11 +3670,22 @@ function openDeliverySlipPrint(client, date, items, subject) {
   triggerPrintOnIframe(iframe, fileName);
 }
 
+// 同じ納品書（slipId）に属する明細（出庫記録）を、登録した時の並び順に揃えるための比較関数。
+// itemSeqは登録（発行）時に明細の配列順そのものを埋め込んだ値なので、これがあれば最優先で使う。
+// itemSeqを持たない古い記録（この対応より前に発行された納品書）はcreatedAtで代用する
+// （createdAtだけに頼ると、複数明細が同じミリ秒でPOSTされた場合にサーバーへの到達順に
+// 左右されて順番が入れ替わってしまうことがあったため、新規発行分はitemSeqで確実に固定する）。
+function compareDeliverySlipItemOrder(a, b) {
+  const aKey = a.itemSeq != null ? a.itemSeq : (a.createdAt || 0);
+  const bKey = b.itemSeq != null ? b.itemSeq : (b.createdAt || 0);
+  return aKey - bKey;
+}
+
 // 発行済みの納品書について、保存されている出庫記録から取引先・日付・明細を再構成する
 // （印刷・PDF保存のどちらからも同じ内容を使えるよう共通化）
 function buildDeliverySlipDataFromSlipId(slipId) {
   const moves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'out')
-    .sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+    .sort(compareDeliverySlipItemOrder);
   if (!moves.length) return null;
   const items = moves.map(m => ({
     // 型番は納品書の明細でその場修正できるようになったため、記録済みの値を優先する。
@@ -3837,7 +3855,7 @@ function confirmCancelDeliverySlip(slipId) {
 // 発行済みの納品書を編集モードで読み込む（内容を修正して保存すると、元の分を取り消して新しい内容で作り直す）
 function editDeliverySlip(slipId) {
   const moves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'out')
-    .sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+    .sort(compareDeliverySlipItemOrder);
   if (!moves.length) { showToast('対象の納品書が見つかりません'); return; }
   _whDelivItems = moves.map(m => ({
     productKey: m.productKey, jan: m.jan, name: m.productName,
@@ -4476,11 +4494,14 @@ async function createConsignInvoiceSlipFromSelection() {
       const items = groups[client];
       const slipId = 'cslip_' + Date.now() + '_' + (seq++);
       const date = todayStr();
-      await Promise.all(items.map(m => fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
+      // 通常の納品書と同じく、Promise.allでの並行POSTによる到達順の入れ替わりを避けるため、
+      // 選択（登録）した順をitemSeqとして明細ごとに埋め込んでおく（印刷・プレビューは
+      // buildDeliverySlipDataFromSlipIdのcompareDeliverySlipItemOrderで、これを優先して並べる）
+      await Promise.all(items.map((m, idx) => fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
         productKey: m.productKey, productName: m.productName || '', model: consignItemModel(m), jan: m.jan || '',
         type: 'out', channel: CONSIGN_INVOICE_CHANNEL, client, subject: '預かり精算分',
         qty: m.qty, unitPrice: m.unitPrice, amount: m.amount, slipId, date, memo: '',
-        sourceConsignKey: m._key, createdAt: Date.now()
+        sourceConsignKey: m._key, createdAt: Date.now(), itemSeq: idx
       })})));
 
       // 精算した時点では商品ごとに個別の売上記録が作られているが、同じ納品書にまとめる
@@ -11170,6 +11191,7 @@ function renderPortalHistory(historyItems) {
   // 履歴が一番下にあり、一番下までスクロールしないと見えないための要望対応：
   // 履歴がある場合だけ、いつでもタップして直接そこへ移動できるショートカットを出す
   if (navEl) navEl.style.display = 'block';
+  updatePortalHistoryNavLabel();
   listEl.innerHTML = historyItems.map(it => {
     const label = it.status === 'settled' ? '精算済み' : '返却済み';
     const color = it.status === 'settled' ? 'var(--success)' : 'var(--text-muted)';
@@ -11197,6 +11219,38 @@ function scrollToPortalHistory() {
     if (arrow) arrow.classList.add('open');
   }
   wrapEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// 実際にスクロールしている要素は#portal-screen自身（overflow-y:autoが指定されている）なので、
+// 「一番上に戻る」もwindowではなくこちらをスクロールさせる
+function scrollToPortalTop() {
+  const screenEl = document.getElementById('portal-screen');
+  if (screenEl) screenEl.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// 左端のショートカットボタンは、ある程度スクロールした状態では「一番上に戻る」に機能を
+// 切り替える（要望：「履歴を見るを押すとそこにすぐ飛ぶが、一番上に戻るのにはスクロール
+// しないといけないのですぐ戻れるようにしてほしい」）。ボタンを押して履歴へ飛んだ場合だけでなく、
+// 指で普通にスクロールした場合にも同じように機能するよう、#portal-screenのスクロールを
+// 監視してラベルを更新する（onscroll属性から呼ばれる）。
+function updatePortalHistoryNavLabel() {
+  const navEl = document.getElementById('portal-history-nav');
+  const screenEl = document.getElementById('portal-screen');
+  const btnEl = navEl ? navEl.querySelector('button') : null;
+  if (!navEl || !btnEl || !screenEl) return;
+  if (navEl.style.display === 'none') return; // 履歴が無い取引先ではそもそも表示されないので何もしない
+  btnEl.textContent = screenEl.scrollTop > 160 ? '🔝 上に戻る' : '📋 過去の履歴を見る';
+}
+
+// ショートカットボタン本体のクリック処理。今の位置に応じて「履歴へ移動」「一番上に戻る」の
+// どちらを行うか自動的に判断する（ボタンのラベル・見た目はupdatePortalHistoryNavLabelが合わせて更新する）。
+function portalHistoryNavClick() {
+  const screenEl = document.getElementById('portal-screen');
+  if (screenEl && screenEl.scrollTop > 160) {
+    scrollToPortalTop();
+  } else {
+    scrollToPortalHistory();
+  }
 }
 
 // 型番検索の入力欄が変わるたびに呼ばれる。元のwindow._portalItems配列でのインデックス（idx）は
@@ -11302,6 +11356,8 @@ function getPortalSettleCandidates() {
 // 合計金額を集計して、上部の固定バー（「まとめて精算」ボタン）に表示する。あわせて、
 // 型番を検索しながら1つずつ入力していく際に「今どれを選択（入力）済みか」が分かるよう、
 // 対象の型番をタグの一覧としても表示する（要望：「選択した型番は右側に表示させるなど」）。
+// タグには型番だけでなく、その商品1件分の金額（数量×売値）も併せて表示する
+// （要望：「型番ごとの金額も分かるようになると見やすい」）。
 function updatePortalGrandTotal() {
   const grandEl = document.getElementById('portal-grand-total');
   const textEl = document.getElementById('portal-grand-total-text');
@@ -11311,7 +11367,9 @@ function updatePortalGrandTotal() {
   const grandTotal = candidates.reduce((s, c) => s + c.qty * c.price, 0);
   if (candidates.length >= 1) {
     if (textEl) textEl.textContent = `精算対象 ${candidates.length}件の合計：¥${grandTotal.toLocaleString('ja-JP')}`;
-    if (chipsEl) chipsEl.innerHTML = candidates.map(c => `<span class="portal-chip">${escapeHtmlMain(c.it.model || '商品')}</span>`).join('');
+    if (chipsEl) chipsEl.innerHTML = candidates.map(c =>
+      `<span class="portal-chip">${escapeHtmlMain(c.it.model || '商品')}／¥${(c.qty * c.price).toLocaleString('ja-JP')}</span>`
+    ).join('');
     grandEl.style.display = 'block';
   } else {
     grandEl.style.display = 'none';
