@@ -4449,7 +4449,26 @@ async function createConsignInvoiceSlipFromSelection() {
         qty: m.qty, unitPrice: m.unitPrice, amount: m.amount, slipId, date, memo: '',
         sourceConsignKey: m._key, createdAt: Date.now()
       })})));
-      await Promise.all(items.map(m => fetch(authedUrl('/stockMoves/' + m._key + '.json'), { method: 'PATCH', body: JSON.stringify({ invoicedSlipId: slipId }) })));
+
+      // 精算した時点では商品ごとに個別の売上記録が作られているが、同じ納品書にまとめる
+      // 商品については、業務の売上一覧でも1件にまとめて見えるようにしたい（要望：「同じ
+      // 納品書で精算したものはそれ一つで考えて欲しい」）。そのため、個別の売上記録はここで
+      // いったん削除し、合計金額の売上記録を1件だけ新規作成して、対象の精算記録すべてに
+      // その共有のsalesKeyを書き戻す。（この納品書を取り消す場合は、cancelConsignInvoiceSlip
+      // 側でこのまとめ処理を逆に辿り、精算時点の個別の売上記録へ戻す）
+      await Promise.all(items.filter(m => m.salesKey).map(m => fetch(authedUrl('/sales/' + m.salesKey + '.json'), { method: 'DELETE' })));
+      const combinedAmount = items.reduce((s, m) => s + (m.amount || 0), 0);
+      const itemsLabel = items.length <= 3
+        ? items.map(m => `${consignItemModel(m)}／${m.qty}個`).join('、')
+        : `${items.slice(0, 2).map(m => `${consignItemModel(m)}／${m.qty}個`).join('、')}ほか${items.length - 2}件`;
+      const combinedSalesKey = await window._fbPushSales({
+        type: 'sales', date, salesType: '国内（請求書）', client, amount: combinedAmount, due: '',
+        note: `預かり精算（${itemsLabel}）より自動登録（納品書にまとめて記録）`,
+        payStatus: '未入金', submittedAt: new Date().toLocaleDateString('ja-JP')
+      });
+      await Promise.all(items.map(m => fetch(authedUrl('/stockMoves/' + m._key + '.json'), { method: 'PATCH', body: JSON.stringify({
+        invoicedSlipId: slipId, salesKey: combinedSalesKey || null
+      })})));
     }
     await loadInventory();
     renderWhConsignList();
@@ -4458,11 +4477,13 @@ async function createConsignInvoiceSlipFromSelection() {
 }
 
 // 精算分の納品書（請求用）を取り消す。通常の納品書の取り消し（cancelDeliverySlip）とは異なり、
-// 在庫・売上には一切触れず、単にこの納品書のレコードを削除し、元の精算記録を「未請求」に戻すだけ
-// （在庫は預け入れ時点ですでに減っており、売上は精算時点ですでに記録済みのため、どちらもこの
-// 納品書を作成した時点では変更していない＝取り消し時にも変更してはいけない）。
+// 在庫には一切触れず、単にこの納品書のレコードを削除し、元の精算記録を「未請求」に戻すだけ
+// （在庫は預け入れ時点ですでに減っているため、取り消し時にも変更してはいけない）。
+// 売上については、納品書作成時にまとめて1件にした売上記録（createConsignInvoiceSlipFromSelection
+// 参照）を削除し、精算時点と同じ内容の個別の売上記録を対象の精算記録の数だけ作り直すことで、
+// 「納品書を作成する前の状態」へ正確に巻き戻す（合計金額は変わらない）。
 function confirmCancelConsignInvoiceSlip(slipId) {
-  showConfirm('この納品書を取り消しますか？（在庫・売上は変更されません。元の精算記録は未請求に戻ります）').then(async ok => {
+  showConfirm('この納品書を取り消しますか？（在庫は変更されません。まとめていた売上記録は精算時点の個別の記録に戻り、元の精算記録は未請求に戻ります）').then(async ok => {
     if (!ok) return;
     try {
       await cancelConsignInvoiceSlip(slipId);
@@ -4476,10 +4497,26 @@ function confirmCancelConsignInvoiceSlip(slipId) {
 async function cancelConsignInvoiceSlip(slipId) {
   const moves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'out' && m.channel === CONSIGN_INVOICE_CHANNEL);
   if (!moves.length) return;
+  const sourceRecords = moves.filter(m => m.sourceConsignKey)
+    .map(m => (stockMoves || []).find(x => x._key === m.sourceConsignKey))
+    .filter(Boolean);
+
+  // まとめて1件になっていた売上記録を削除し、対象だった精算記録それぞれについて、
+  // 精算時点と同じ内容の売上記録を個別に作り直す
+  const combinedSalesKey = sourceRecords.map(m => m.salesKey).find(Boolean);
+  if (combinedSalesKey) {
+    await fetch(authedUrl('/sales/' + combinedSalesKey + '.json'), { method: 'DELETE' });
+  }
+  await Promise.all(sourceRecords.map(async m => {
+    const salesKey = await window._fbPushSales({
+      type: 'sales', date: todayStr(), salesType: '国内（請求書）', client: m.client, amount: m.amount || 0, due: '',
+      note: `預かり精算（${m.productName || ''}／${m.qty}個）より自動登録`,
+      payStatus: '未入金', submittedAt: new Date().toLocaleDateString('ja-JP')
+    });
+    await fetch(authedUrl('/stockMoves/' + m._key + '.json'), { method: 'PATCH', body: JSON.stringify({ invoicedSlipId: null, salesKey: salesKey || null }) });
+  }));
+
   await Promise.all(moves.map(m => fetch(authedUrl('/stockMoves/' + m._key + '.json'), { method: 'DELETE' })));
-  await Promise.all(moves.filter(m => m.sourceConsignKey).map(m =>
-    fetch(authedUrl('/stockMoves/' + m.sourceConsignKey + '.json'), { method: 'PATCH', body: JSON.stringify({ invoicedSlipId: null }) })
-  ));
   stockMoves = stockMoves.filter(m => !(m.slipId === slipId && m.type === 'out' && m.channel === CONSIGN_INVOICE_CHANNEL));
 }
 
