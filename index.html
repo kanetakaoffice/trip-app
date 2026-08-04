@@ -243,8 +243,10 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
    細いタブとして表示するなど、画面幅に応じて見え方を変える（要望：「携帯の場合、画面が
    パソコンに比べて小さいので、違う仕様で表示できるととてもいい」）。画面幅が十分にある場合
    （PCなど）は、要望の通り選択中の型番を右側に、履歴へのショートカットを左側に固定表示する。 */
-#portal-selected-chips { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
-#portal-selected-chips .portal-chip { font-size:11px; padding:3px 9px; border-radius:999px; background:#faf3e2; color:var(--gold-dark); border:1px solid var(--gold-dark); white-space:nowrap; max-width:200px; overflow:hidden; text-overflow:ellipsis; }
+#portal-selected-chips { display:flex; flex-direction:column; gap:5px; margin-top:8px; }
+/* 型番が長い場合でも省略記号で切れて金額・数量が見えなくなってしまわないよう、
+   横並びの短いタグではなく、1件ずつ横幅いっぱいを使って折り返し表示する */
+#portal-selected-chips .portal-chip { display:block; font-size:11px; padding:4px 10px; border-radius:10px; background:#faf3e2; color:var(--gold-dark); border:1px solid var(--gold-dark); white-space:normal; overflow-wrap:break-word; word-break:break-word; }
 #portal-history-nav { display:none; position:fixed; left:0; top:50%; transform:translateY(-50%); z-index:6; }
 #portal-history-nav button { writing-mode:vertical-rl; letter-spacing:0.05em; padding:14px 7px; border:1.2px solid var(--gold-dark); border-left:none; border-radius:0 10px 10px 0; background:var(--white); color:var(--gold-dark); font-size:12px; font-weight:700; cursor:pointer; box-shadow:2px 2px 8px rgba(0,0,0,0.12); }
 @media (min-width: 860px) {
@@ -11356,8 +11358,10 @@ function getPortalSettleCandidates() {
 // 合計金額を集計して、上部の固定バー（「まとめて精算」ボタン）に表示する。あわせて、
 // 型番を検索しながら1つずつ入力していく際に「今どれを選択（入力）済みか」が分かるよう、
 // 対象の型番をタグの一覧としても表示する（要望：「選択した型番は右側に表示させるなど」）。
-// タグには型番だけでなく、その商品1件分の金額（数量×売値）も併せて表示する
-// （要望：「型番ごとの金額も分かるようになると見やすい」）。
+// タグには型番だけでなく、対象の数量と、その商品1件分の金額（数量×売値）も併せて表示する
+// （要望：「型番ごとの金額も分かるようになると見やすい」「数量は見れないのでしょうか」）。
+// 型番が長い場合でも省略せず全て読めるよう、1件ずつ横幅いっぱいで折り返して表示する
+// （要望：「型番が長いと金額が見えないので、全て見れるようにして欲しい」）。
 function updatePortalGrandTotal() {
   const grandEl = document.getElementById('portal-grand-total');
   const textEl = document.getElementById('portal-grand-total-text');
@@ -11368,7 +11372,7 @@ function updatePortalGrandTotal() {
   if (candidates.length >= 1) {
     if (textEl) textEl.textContent = `精算対象 ${candidates.length}件の合計：¥${grandTotal.toLocaleString('ja-JP')}`;
     if (chipsEl) chipsEl.innerHTML = candidates.map(c =>
-      `<span class="portal-chip">${escapeHtmlMain(c.it.model || '商品')}／¥${(c.qty * c.price).toLocaleString('ja-JP')}</span>`
+      `<span class="portal-chip">${escapeHtmlMain(c.it.model || '商品')}／${c.qty}個／¥${(c.qty * c.price).toLocaleString('ja-JP')}</span>`
     ).join('');
     grandEl.style.display = 'block';
   } else {
