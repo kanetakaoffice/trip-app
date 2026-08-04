@@ -251,7 +251,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     </div>
     <div id="portal-grand-total" style="display:none;position:sticky;top:0;z-index:5;background:var(--white);border:1.2px solid var(--gold-dark);border-radius:10px;padding:10px 12px;margin-bottom:12px">
       <div id="portal-grand-total-text" style="text-align:center;font-size:14px;font-weight:800;color:var(--gold-dark)"></div>
-      <button type="button" onclick="submitBatchSettle()" style="width:100%;margin-top:8px;padding:10px 0;border-radius:8px;border:none;background:linear-gradient(135deg,#d8b872,#c8a052);color:#fff;font-size:14px;font-weight:700;cursor:pointer">まとめて精算</button>
+      <button type="button" onclick="openBatchSettleConfirm()" style="width:100%;margin-top:8px;padding:10px 0;border-radius:8px;border:none;background:linear-gradient(135deg,#d8b872,#c8a052);color:#fff;font-size:14px;font-weight:700;cursor:pointer">まとめて精算</button>
       <div id="portal-batch-status" style="display:none;margin-top:8px;font-size:12px;text-align:center"></div>
     </div>
     <div id="portal-items"></div>
@@ -1731,6 +1731,20 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     <div style="display:flex;gap:10px">
       <button onclick="closeConfirm(false)" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">キャンセル</button>
       <button onclick="closeConfirm(true)" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8d8d8,#a8a8a8);color:#1a1a1a;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">OK</button>
+    </div>
+  </div>
+</div>
+<!-- 取引先ポータルの「まとめて精算」送信前の確認モーダル。誤送信を防ぐため、どの商品を
+     どれだけ・いくらで精算しようとしているかを一覧で見せてから、実際の送信ボタンを押してもらう -->
+<div id="portal-batch-confirm-modal" style="display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:24px">
+  <div style="background:var(--white);border-radius:16px;padding:22px;width:100%;max-width:360px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px">精算内容の確認</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">以下の内容で店舗に精算のご連絡を送信します</div>
+    <div id="portal-batch-confirm-list"></div>
+    <div id="portal-batch-confirm-total" style="text-align:right;font-size:14px;font-weight:800;color:var(--gold-dark);margin-top:10px"></div>
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button onclick="closeBatchSettleConfirm()" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">キャンセル</button>
+      <button onclick="confirmSubmitBatchSettle()" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8b872,#c8a052);color:#fff;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">この内容で送信する</button>
     </div>
   </div>
 </div>
@@ -4319,6 +4333,11 @@ function renderWhConsignList() {
       // ものだけは、先にその納品書を取り消してもらう必要があるため、取り消すリンクを出さず
       // 「請求済み」バッジのみ表示する（confirmUndoSettleConsign側でも二重にガードしている）
       const undoLinkHtml = (m) => `<span onclick="event.stopPropagation(); ${m.status === 'settled' ? `confirmUndoSettleConsign('${m._key}')` : `confirmUndoReturnConsign('${m._key}')`}" style="flex-shrink:0;font-size:11px;color:var(--text-muted);text-decoration:underline;cursor:pointer">取り消す</span>`;
+      // テストとして行った精算・返却の記録などを、跡形もなく消したい場合のための「完全に削除する」
+      // リンク。「取り消す」（预け中に戻すだけ）とは異なり元に戻せない破壊的操作なので、確認
+      // ダイアログの文言でもその旨を明示し、色も警告色にして誤操作しにくくしている。すでに
+      // 精算分の納品書を発行済みのものは「取り消す」同様に削除もできない（confirmDeleteConsignHistory側で二重にガード）
+      const deleteLinkHtml = (m) => `<span onclick="event.stopPropagation(); confirmDeleteConsignHistory('${m._key}')" style="flex-shrink:0;font-size:11px;color:var(--danger);text-decoration:underline;cursor:pointer">完全に削除</span>`;
       const renderHistoryRow = (m) => {
         const amountStr = m.status === 'settled' && m.amount != null ? `／¥${m.amount.toLocaleString('ja-JP')}` : '';
         const dateVal = m.status === 'settled' ? m.settledAt : m.returnedAt;
@@ -4335,11 +4354,13 @@ function renderWhConsignList() {
             <input type="checkbox" class="consign-invoice-checkbox" data-key="${m._key}" style="flex-shrink:0;width:16px;height:16px">
             <span style="flex:1">${rowText}</span>
             ${undoLinkHtml(m)}
+            ${deleteLinkHtml(m)}
           </div>`;
         }
         return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;display:flex;align-items:center;gap:6px">
           <span style="flex:1">${rowText}</span>
           ${undoLinkHtml(m)}
+          ${deleteLinkHtml(m)}
         </div>`;
       };
       const renderHistorySection = (label, color, list) => {
@@ -5194,6 +5215,55 @@ function confirmUndoReturnConsign(key) {
       renderWhConsignList();
       showToast('返却を取り消し、预け中に戻しました（在庫: ' + newStock + '個）');
     } catch(e) { showToast('取り消しに失敗しました'); console.error(e); }
+  });
+}
+
+// テストとして行った精算・返却の記録などを、跡形もなく完全に削除したい場合の機能。
+// 「取り消す」（预け中に戻すだけ）とは異なり、レコード自体をデータベースから削除する
+// 元に戻せない操作のため、確認ダイアログの文言でも明示している。
+// ・精算済み：すでに精算分の納品書（請求用）を発行済みのものは、先にその納品書を取り消して
+//   もらう必要があるため削除できない（取り消し同様のガード）。関連する売上記録（salesKey）が
+//   あれば、記録の整合性のためそれも一緒に削除する。
+// ・返却済み：返却時に在庫へ戻した分を削除時にも差し引く必要があるため、現在の在庫が返却
+//   数量に満たない場合（すでに他の出荷などで在庫が動いている場合）は安全のため削除をブロックする。
+function confirmDeleteConsignHistory(key) {
+  const m = (stockMoves || []).find(x => x._key === key);
+  if (!m) { showToast('対象の記録が見つかりません'); return; }
+  if (m.status === 'settled') {
+    if (m.invoicedSlipId) {
+      showToast('すでに精算分の納品書を発行済みのため削除できません。先に「精算分の納品書」からその納品書を取り消してください');
+      return;
+    }
+    showConfirm(`${m.client || ''}／${consignItemModel(m)}の精算記録を完全に削除しますか？この操作は元に戻せません。${m.salesKey ? '（関連する売上記録も削除されます）' : ''}`).then(async ok => {
+      if (!ok) return;
+      try {
+        if (m.salesKey) { await fetch(authedUrl('/sales/' + m.salesKey + '.json'), { method: 'DELETE' }); }
+        await fetch(authedUrl('/stockMoves/' + key + '.json'), { method: 'DELETE' });
+        await loadInventory();
+        renderWhConsignList();
+        showToast('記録を削除しました');
+      } catch(e) { showToast('削除に失敗しました'); console.error(e); }
+    });
+    return;
+  }
+  const prod = products.find(p => p._key === m.productKey);
+  const currentStock = prod ? prod.stock : 0;
+  if (currentStock < m.qty) {
+    showToast(`現在の在庫（${currentStock}個）が返却数量（${m.qty}個）に満たないため削除できません（すでに在庫が動いている可能性があります）`);
+    return;
+  }
+  showConfirm(`${m.client || ''}／${consignItemModel(m)}の返却記録を完全に削除しますか？この操作は元に戻せません（在庫が${m.qty}個減ります）`).then(async ok => {
+    if (!ok) return;
+    try {
+      const newStock = currentStock - m.qty;
+      await Promise.all([
+        fetch(authedUrl('/products/' + m.productKey + '/stock.json'), { method: 'PUT', body: JSON.stringify(newStock) }),
+        fetch(authedUrl('/stockMoves/' + key + '.json'), { method: 'DELETE' })
+      ]);
+      await loadInventory();
+      renderWhConsignList();
+      showToast('記録を削除しました（在庫: ' + newStock + '個）');
+    } catch(e) { showToast('削除に失敗しました'); console.error(e); }
   });
 }
 
@@ -10936,6 +11006,10 @@ async function loadPortalData() {
 
 function renderPortalItems(items) {
   window._portalItems = items;
+  // 検索で絞り込む・絞り込みを解除するたびに商品カードのDOMを作り直す（renderPortalItemsList）ため、
+  // 入力済みの数量・売値をここに保存しておき、再描画のたびに復元する（idxは検索前後で不変）。
+  // これにより「商品Aを入力→検索欄を消して商品Bを探す」という操作でAの入力が消えなくなる。
+  window._portalEnteredValues = {};
   const emptyEl = document.getElementById('portal-items-empty');
   const searchWrap = document.getElementById('portal-search-wrap');
   const itemsRoot = document.getElementById('portal-items');
@@ -11012,18 +11086,22 @@ function renderPortalItemsList(pairs) {
     if (typeof updatePortalGrandTotal === 'function') updatePortalGrandTotal();
     return;
   }
-  root.innerHTML = pairs.map(({ it, idx }) => `
+  root.innerHTML = pairs.map(({ it, idx }) => {
+    const saved = (window._portalEnteredValues || {})[idx];
+    const qtyVal = saved && saved.qty != null ? saved.qty : it.qty;
+    const priceVal = saved && saved.price != null ? saved.price : '';
+    return `
     <div style="border:1.2px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:var(--white)">
       <div style="font-size:14px;font-weight:700;color:var(--text)">${escapeHtmlMain(it.model || '商品')}</div>
       <div style="font-size:12.5px;color:var(--text-muted);margin-top:2px">${fmtDateJP(it.date)}／預けている数量：${it.qty}個${it.memo ? '／' + escapeHtmlMain(it.memo) : ''}</div>
       <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
         <label for="portal-qty-${idx}" style="font-size:12px;color:var(--text-muted)">対象の数量</label>
-        <input type="number" id="portal-qty-${idx}" min="1" max="${it.qty}" value="${it.qty}" oninput="updatePortalItemTotal(${idx})" style="width:64px;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
+        <input type="number" id="portal-qty-${idx}" min="1" max="${it.qty}" value="${qtyVal}" oninput="updatePortalItemTotal(${idx})" style="width:64px;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
         <span style="font-size:12px;color:var(--text-muted)">個（${it.qty}個のうち一部だけの場合は数を変えてください）</span>
       </div>
       <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
         <label for="portal-price-${idx}" style="font-size:12px;color:var(--text-muted)">売値（円）</label>
-        <input type="number" id="portal-price-${idx}" min="0" placeholder="任意" oninput="updatePortalItemTotal(${idx})" style="width:88px;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
+        <input type="number" id="portal-price-${idx}" min="0" placeholder="任意" value="${priceVal}" oninput="updatePortalItemTotal(${idx})" style="width:88px;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
         <span style="font-size:12px;color:var(--text-muted)">精算する場合はこちらに入力してください</span>
       </div>
       <div id="portal-total-${idx}" style="display:none;font-size:12.5px;font-weight:700;color:var(--text);margin-top:6px;text-align:right"></div>
@@ -11033,7 +11111,8 @@ function renderPortalItemsList(pairs) {
       <div style="font-size:11px;color:var(--text-muted);margin-top:6px">精算する場合は、上の「売値」を入力すると画面上部の「まとめて精算」ボタンから送信できます</div>
       <div id="portal-item-status-${idx}" style="display:none;margin-top:8px;font-size:12px"></div>
     </div>
-  `).join('');
+  `;
+  }).join('');
   updatePortalGrandTotal();
 }
 
@@ -11043,6 +11122,12 @@ function updatePortalItemTotal(idx) {
   const qtyInput = document.getElementById('portal-qty-' + idx);
   const priceInput = document.getElementById('portal-price-' + idx);
   const totalEl = document.getElementById('portal-total-' + idx);
+  // 検索の絞り込み・解除でカードが作り直されても入力内容が消えないよう、ここで保存しておく
+  if (!window._portalEnteredValues) window._portalEnteredValues = {};
+  window._portalEnteredValues[idx] = {
+    qty: qtyInput && qtyInput.value !== '' ? qtyInput.value : null,
+    price: priceInput && priceInput.value !== '' ? priceInput.value : null
+  };
   if (totalEl) {
     const qty = qtyInput ? parseInt(qtyInput.value, 10) : NaN;
     const rawPrice = priceInput ? priceInput.value.trim() : '';
@@ -11133,6 +11218,9 @@ async function sendPortalRequest(idx, type) {
   const qty = qtyInput ? parseInt(qtyInput.value, 10) : it.qty;
   if (!qty || qty < 1) { setStatus('数量を正しく入力してください', true); return; }
   if (qty > it.qty) { setStatus(`預けている数量（${it.qty}個）を超えています`, true); return; }
+  // ボタンの誤タップでそのまま送信されてしまわないよう、送信前に必ず確認を挟む
+  const ok = await showConfirm(`${it.model || '商品'}を${qty}個、返却します。よろしいですか？`);
+  if (!ok) return;
   try {
     await postConsignRequestsForItem(it, qty, type, null);
     setStatus(`✓ ${qty}個の返却のご連絡を送信しました。店舗からの確認をお待ちください。`, false);
@@ -11142,10 +11230,51 @@ async function sendPortalRequest(idx, type) {
   }
 }
 
-// 「まとめて精算」ボタン：数量・売値が入力済みの商品をすべて集めて、それぞれ
-// consignRequestとして送信する。1件ずつ都度ボタンを押す必要がなく、送信前にまとめての
-// 合計金額を確認できる（要望：「毎回精算ボタンを押さずに、商品を検索し、数量・売値を入力し、
+// 「まとめて精算」ボタンを押したときにまず開く確認モーダル。誤送信を防ぐため、実際に
+// consignRequestを送信する前に、どの商品を・いくつ・いくらで精算しようとしているのかを
+// 一覧と合計金額で確認できるようにしてから、改めて送信を確定してもらう。
+function openBatchSettleConfirm() {
+  const candidates = getPortalSettleCandidates();
+  const batchStatusEl = document.getElementById('portal-batch-status');
+  const setBatchStatus = (msg, isError) => {
+    if (!batchStatusEl) return;
+    batchStatusEl.textContent = msg;
+    batchStatusEl.style.color = isError ? '#b33' : '#2f6b2f';
+    batchStatusEl.style.display = msg ? 'block' : 'none';
+  };
+  if (!candidates.length) { setBatchStatus('数量と売値を入力した商品がありません', true); return; }
+  setBatchStatus('', false);
+  const grandTotal = candidates.reduce((s, c) => s + c.qty * c.price, 0);
+  const listEl = document.getElementById('portal-batch-confirm-list');
+  if (listEl) {
+    listEl.innerHTML = candidates.map(c => `
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12.5px">
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${escapeHtmlMain(c.it.model || '商品')}</span>
+        <span style="flex-shrink:0;color:var(--text-muted)">${c.qty}個 × ¥${c.price.toLocaleString('ja-JP')}</span>
+        <span style="flex-shrink:0;font-weight:700;color:var(--text)">¥${(c.qty * c.price).toLocaleString('ja-JP')}</span>
+      </div>`).join('');
+  }
+  const totalEl = document.getElementById('portal-batch-confirm-total');
+  if (totalEl) totalEl.textContent = `合計 ${candidates.length}件：¥${grandTotal.toLocaleString('ja-JP')}`;
+  const modal = document.getElementById('portal-batch-confirm-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeBatchSettleConfirm() {
+  const modal = document.getElementById('portal-batch-confirm-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function confirmSubmitBatchSettle() {
+  closeBatchSettleConfirm();
+  await submitBatchSettle();
+}
+
+// 数量・売値が入力済みの商品をすべて集めて、それぞれconsignRequestとして送信する。
+// 1件ずつ都度ボタンを押す必要がなく、送信前にまとめての合計金額を確認できる
+// （要望：「毎回精算ボタンを押さずに、商品を検索し、数量・売値を入力し、
 // 最後にまとめて精算ボタンを押して精算することができるようにするのもいい」）。
+// 実際の送信は、openBatchSettleConfirm()で内容を確認してもらった後に呼ばれる。
 async function submitBatchSettle() {
   const candidates = getPortalSettleCandidates();
   const batchStatusEl = document.getElementById('portal-batch-status');
