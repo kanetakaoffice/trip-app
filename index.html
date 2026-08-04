@@ -3506,11 +3506,11 @@ function renderDeliverySlipColumns(root, items) {
   // 合計数量・合計金額は、明細の右下に単独で表示するのではなく、数量欄・単価欄の真下に
   // それぞれ来るよう最後の列の中に差し込む（預かり精算分の請求用納品書にもこの表示が
   // そのまま使われるため、「精算済みの商品で納品書を作成する際に合計金額も出してほしい」
-  // という要望にもここで対応できる）
+  // という要望にもここで対応できる）。以前は合計数量・合計金額を別々の2行に分けて表示して
+  // いたが、「2段に分けるのをやめたい」との要望により、1行にまとめて表示するよう変更した。
   const lastCol = cols[cols.length - 1];
   if (lastCol) {
-    lastCol.insertAdjacentHTML('beforeend', '<div class="ds-row ds-qty-total"><span class="ds-model">合計数量</span><span class="ds-qty">' + totalQty + '個</span><span class="ds-price"></span></div>'
-      + '<div class="ds-row ds-qty-total"><span class="ds-model">合計金額</span><span class="ds-qty"></span><span class="ds-price">¥' + totalAmount.toLocaleString('ja-JP') + '</span></div>');
+    lastCol.insertAdjacentHTML('beforeend', '<div class="ds-row ds-qty-total"><span class="ds-model">合計</span><span class="ds-qty">' + totalQty + '個</span><span class="ds-price">¥' + totalAmount.toLocaleString('ja-JP') + '</span></div>');
   }
 }
 
