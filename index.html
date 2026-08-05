@@ -273,7 +273,10 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       <div id="portal-pending-list"></div>
     </div>
     <div id="portal-search-wrap" style="display:none;margin-bottom:14px">
-      <input type="text" id="portal-search" placeholder="型番で検索" oninput="filterPortalItems()" style="width:100%;padding:10px 12px;border:1.2px solid var(--border);border-radius:10px;font-size:14px;box-sizing:border-box">
+      <div style="position:relative">
+        <input type="text" id="portal-search" placeholder="型番で検索" oninput="filterPortalItems()" style="width:100%;padding:10px 34px 10px 12px;border:1.2px solid var(--border);border-radius:10px;font-size:14px;box-sizing:border-box">
+        <button type="button" id="portal-search-clear" onclick="clearPortalSearch()" aria-label="検索をクリア" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);width:26px;height:26px;border:none;background:transparent;color:var(--text-muted);font-size:17px;line-height:1;cursor:pointer;padding:0">✕</button>
+      </div>
       <div id="portal-search-count" style="font-size:11.5px;color:var(--text-muted);margin-top:4px"></div>
     </div>
     <div id="portal-grand-total" style="display:none;position:sticky;top:0;z-index:5;background:var(--white);border:1.2px solid var(--gold-dark);border-radius:10px;padding:10px 12px;margin-bottom:12px">
@@ -4261,7 +4264,30 @@ function filterWhConsignClientItems(idx) {
   if (client == null) return;
   const input = document.getElementById('wh-consign-client-search-' + idx);
   _whConsignClientSearchQuery[client] = input ? input.value : '';
+  toggleWhConsignClientSearchClearBtn(idx);
   renderWhConsignClientItemsList(idx);
+}
+
+// 在庫一覧の検索欄と同じく、入力があるときだけ✕ボタンを表示する
+function toggleWhConsignClientSearchClearBtn(idx) {
+  const input = document.getElementById('wh-consign-client-search-' + idx);
+  const btn = document.getElementById('wh-consign-client-search-clear-' + idx);
+  if (!input || !btn) return;
+  btn.style.display = input.value ? 'block' : 'none';
+}
+
+// ✕ボタンから呼ばれ、検索欄を一発で空にする（要望：「在庫一覧の検索欄のように、型番を
+// 入力したら、一発で消せるようにして欲しい」）
+function clearWhConsignClientSearch(idx) {
+  const client = _whConsignClientOrder[idx];
+  if (client == null) return;
+  const input = document.getElementById('wh-consign-client-search-' + idx);
+  if (!input) return;
+  input.value = '';
+  _whConsignClientSearchQuery[client] = '';
+  toggleWhConsignClientSearchClearBtn(idx);
+  renderWhConsignClientItemsList(idx);
+  input.focus();
 }
 
 function renderWhConsignClientItemsList(idx) {
@@ -4363,7 +4389,10 @@ function renderWhConsignList() {
           </div>
           <div class="accordion-body${isOpen ? ' open' : ''}" style="margin-top:8px">
             ${items.length > 1 ? `<div style="margin-bottom:8px">
-              <input type="text" id="wh-consign-client-search-${idx}" placeholder="🔍 型番で検索" value="${escapeHtmlMain(_whConsignClientSearchQuery[client] || '')}" oninput="filterWhConsignClientItems(${idx})" onclick="event.stopPropagation()" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
+              <div style="position:relative">
+                <input type="text" id="wh-consign-client-search-${idx}" placeholder="🔍 型番で検索" value="${escapeHtmlMain(_whConsignClientSearchQuery[client] || '')}" oninput="filterWhConsignClientItems(${idx})" onclick="event.stopPropagation()" style="width:100%;box-sizing:border-box;padding:8px 34px 8px 10px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
+                <button type="button" id="wh-consign-client-search-clear-${idx}" onclick="event.stopPropagation(); clearWhConsignClientSearch(${idx})" aria-label="検索をクリア" style="display:${_whConsignClientSearchQuery[client] ? 'block' : 'none'};position:absolute;right:6px;top:50%;transform:translateY(-50%);width:24px;height:24px;border:none;background:transparent;color:var(--text-muted);font-size:16px;line-height:1;cursor:pointer;padding:0">✕</button>
+              </div>
               <div id="wh-consign-client-search-count-${idx}" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
             </div>` : ''}
             <div id="wh-consign-client-items-${idx}"></div>
@@ -11173,6 +11202,7 @@ function renderPortalItems(items) {
   if (searchInput) searchInput.value = '';
   const countEl = document.getElementById('portal-search-count');
   if (countEl) countEl.textContent = '';
+  togglePortalSearchClearBtn();
   renderPortalItemsList(items.map((it, idx) => ({ it, idx })));
 }
 
@@ -11266,6 +11296,24 @@ function filterPortalItems() {
   renderPortalItemsList(pairs);
   const countEl = document.getElementById('portal-search-count');
   if (countEl) countEl.textContent = q ? `${pairs.length}件見つかりました` : '';
+  togglePortalSearchClearBtn();
+}
+
+// 在庫一覧の検索欄と同じく、入力があるときだけ✕ボタンを表示する（要望：「型番を入力したら、
+// 一発で消せるようにして欲しい」）
+function togglePortalSearchClearBtn() {
+  const input = document.getElementById('portal-search');
+  const btn = document.getElementById('portal-search-clear');
+  if (!input || !btn) return;
+  btn.style.display = input.value ? 'block' : 'none';
+}
+
+function clearPortalSearch() {
+  const input = document.getElementById('portal-search');
+  if (!input) return;
+  input.value = '';
+  filterPortalItems();
+  input.focus();
 }
 
 function renderPortalItemsList(pairs) {
