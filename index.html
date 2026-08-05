@@ -296,10 +296,14 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       <div class="accordion-body" id="acc-body-portal-history" style="margin-top:8px">
         <!-- 要望：「型番検索や月毎、日にち指定などで絞れるようにしたい」への対応。
              型番検索・月指定・日付指定はAND条件で組み合わせられる（すべて空なら絞り込みなし） -->
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
           <input type="text" id="portal-history-search" placeholder="🔍 型番で検索" oninput="filterPortalHistory()" style="flex:1;min-width:120px;padding:7px 9px;border:1.2px solid var(--border);border-radius:8px;font-size:12.5px;box-sizing:border-box">
-          <input type="month" id="portal-history-month" onchange="filterPortalHistory()" aria-label="月で絞り込む" style="padding:7px 9px;border:1.2px solid var(--border);border-radius:8px;font-size:12.5px">
-          <input type="date" id="portal-history-date" onchange="filterPortalHistory()" aria-label="日付で絞り込む" style="padding:7px 9px;border:1.2px solid var(--border);border-radius:8px;font-size:12.5px">
+          <label style="display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text-muted);white-space:nowrap">月
+            <input type="month" id="portal-history-month" onchange="filterPortalHistory()" aria-label="月で絞り込む" style="padding:7px 9px;border:1.2px solid var(--border);border-radius:8px;font-size:12.5px">
+          </label>
+          <label style="display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text-muted);white-space:nowrap">日付
+            <input type="date" id="portal-history-date" onchange="filterPortalHistory()" aria-label="日付で絞り込む" style="padding:7px 9px;border:1.2px solid var(--border);border-radius:8px;font-size:12.5px">
+          </label>
           <button type="button" id="portal-history-filter-clear" onclick="clearPortalHistoryFilter()" style="display:none;padding:7px 10px;border:1.2px solid var(--border);border-radius:8px;background:var(--white);color:var(--text-muted);font-size:12px;cursor:pointer;white-space:nowrap">✕ 条件をクリア</button>
         </div>
         <div id="portal-history-list"></div>
@@ -1493,10 +1497,14 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       <div class="accordion-body" id="acc-body-wh-consign-history" style="margin-top:8px">
         <!-- 要望：「型番検索や月毎、日にち指定などで絞れるようにしたい」への対応。
              型番検索・月指定・日付指定はAND条件で組み合わせられる（すべて空なら絞り込みなし） -->
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
           <input type="text" id="wh-consign-history-search" placeholder="🔍 型番で検索" oninput="filterWhConsignHistory()" style="flex:1;min-width:130px;padding:7px 9px;border:1.2px solid var(--border);border-radius:8px;font-size:12.5px;box-sizing:border-box">
-          <input type="month" id="wh-consign-history-month" onchange="filterWhConsignHistory()" aria-label="月で絞り込む" style="padding:7px 9px;border:1.2px solid var(--border);border-radius:8px;font-size:12.5px">
-          <input type="date" id="wh-consign-history-date" onchange="filterWhConsignHistory()" aria-label="日付で絞り込む" style="padding:7px 9px;border:1.2px solid var(--border);border-radius:8px;font-size:12.5px">
+          <label style="display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text-muted);white-space:nowrap">月
+            <input type="month" id="wh-consign-history-month" onchange="filterWhConsignHistory()" aria-label="月で絞り込む" style="padding:7px 9px;border:1.2px solid var(--border);border-radius:8px;font-size:12.5px">
+          </label>
+          <label style="display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text-muted);white-space:nowrap">日付
+            <input type="date" id="wh-consign-history-date" onchange="filterWhConsignHistory()" aria-label="日付で絞り込む" style="padding:7px 9px;border:1.2px solid var(--border);border-radius:8px;font-size:12.5px">
+          </label>
           <button type="button" id="wh-consign-history-filter-clear" onclick="clearWhConsignHistoryFilter()" style="display:none;padding:7px 10px;border:1.2px solid var(--border);border-radius:8px;background:var(--white);color:var(--text-muted);font-size:12px;cursor:pointer;white-space:nowrap">✕ 条件をクリア</button>
         </div>
         <div id="wh-consign-history-list"></div>
