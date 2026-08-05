@@ -294,6 +294,14 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <span class="accordion-arrow" id="acc-arrow-portal-history">▼</span>
       </div>
       <div class="accordion-body" id="acc-body-portal-history" style="margin-top:8px">
+        <!-- 要望：「型番検索や月毎、日にち指定などで絞れるようにしたい」への対応。
+             型番検索・月指定・日付指定はAND条件で組み合わせられる（すべて空なら絞り込みなし） -->
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+          <input type="text" id="portal-history-search" placeholder="🔍 型番で検索" oninput="filterPortalHistory()" style="flex:1;min-width:120px;padding:7px 9px;border:1.2px solid var(--border);border-radius:8px;font-size:12.5px;box-sizing:border-box">
+          <input type="month" id="portal-history-month" onchange="filterPortalHistory()" aria-label="月で絞り込む" style="padding:7px 9px;border:1.2px solid var(--border);border-radius:8px;font-size:12.5px">
+          <input type="date" id="portal-history-date" onchange="filterPortalHistory()" aria-label="日付で絞り込む" style="padding:7px 9px;border:1.2px solid var(--border);border-radius:8px;font-size:12.5px">
+          <button type="button" id="portal-history-filter-clear" onclick="clearPortalHistoryFilter()" style="display:none;padding:7px 10px;border:1.2px solid var(--border);border-radius:8px;background:var(--white);color:var(--text-muted);font-size:12px;cursor:pointer;white-space:nowrap">✕ 条件をクリア</button>
+        </div>
         <div id="portal-history-list"></div>
       </div>
     </div>
@@ -1483,6 +1491,14 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <span class="accordion-arrow" id="acc-arrow-wh-consign-history" style="font-size:10px;color:var(--text-muted)">▼</span>
       </div>
       <div class="accordion-body" id="acc-body-wh-consign-history" style="margin-top:8px">
+        <!-- 要望：「型番検索や月毎、日にち指定などで絞れるようにしたい」への対応。
+             型番検索・月指定・日付指定はAND条件で組み合わせられる（すべて空なら絞り込みなし） -->
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+          <input type="text" id="wh-consign-history-search" placeholder="🔍 型番で検索" oninput="filterWhConsignHistory()" style="flex:1;min-width:130px;padding:7px 9px;border:1.2px solid var(--border);border-radius:8px;font-size:12.5px;box-sizing:border-box">
+          <input type="month" id="wh-consign-history-month" onchange="filterWhConsignHistory()" aria-label="月で絞り込む" style="padding:7px 9px;border:1.2px solid var(--border);border-radius:8px;font-size:12.5px">
+          <input type="date" id="wh-consign-history-date" onchange="filterWhConsignHistory()" aria-label="日付で絞り込む" style="padding:7px 9px;border:1.2px solid var(--border);border-radius:8px;font-size:12.5px">
+          <button type="button" id="wh-consign-history-filter-clear" onclick="clearWhConsignHistoryFilter()" style="display:none;padding:7px 10px;border:1.2px solid var(--border);border-radius:8px;background:var(--white);color:var(--text-muted);font-size:12px;cursor:pointer;white-space:nowrap">✕ 条件をクリア</button>
+        </div>
         <div id="wh-consign-history-list"></div>
         <button onclick="createConsignInvoiceSlipFromSelection()" style="width:100%;margin-top:10px;padding:10px;background:var(--surface);color:var(--text);border:1.5px dashed var(--border);border-radius:var(--radius-sm);font-size:12.5px;font-weight:600;cursor:pointer">📄 選択した精算済み商品で納品書を作成</button>
       </div>
@@ -4403,63 +4419,131 @@ function renderWhConsignList() {
     order.forEach((client, idx) => renderWhConsignClientItemsList(idx));
   }
 
-  if (historyEl) {
-    if (!history.length) {
-      historyEl.innerHTML = `<div style="font-size:12px;color:var(--text-muted)">まだ精算・返却の記録はありません</div>`;
-    } else {
-      // 精算と返却は見分けやすいよう別々のセクションに分け、それぞれの日付（settledAt／returnedAt）を表示する。
-      // 精算済みの商品は、まだ納品書（請求用）にしていないものだけチェックボックスで選べるようにし、
-      // すでに納品書にした商品は「請求済み」バッジを表示してこれ以上選べないようにする。
-      // 取引先が誤って精算・返却してしまった、店舗側が入力を間違えたなど、確定後に取り消したい
-      // 場合のための「取り消す」リンク。精算済みですでに精算分の納品書（請求用）を発行済みの
-      // ものだけは、先にその納品書を取り消してもらう必要があるため、取り消すリンクを出さず
-      // 「請求済み」バッジのみ表示する（confirmUndoSettleConsign側でも二重にガードしている）
-      const undoLinkHtml = (m) => `<span onclick="event.stopPropagation(); ${m.status === 'settled' ? `confirmUndoSettleConsign('${m._key}')` : `confirmUndoReturnConsign('${m._key}')`}" style="flex-shrink:0;font-size:11px;color:var(--text-muted);text-decoration:underline;cursor:pointer">取り消す</span>`;
-      // テストとして行った精算・返却の記録などを、跡形もなく消したい場合のための「完全に削除する」
-      // リンク。「取り消す」（预け中に戻すだけ）とは異なり元に戻せない破壊的操作なので、確認
-      // ダイアログの文言でもその旨を明示し、色も警告色にして誤操作しにくくしている。すでに
-      // 精算分の納品書を発行済みのものは「取り消す」同様に削除もできない（confirmDeleteConsignHistory側で二重にガード）
-      const deleteLinkHtml = (m) => `<span onclick="event.stopPropagation(); confirmDeleteConsignHistory('${m._key}')" style="flex-shrink:0;font-size:11px;color:var(--danger);text-decoration:underline;cursor:pointer">完全に削除</span>`;
-      const renderHistoryRow = (m) => {
-        const amountStr = m.status === 'settled' && m.amount != null ? `／¥${m.amount.toLocaleString('ja-JP')}` : '';
-        const dateVal = m.status === 'settled' ? m.settledAt : m.returnedAt;
-        const dateStr = dateVal ? fmtDateJP(dateVal) : '';
-        const rowText = `${escapeHtmlMain(consignItemModel(m))}／預け先: ${escapeHtmlMain(m.client || '')}／${m.qty}個${amountStr}${dateStr ? '／' + dateStr : ''}`;
-        if (m.status === 'settled') {
-          if (m.invoicedSlipId) {
-            return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;display:flex;align-items:center;gap:6px">
-              <span style="flex:1">${rowText}</span>
-              <span style="font-size:11px;font-weight:700;color:var(--gold-dark);flex-shrink:0">請求済み</span>
-            </div>`;
-          }
-          return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;display:flex;align-items:center;gap:6px">
-            <input type="checkbox" class="consign-invoice-checkbox" data-key="${m._key}" style="flex-shrink:0;width:16px;height:16px">
-            <span style="flex:1">${rowText}</span>
-            ${undoLinkHtml(m)}
-            ${deleteLinkHtml(m)}
-          </div>`;
-        }
-        return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;display:flex;align-items:center;gap:6px">
-          <span style="flex:1">${rowText}</span>
-          ${undoLinkHtml(m)}
-          ${deleteLinkHtml(m)}
-        </div>`;
-      };
-      const renderHistorySection = (label, color, list) => {
-        if (!list.length) return '';
-        return `<div style="margin-bottom:12px">
-          <div style="font-size:12px;font-weight:700;color:${color};margin-bottom:4px">${label}（${list.length}件）</div>
-          ${list.map(renderHistoryRow).join('')}
-        </div>`;
-      };
-      const settledHistory = history.filter(m => m.status === 'settled');
-      const returnedHistory = history.filter(m => m.status === 'returned');
-      historyEl.innerHTML = renderHistorySection('精算済み', 'var(--success)', settledHistory)
-        + renderHistorySection('返却済み', 'var(--text-muted)', returnedHistory);
-    }
-  }
+  // 型番検索・月・日付での絞り込み（要望：「型番検索や月毎、日にち指定などで絞れるように
+  // したい」）に対応するため、絞り込み前の全件をここに保持しておき、フィルター欄が変わる
+  // たびにrenderWhConsignHistorySection()だけを呼び直して再描画できるようにする
+  _whConsignHistoryFull = history;
+  renderWhConsignHistorySection();
   renderConsignRequestsPanel();
   renderConsignInvoicesList();
+}
+
+// 「精算・返却済みの履歴」の絞り込み前の全件（renderWhConsignList()のたびに更新される）
+let _whConsignHistoryFull = [];
+// 型番検索・月・日付の3つの絞り込み条件（すべて空文字なら絞り込みなし＝全件表示）
+let _whConsignHistoryFilter = { q: '', month: '', date: '' };
+
+// タイムスタンプ（ミリ秒）から、月・日付での絞り込み比較に使うローカル日付キー（YYYY-MM-DD）を作る。
+// toISOString()はUTC基準になり日付がズレることがあるため、ローカルの年月日から組み立てる
+function localDateKeyFromTs(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${mo}-${day}`;
+}
+
+// 精算と返却は見分けやすいよう別々のセクションに分け、それぞれの日付（settledAt／returnedAt）を表示する。
+// 精算済みの商品は、まだ納品書（請求用）にしていないものだけチェックボックスで選べるようにし、
+// すでに納品書にした商品は「請求済み」バッジを表示してこれ以上選べないようにする。
+function renderWhConsignHistorySection() {
+  const historyEl = document.getElementById('wh-consign-history-list');
+  if (!historyEl) return;
+  const f = _whConsignHistoryFilter;
+  const qNorm = normalizeModelStr(f.q || '');
+  let history = _whConsignHistoryFull || [];
+  if (qNorm) history = history.filter(m => normalizeModelStr(consignItemModel(m)).includes(qNorm));
+  const dateKeyOf = (m) => localDateKeyFromTs(m.status === 'settled' ? m.settledAt : m.returnedAt);
+  if (f.date) history = history.filter(m => dateKeyOf(m) === f.date);
+  else if (f.month) history = history.filter(m => dateKeyOf(m).slice(0, 7) === f.month);
+  const filterActive = !!(f.q || f.month || f.date);
+
+  if (!history.length) {
+    historyEl.innerHTML = `<div style="font-size:12px;color:var(--text-muted)">${filterActive ? '条件に一致する記録が見つかりませんでした' : 'まだ精算・返却の記録はありません'}</div>`;
+    return;
+  }
+  // 取引先が誤って精算・返却してしまった、店舗側が入力を間違えたなど、確定後に取り消したい
+  // 場合のための「取り消す」リンク。精算済みですでに精算分の納品書（請求用）を発行済みの
+  // ものだけは、先にその納品書を取り消してもらう必要があるため、取り消すリンクを出さず
+  // 「請求済み」バッジのみ表示する（confirmUndoSettleConsign側でも二重にガードしている）
+  const undoLinkHtml = (m) => `<span onclick="event.stopPropagation(); ${m.status === 'settled' ? `confirmUndoSettleConsign('${m._key}')` : `confirmUndoReturnConsign('${m._key}')`}" style="flex-shrink:0;font-size:11px;color:var(--text-muted);text-decoration:underline;cursor:pointer">取り消す</span>`;
+  // テストとして行った精算・返却の記録などを、跡形もなく消したい場合のための「完全に削除する」
+  // リンク。「取り消す」（预け中に戻すだけ）とは異なり元に戻せない破壊的操作なので、確認
+  // ダイアログの文言でもその旨を明示し、色も警告色にして誤操作しにくくしている。すでに
+  // 精算分の納品書を発行済みのものは「取り消す」同様に削除もできない（confirmDeleteConsignHistory側で二重にガード）
+  const deleteLinkHtml = (m) => `<span onclick="event.stopPropagation(); confirmDeleteConsignHistory('${m._key}')" style="flex-shrink:0;font-size:11px;color:var(--danger);text-decoration:underline;cursor:pointer">完全に削除</span>`;
+  const renderHistoryRow = (m) => {
+    const amountStr = m.status === 'settled' && m.amount != null ? `／¥${m.amount.toLocaleString('ja-JP')}` : '';
+    const dateVal = m.status === 'settled' ? m.settledAt : m.returnedAt;
+    const dateStr = dateVal ? fmtDateJP(dateVal) : '';
+    const rowText = `${escapeHtmlMain(consignItemModel(m))}／預け先: ${escapeHtmlMain(m.client || '')}／${m.qty}個${amountStr}${dateStr ? '／' + dateStr : ''}`;
+    if (m.status === 'settled') {
+      if (m.invoicedSlipId) {
+        return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;display:flex;align-items:center;gap:6px">
+          <span style="flex:1">${rowText}</span>
+          <span style="font-size:11px;font-weight:700;color:var(--gold-dark);flex-shrink:0">請求済み</span>
+        </div>`;
+      }
+      return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;display:flex;align-items:center;gap:6px">
+        <input type="checkbox" class="consign-invoice-checkbox" data-key="${m._key}" style="flex-shrink:0;width:16px;height:16px">
+        <span style="flex:1">${rowText}</span>
+        ${undoLinkHtml(m)}
+        ${deleteLinkHtml(m)}
+      </div>`;
+    }
+    return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;display:flex;align-items:center;gap:6px">
+      <span style="flex:1">${rowText}</span>
+      ${undoLinkHtml(m)}
+      ${deleteLinkHtml(m)}
+    </div>`;
+  };
+  const renderHistorySection = (label, color, list) => {
+    if (!list.length) return '';
+    return `<div style="margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:${color};margin-bottom:4px">${label}（${list.length}件）</div>
+      ${list.map(renderHistoryRow).join('')}
+    </div>`;
+  };
+  const settledHistory = history.filter(m => m.status === 'settled');
+  const returnedHistory = history.filter(m => m.status === 'returned');
+  historyEl.innerHTML = renderHistorySection('精算済み', 'var(--success)', settledHistory)
+    + renderHistorySection('返却済み', 'var(--text-muted)', returnedHistory);
+}
+
+// 検索・月・日付いずれかの入力欄が変わるたびに呼ばれ、フィルター条件を読み取って再描画する
+function filterWhConsignHistory() {
+  const qInput = document.getElementById('wh-consign-history-search');
+  const monthInput = document.getElementById('wh-consign-history-month');
+  const dateInput = document.getElementById('wh-consign-history-date');
+  _whConsignHistoryFilter = {
+    q: qInput ? qInput.value.trim() : '',
+    month: monthInput ? monthInput.value : '',
+    date: dateInput ? dateInput.value : ''
+  };
+  updateWhConsignHistoryFilterClearBtn();
+  renderWhConsignHistorySection();
+}
+
+function updateWhConsignHistoryFilterClearBtn() {
+  const btn = document.getElementById('wh-consign-history-filter-clear');
+  if (!btn) return;
+  const f = _whConsignHistoryFilter;
+  btn.style.display = (f.q || f.month || f.date) ? 'inline-block' : 'none';
+}
+
+// 「✕ 条件をクリア」から呼ばれる。3つの入力欄と絞り込み状態をすべて空に戻し、全件表示に戻す
+function clearWhConsignHistoryFilter() {
+  const qInput = document.getElementById('wh-consign-history-search');
+  const monthInput = document.getElementById('wh-consign-history-month');
+  const dateInput = document.getElementById('wh-consign-history-date');
+  if (qInput) qInput.value = '';
+  if (monthInput) monthInput.value = '';
+  if (dateInput) dateInput.value = '';
+  _whConsignHistoryFilter = { q: '', month: '', date: '' };
+  updateWhConsignHistoryFilterClearBtn();
+  renderWhConsignHistorySection();
 }
 
 // 精算済みの預かり品から作成した「請求用の納品書」の一覧（発行済みの通常の納品書＝卸売の
@@ -11213,7 +11297,10 @@ function renderPortalHistory(historyItems) {
   const listEl = document.getElementById('portal-history-list');
   const navEl = document.getElementById('portal-history-nav');
   if (!wrapEl || !listEl) return;
-  if (!historyItems || !historyItems.length) {
+  // 型番検索・月・日付での絞り込み（要望：「型番検索や月毎、日にち指定などで絞れるように
+  // したい」）に対応するため、絞り込み前の全件を保持しておく
+  window._portalHistoryFull = historyItems || [];
+  if (!window._portalHistoryFull.length) {
     wrapEl.style.display = 'none';
     listEl.innerHTML = '';
     if (navEl) navEl.style.display = 'none';
@@ -11224,7 +11311,28 @@ function renderPortalHistory(historyItems) {
   // 履歴がある場合だけ、いつでもタップして直接そこへ移動できるショートカットを出す
   if (navEl) navEl.style.display = 'block';
   updatePortalHistoryNavLabel();
-  listEl.innerHTML = historyItems.map(it => {
+  renderPortalHistoryList();
+}
+
+// 現在の検索・月・日付の絞り込み条件に沿って#portal-history-listだけを描画し直す
+// （検索欄自体は再描画で消えないよう、リスト部分だけを差し替える）
+function renderPortalHistoryList() {
+  const listEl = document.getElementById('portal-history-list');
+  if (!listEl) return;
+  const q = (document.getElementById('portal-history-search')?.value || '').trim().toLowerCase();
+  const month = document.getElementById('portal-history-month')?.value || '';
+  const date = document.getElementById('portal-history-date')?.value || '';
+  let items = window._portalHistoryFull || [];
+  if (q) items = items.filter(it => String(it.model || '').toLowerCase().includes(q));
+  if (date) items = items.filter(it => localDateKeyFromTs(it.date) === date);
+  else if (month) items = items.filter(it => localDateKeyFromTs(it.date).slice(0, 7) === month);
+  const filterActive = !!(q || month || date);
+
+  if (!items.length) {
+    listEl.innerHTML = `<div style="text-align:center;color:var(--text-muted);font-size:12.5px;padding:12px 0">${filterActive ? '条件に一致する記録が見つかりませんでした' : '履歴はありません'}</div>`;
+    return;
+  }
+  listEl.innerHTML = items.map(it => {
     const label = it.status === 'settled' ? '精算済み' : '返却済み';
     const color = it.status === 'settled' ? 'var(--success)' : 'var(--text-muted)';
     const dateStr = it.date ? fmtDateJP(it.date) : '';
@@ -11236,6 +11344,33 @@ function renderPortalHistory(historyItems) {
       <span style="font-size:11px;font-weight:700;color:${color};flex-shrink:0">${label}</span>
     </div>`;
   }).join('');
+}
+
+// 検索・月・日付いずれかの入力欄が変わるたびに呼ばれる
+function filterPortalHistory() {
+  updatePortalHistoryFilterClearBtn();
+  renderPortalHistoryList();
+}
+
+function updatePortalHistoryFilterClearBtn() {
+  const btn = document.getElementById('portal-history-filter-clear');
+  if (!btn) return;
+  const q = document.getElementById('portal-history-search')?.value.trim() || '';
+  const month = document.getElementById('portal-history-month')?.value || '';
+  const date = document.getElementById('portal-history-date')?.value || '';
+  btn.style.display = (q || month || date) ? 'inline-block' : 'none';
+}
+
+// 「✕ 条件をクリア」から呼ばれる。3つの入力欄と絞り込み状態をすべて空に戻し、全件表示に戻す
+function clearPortalHistoryFilter() {
+  const qInput = document.getElementById('portal-history-search');
+  const monthInput = document.getElementById('portal-history-month');
+  const dateInput = document.getElementById('portal-history-date');
+  if (qInput) qInput.value = '';
+  if (monthInput) monthInput.value = '';
+  if (dateInput) dateInput.value = '';
+  updatePortalHistoryFilterClearBtn();
+  renderPortalHistoryList();
 }
 
 // 画面左端の「過去の履歴を見る」ショートカットから呼ばれる。履歴のアコーディオンが
