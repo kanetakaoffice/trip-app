@@ -1319,6 +1319,17 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     <button class="tab-switch-btn" id="wh-tab-consign" onclick="switchWhTab('consign')">📦 預かりリスト</button>
   </div>
 
+  <!-- 請求書（freee）作成済みへのまとめ：通常の納品書／精算分の納品書のどちらのタブで
+       チェックしても選択状態を保持し、両方のタブをまたいで1つの請求書にまとめられるように、
+       タブの外（画面共通）に置いている -->
+  <div id="freee-invoice-selectbar" style="display:none;align-items:center;justify-content:space-between;gap:10px;position:sticky;bottom:10px;z-index:50;margin:10px 0;padding:10px 12px;background:var(--text);color:#fff;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,0.25)">
+    <span id="freee-invoice-selectbar-count" style="font-size:12.5px;font-weight:700"></span>
+    <div style="display:flex;gap:8px;flex-shrink:0">
+      <button type="button" onclick="openFreeeInvoiceGroupModal()" style="padding:8px 12px;background:var(--gold);color:#1a1a1a;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">この内容で1つの請求書にまとめる</button>
+      <button type="button" onclick="clearFreeeInvoiceSelection()" style="padding:8px 10px;background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.5);border-radius:8px;font-size:12px;cursor:pointer;white-space:nowrap">選択解除</button>
+    </div>
+  </div>
+
   <div id="wh-body-deliv">
     <div class="card">
       <div class="card-title">納品書を作成</div>
@@ -1530,6 +1541,40 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       <div class="accordion-body" id="acc-body-wh-consign-invoices" style="margin-top:8px">
         <div id="wh-consign-invoices-list"></div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- 請求書（freee）としてまとめるモーダル：選択した納品書（通常／精算分を問わない）の一覧と
+     合計、任意のメモ（freeeの請求書番号など）を確認してから「請求書作成済み」としてまとめる -->
+<div id="freee-invoice-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.2);max-height:85vh;overflow-y:auto">
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">請求書としてまとめる</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">以下の納品書を、freeeで発行した1枚の請求書としてまとめて「請求書作成済み」にします</div>
+    <div id="freee-invoice-modal-list" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:0 10px;margin-bottom:8px"></div>
+    <div id="freee-invoice-modal-total" style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px"></div>
+    <div class="field">
+      <div class="field-label">メモ（freeeの請求書番号など・任意）</div>
+      <input type="text" id="freee-invoice-memo" placeholder="例：INV-00123">
+    </div>
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button onclick="confirmCreateFreeeInvoiceGroup()" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8d8d8,#a8a8a8);color:#1a1a1a;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">まとめる</button>
+      <button onclick="closeFreeeInvoiceGroupModal()" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- 請求書（freee）まとめの内訳モーダル：「✅ 請求書作成済み」バッジから開き、
+     どの納品書がまとめられているか確認したり、間違えてまとめた場合に解除できる -->
+<div id="freee-invoice-detail-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.2);max-height:85vh;overflow-y:auto">
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">請求書のまとめ内容</div>
+    <div id="freee-invoice-detail-memo" style="display:none;font-size:12px;color:var(--text-muted);margin-bottom:10px"></div>
+    <div id="freee-invoice-detail-list" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:0 10px;margin-bottom:8px"></div>
+    <div id="freee-invoice-detail-total" style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px"></div>
+    <div style="display:flex;gap:10px;margin-top:6px">
+      <button onclick="confirmUngroupFreeeInvoice()" style="flex:1;padding:13px;background:var(--white);color:var(--danger);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">まとめを解除する</button>
+      <button onclick="closeFreeeInvoiceGroupDetail()" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">閉じる</button>
     </div>
   </div>
 </div>
@@ -2052,6 +2097,10 @@ window._getStockMoves = () => stockMoves;
 
 // ── 在庫管理 ──
 let products = [], stockMoves = [], wholesaleClients = [], overseasClients = [];
+// 「請求書作成済み」のまとめ（freeeで実際に発行した請求書1枚に対応するグループ）。
+// 1グループ = { slipIds:[...], memo:'', createdAt } で、通常の納品書（slip_...）と
+// 精算分の納品書（cslip_...）を種類をまたいで自由に組み合わせられる。
+let freeeInvoiceGroups = [];
 // 取引先ポータル（預かりリストの精算・返却を取引先自身が連絡できるページ）から届いたリクエスト。
 // /consignRequests/{portalId}/{requestId} という2階層構造なので、_portalId・_key（requestId）を
 // それぞれ保持したフラットな配列にして扱う。
@@ -2590,13 +2639,14 @@ function showInvScreen(name) {
 
 async function loadInventory() {
   try {
-    const [p, m, c, oc, cs, cr] = await Promise.all([
+    const [p, m, c, oc, cs, cr, fig] = await Promise.all([
       fetch(authedUrl('/products.json')).then(r => r.json()),
       fetch(authedUrl('/stockMoves.json')).then(r => r.json()),
       fetch(authedUrl('/wholesaleClients.json')).then(r => r.json()),
       fetch(authedUrl('/overseasClients.json')).then(r => r.json()),
       fetch(authedUrl('/customSubcats.json')).then(r => r.json()),
-      fetch(authedUrl('/consignRequests.json')).then(r => r.json()).catch(() => null)
+      fetch(authedUrl('/consignRequests.json')).then(r => r.json()).catch(() => null),
+      fetch(authedUrl('/freeeInvoiceGroups.json')).then(r => r.json()).catch(() => null)
     ]);
     products   = objToArr(p);
     stockMoves = objToArr(m);
@@ -2604,6 +2654,7 @@ async function loadInventory() {
     overseasClients = objToArr(oc);
     customSubcats = cs || {};
     consignRequests = flattenConsignRequests(cr);
+    freeeInvoiceGroups = objToArr(fig);
     applyCustomSubcats();
     refreshOpenSubcatSelects();
     renderWhClientDatalist();
@@ -3875,6 +3926,7 @@ async function cancelDeliverySlip(slipId) {
   stockMoves = stockMoves.filter(m => !(m.slipId === slipId && m.type === 'out'));
   const salesRecs = (window._getSales?.() || []).filter(s => s.slipId === slipId);
   await Promise.all(salesRecs.map(s => window._fbRemoveSales(s._key)));
+  await removeSlipFromFreeeInvoiceGroups(slipId);
 }
 
 // 発行済みの納品書を取り消す（確認ダイアログ付き）。在庫と売上を元に戻す。
@@ -3937,6 +3989,173 @@ function updateWhDelivSubmitButtonLabel() {
   btn.textContent = _editingSlipId ? '💾 変更を保存する' : '発行する';
 }
 
+// ===== 請求書（freee）作成済みトラッキング =====
+// 要望：「納品書作成と預かりリストの精算分の納品書のところに、請求書を作成したらチェックを
+// つけれる項目が欲しい。請求書はfreeeで作成しているので、どの納品書を作成済みか分かるように
+// したい。また、複数の納品書をまとめて一枚の請求書にしたり、複数の納品書と預かりリストの
+// 納品書をまとめて一枚の請求書にすることもあるので、どれをまとめるかも分かりやすくして
+// 欲しい」への対応。
+//
+// 通常の納品書（slipId: 'slip_...'）と精算分の納品書（slipId: 'cslip_...'）のどちらも
+// slipIdはグローバルに一意なので、freeeInvoiceGroupsは種類を意識せずslipIdの配列を
+// 持つだけで、両方の一覧をまたいだ「まとめ」を表現できる。
+// { slipIds:[...], memo:'', createdAt } を1グループ＝freeeの請求書1枚として扱う。
+let _freeeInvoiceSelected = new Set();
+
+function findFreeeInvoiceGroupForSlip(slipId) {
+  return (freeeInvoiceGroups || []).find(g => (g.slipIds || []).includes(slipId)) || null;
+}
+
+// 指定slipIdの納品書（通常／精算分どちらでも）の概要を返す。まとめ作成時の確認画面や、
+// 既存グループの内訳表示で共通して使う。
+function freeeInvoiceSlipInfo(slipId) {
+  const moves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'out');
+  if (!moves.length) return null;
+  const first = moves[0];
+  const isConsignInvoice = first.channel === CONSIGN_INVOICE_CHANNEL;
+  return {
+    slipId,
+    client: first.client || '',
+    date: first.date || '',
+    total: moves.reduce((s, m) => s + (m.amount || 0), 0),
+    typeLabel: isConsignInvoice ? '精算分' : '納品書'
+  };
+}
+
+function toggleFreeeInvoiceSelect(slipId, checked) {
+  if (checked) _freeeInvoiceSelected.add(slipId);
+  else _freeeInvoiceSelected.delete(slipId);
+  updateFreeeInvoiceSelectBar();
+}
+
+function updateFreeeInvoiceSelectBar() {
+  const bar = document.getElementById('freee-invoice-selectbar');
+  if (!bar) return;
+  const n = _freeeInvoiceSelected.size;
+  if (!n) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  const countEl = document.getElementById('freee-invoice-selectbar-count');
+  if (countEl) countEl.textContent = `${n}件の納品書を選択中`;
+}
+
+function clearFreeeInvoiceSelection() {
+  _freeeInvoiceSelected.clear();
+  renderWhDelivHistory();
+  renderConsignInvoicesList();
+  updateFreeeInvoiceSelectBar();
+}
+
+function freeeInvoiceGroupSummaryHtml(slipId) {
+  const group = findFreeeInvoiceGroupForSlip(slipId);
+  const checked = _freeeInvoiceSelected.has(slipId);
+  if (group) {
+    const othersCount = (group.slipIds || []).length - 1;
+    return `<button type="button" onclick="event.stopPropagation();showFreeeInvoiceGroupDetail('${group._key}')" style="display:inline-flex;align-items:center;gap:4px;padding:4px 9px;background:#e8f5e9;color:var(--success);border:1px solid #b6dfc0;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer">✅ 請求書作成済み${othersCount > 0 ? `（他${othersCount}件とまとめ）` : ''}</button>`;
+  }
+  return `<label style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;color:var(--text-muted);cursor:pointer" onclick="event.stopPropagation()">
+    <input type="checkbox" onclick="event.stopPropagation()" onchange="toggleFreeeInvoiceSelect('${slipId}', this.checked)" ${checked ? 'checked' : ''} style="width:15px;height:15px;flex-shrink:0">請求書作成済みにする
+  </label>`;
+}
+
+function openFreeeInvoiceGroupModal() {
+  if (!_freeeInvoiceSelected.size) return;
+  const items = Array.from(_freeeInvoiceSelected).map(freeeInvoiceSlipInfo).filter(Boolean);
+  const total = items.reduce((s, it) => s + it.total, 0);
+  const listEl = document.getElementById('freee-invoice-modal-list');
+  if (listEl) {
+    listEl.innerHTML = items.map(it => `
+      <div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12.5px">
+        <span style="color:var(--text-muted)">［${it.typeLabel}］</span>${escapeHtmlMain(it.client)}／${fmtDateJP(it.date)}／¥${it.total.toLocaleString('ja-JP')}
+      </div>`).join('');
+  }
+  const totalEl = document.getElementById('freee-invoice-modal-total');
+  if (totalEl) totalEl.textContent = `合計 ¥${total.toLocaleString('ja-JP')}（${items.length}件）`;
+  const memoInput = document.getElementById('freee-invoice-memo');
+  if (memoInput) memoInput.value = '';
+  const modal = document.getElementById('freee-invoice-modal');
+  if (modal) modal.style.display = 'flex';
+}
+function closeFreeeInvoiceGroupModal() {
+  const modal = document.getElementById('freee-invoice-modal');
+  if (modal) modal.style.display = 'none';
+}
+async function confirmCreateFreeeInvoiceGroup() {
+  const slipIds = Array.from(_freeeInvoiceSelected);
+  if (!slipIds.length) return;
+  const memo = (document.getElementById('freee-invoice-memo')?.value || '').trim();
+  try {
+    await fetch(authedUrl('/freeeInvoiceGroups.json'), { method: 'POST', body: JSON.stringify({ slipIds, memo, createdAt: Date.now() }) });
+    _freeeInvoiceSelected.clear();
+    closeFreeeInvoiceGroupModal();
+    await loadInventory();
+    renderWhDelivHistory();
+    renderConsignInvoicesList();
+    updateFreeeInvoiceSelectBar();
+    showToast('請求書としてまとめました');
+  } catch (e) { showToast('保存に失敗しました'); console.error(e); }
+}
+
+function showFreeeInvoiceGroupDetail(groupKey) {
+  const group = (freeeInvoiceGroups || []).find(g => g._key === groupKey);
+  if (!group) return;
+  const items = (group.slipIds || []).map(freeeInvoiceSlipInfo).filter(Boolean);
+  const total = items.reduce((s, it) => s + it.total, 0);
+  const listEl = document.getElementById('freee-invoice-detail-list');
+  if (listEl) {
+    listEl.innerHTML = items.length ? items.map(it => `
+      <div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12.5px">
+        <span style="color:var(--text-muted)">［${it.typeLabel}］</span>${escapeHtmlMain(it.client)}／${fmtDateJP(it.date)}／¥${it.total.toLocaleString('ja-JP')}
+      </div>`).join('') : `<div style="font-size:12px;color:var(--text-muted)">対象の納品書が見つかりませんでした</div>`;
+  }
+  const totalEl = document.getElementById('freee-invoice-detail-total');
+  if (totalEl) totalEl.textContent = `合計 ¥${total.toLocaleString('ja-JP')}（${items.length}件）`;
+  const memoEl = document.getElementById('freee-invoice-detail-memo');
+  if (memoEl) {
+    memoEl.textContent = group.memo ? `メモ：${group.memo}` : '';
+    memoEl.style.display = group.memo ? 'block' : 'none';
+  }
+  const modal = document.getElementById('freee-invoice-detail-modal');
+  if (modal) { modal.dataset.groupKey = groupKey; modal.style.display = 'flex'; }
+}
+function closeFreeeInvoiceGroupDetail() {
+  const modal = document.getElementById('freee-invoice-detail-modal');
+  if (modal) modal.style.display = 'none';
+}
+function confirmUngroupFreeeInvoice() {
+  const modal = document.getElementById('freee-invoice-detail-modal');
+  const groupKey = modal && modal.dataset.groupKey;
+  if (!groupKey) return;
+  showConfirm('この請求書のまとめを解除しますか？（納品書自体は削除されません。「請求書作成済み」の印だけが外れます）').then(async ok => {
+    if (!ok) return;
+    try {
+      await fetch(authedUrl('/freeeInvoiceGroups/' + groupKey + '.json'), { method: 'DELETE' });
+      closeFreeeInvoiceGroupDetail();
+      await loadInventory();
+      renderWhDelivHistory();
+      renderConsignInvoicesList();
+      showToast('請求書のまとめを解除しました');
+    } catch (e) { showToast('解除に失敗しました'); console.error(e); }
+  });
+}
+
+// 納品書（通常／精算分）そのものが取り消された場合に、請求書グループに存在しないslipIdの
+// 参照が残らないようにする（「請求書作成済み」の印が、実在しない納品書を指したまま残る
+// ことを防ぐ）。グループの残りslipIdが0件になった場合は、グループ自体を削除する。
+async function removeSlipFromFreeeInvoiceGroups(slipId) {
+  const group = findFreeeInvoiceGroupForSlip(slipId);
+  if (!group) return;
+  const remaining = (group.slipIds || []).filter(id => id !== slipId);
+  try {
+    if (remaining.length) {
+      await fetch(authedUrl('/freeeInvoiceGroups/' + group._key + '/slipIds.json'), { method: 'PUT', body: JSON.stringify(remaining) });
+      group.slipIds = remaining;
+    } else {
+      await fetch(authedUrl('/freeeInvoiceGroups/' + group._key + '.json'), { method: 'DELETE' });
+      freeeInvoiceGroups = freeeInvoiceGroups.filter(g => g._key !== group._key);
+    }
+  } catch (e) { console.error('freeeInvoiceGroup cleanup failed', e); }
+}
+
 // 発行済みの納品書一覧（slipIdごとにまとめて表示。編集・取消ができる）
 function renderWhDelivHistory() {
   const listEl = document.getElementById('wh-deliv-history-list');
@@ -3967,16 +4186,23 @@ function renderWhDelivHistory() {
 
   if (!slips.length) {
     listEl.innerHTML = `<div style="font-size:12px;color:var(--text-muted)">まだ発行した納品書はありません</div>`;
+    updateFreeeInvoiceSelectBar();
     return;
   }
   // 「内容を見る」ボタンは廃止し、取引先名・日付・件名の行自体をタップすると内容（プレビュー）が
   // 開くようにした。編集する・取り消すは、プレビュー内に共有ボタンと同じ並びのアイコンボタンとして
   // 用意している（updateDsPreviewActionButtons／previewEditDeliverySlip／previewCancelDeliverySlip）。
+  // 請求書作成済みのチェック・まとめ表示（footer部分）は、チェックボックス／バッジ側の
+  // onclickでevent.stopPropagation()しているため、行タップ（プレビューを開く）とは干渉しない。
   listEl.innerHTML = slips.map(s => `
     <div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;cursor:pointer" onclick="showDeliverySlipPreview('${s.slipId}')">
-      <div style="color:var(--text);font-weight:600">${s.client || ''}／${fmtDateJP(s.date)}${s.subject ? '／' + s.subject : ''}</div>
-      <div style="color:var(--text-muted);font-size:11px;margin-top:2px">数量合計 ${s.itemQty}個／合計 ¥${s.total.toLocaleString('ja-JP')}</div>
+      <div>
+        <div style="color:var(--text);font-weight:600">${s.client || ''}／${fmtDateJP(s.date)}${s.subject ? '／' + s.subject : ''}</div>
+        <div style="color:var(--text-muted);font-size:11px;margin-top:2px">数量合計 ${s.itemQty}個／合計 ¥${s.total.toLocaleString('ja-JP')}</div>
+      </div>
+      <div style="margin-top:6px">${freeeInvoiceGroupSummaryHtml(s.slipId)}</div>
     </div>`).join('');
+  updateFreeeInvoiceSelectBar();
 }
 
 // プレビューを見ながら、ブラウザの印刷機能でPDFの保存・共有まで行う（納品書のPDF保存・共有はこちらに一本化した）。
@@ -4660,17 +4886,20 @@ function renderConsignInvoicesList() {
 
   if (!slips.length) {
     listEl.innerHTML = `<div style="font-size:12px;color:var(--text-muted)">まだ精算分の納品書はありません</div>`;
+    updateFreeeInvoiceSelectBar();
     return;
   }
   listEl.innerHTML = slips.map(s => `
     <div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:13px">
       <div style="color:var(--text);font-weight:600">${escapeHtmlMain(s.client || '')}／${fmtDateJP(s.date)}</div>
       <div style="color:var(--text-muted);font-size:11px;margin-top:2px">数量合計 ${s.itemQty}個／合計 ¥${s.total.toLocaleString('ja-JP')}</div>
+      <div style="margin-top:6px">${freeeInvoiceGroupSummaryHtml(s.slipId)}</div>
       <div style="display:flex;gap:8px;margin-top:8px">
         <button onclick="showDeliverySlipPreview('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">📄 内容を見る</button>
         <button onclick="confirmCancelConsignInvoiceSlip('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--danger);cursor:pointer">取り消す</button>
       </div>
     </div>`).join('');
+  updateFreeeInvoiceSelectBar();
 }
 
 // 「精算・返却済みの履歴」内でチェックした精算済み商品（まだ請求書化していないもの）から、
@@ -4777,6 +5006,7 @@ async function cancelConsignInvoiceSlip(slipId) {
 
   await Promise.all(moves.map(m => fetch(authedUrl('/stockMoves/' + m._key + '.json'), { method: 'DELETE' })));
   stockMoves = stockMoves.filter(m => !(m.slipId === slipId && m.type === 'out' && m.channel === CONSIGN_INVOICE_CHANNEL));
+  await removeSlipFromFreeeInvoiceGroups(slipId);
 }
 
 // 取引先ポータルから届いた精算・返却リクエストの一覧表示。承認は既存の精算・返却の
