@@ -11136,7 +11136,32 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+// 携帯の見切れ修正など、ファイルを更新してもホーム画面に追加したアプリ側に反映されない
+// （Service Workerが古い内容をキャッシュしたまま返し続けてしまう）ケースへの対応。
+// 新しいService Workerが見つかったらすぐに有効化を待たずに引き継がせ（skipWaiting相当は
+// sw.js側の対応が必要だが、こちら側でも）、実際に制御が新しいものに切り替わったタイミングで
+// 一度だけ自動的に再読み込みして、最新のHTML・CSSが確実に反映されるようにする。
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    // このページを開くたびに、新しいsw.js・キャッシュがないか確認しにいく
+    reg.update().catch(()=>{});
+    reg.addEventListener('updatefound', () => {
+      const newWorker = reg.installing;
+      if (!newWorker) return;
+      newWorker.addEventListener('statechange', () => {
+        if (newWorker.state === 'activated' && navigator.serviceWorker.controller) {
+          window.location.reload();
+        }
+      });
+    });
+  }).catch(()=>{});
+  let _swControllerRefreshed = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (_swControllerRefreshed) return;
+    _swControllerRefreshed = true;
+    window.location.reload();
+  });
+}
 
 // スマホでは画面を下に引く（プルダウン）ことで更新できるが、パソコンではその操作ができないため、
 // 同じ更新処理（doRefresh）をヘッダーの更新ボタン（manualRefresh、PCではクリックで使う）からも
