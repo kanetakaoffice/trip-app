@@ -60,9 +60,19 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Hira
 .header-sub { font-size: 11px; color: #707070; margin-top: 1px; }
 .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; display: inline-block; margin-left: 5px; }
 .sync-dot.offline { background: #f87171; }
-.manual-refresh-btn { flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.15); background: rgba(255,255,255,0.55); color: #3a3a3a; font-size: 15px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
+/* 要望：「携帯の画面の上部に更新できるようにクルクルのアクションを追加したので『株式会社KANETAKA』
+   の文字が2段になってしまっている。携帯の更新方法は下に引っ張る仕様にしたい」への対応。
+   このボタンはもともとパソコン操作用（マウスでは下に引っ張るジェスチャーができないため）に
+   追加したもので、スマホでは元々ある下に引っ張って更新する機能（ptr-indicator）がそのまま使える。
+   スマホの画面幅ではこのボタン自体を非表示にし、ヘッダーの横幅を「株式会社KANETAKA」の表示に
+   使えるようにする（PC幅では従来通り表示する）。 */
+.manual-refresh-btn { display: none; flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.15); background: rgba(255,255,255,0.55); color: #3a3a3a; font-size: 15px; line-height: 1; cursor: pointer; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
 .manual-refresh-btn:active { background: rgba(255,255,255,0.85); }
 .manual-refresh-btn.refresh-spinning { animation: spin 0.8s linear infinite; }
+@media (min-width: 860px) {
+  /* PC幅では従来通りボタンを表示する（マウス操作では下に引っ張るジェスチャーができないため） */
+  .manual-refresh-btn { display: flex; }
+}
 .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 100; background: linear-gradient(135deg, #b0b0b0, #a0a0a0); border-top: 2px solid #c8c8c8; display: flex; padding-bottom: env(safe-area-inset-bottom, 0); box-shadow: 0 -2px 12px rgba(0,0,0,0.12); }
 .nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 8px 0 6px; background: none; border: none; cursor: pointer; color: #4a4a4a; font-size: 9px; font-weight: 500; -webkit-tap-highlight-color: transparent; }
 .nav-btn.active { color: #f0f0f0; }
