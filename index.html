@@ -255,7 +255,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
   #portal-history-nav button { writing-mode:horizontal-tb; width:100%; border-left:1.2px solid var(--gold-dark); border-radius:10px; padding:11px 10px; text-align:left; box-shadow:0 2px 8px rgba(0,0,0,0.12); }
 }
 </style>
-<div id="portal-screen" style="display:none;position:fixed;inset:0;z-index:550;background:var(--bg,#f6f5f2);overflow-y:auto;padding:24px 16px 40px" onscroll="updatePortalHistoryNavLabel()">
+<div id="portal-screen" style="display:none;position:fixed;inset:0;z-index:550;background:var(--bg,#f6f5f2);overflow-y:auto;padding:max(24px,env(safe-area-inset-top)) 16px max(40px,env(safe-area-inset-bottom))" onscroll="updatePortalHistoryNavLabel()">
   <div id="portal-history-nav">
     <button type="button" onclick="portalHistoryNavClick()">📋 過去の履歴を見る</button>
   </div>
@@ -339,7 +339,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 </div>
 
 <!-- パスワードリセットモーダル -->
-<div id="reset-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;padding:24px">
+<div id="reset-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;padding:max(24px,env(safe-area-inset-top)) 24px max(24px,env(safe-area-inset-bottom)) 24px">
   <div style="background:var(--white);border-radius:20px;padding:32px 28px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:6px">パスワードリセット</div>
     <div style="font-size:13px;color:var(--text-sub);margin-bottom:20px">登録済みのメールアドレスにリセット用リンクを送信します</div>
@@ -1116,7 +1116,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
   </div>
 </div>
 
-<div id="inv-cal-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:16px">
+<div id="inv-cal-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom)) 16px">
   <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <div style="font-size:15px;font-weight:700;color:var(--text)">入出庫カレンダー</div>
@@ -1141,7 +1141,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 </div>
 
 <!-- 出庫だけを印刷 -->
-<div id="inv-outprint-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:16px">
+<div id="inv-outprint-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom)) 16px">
   <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:380px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <div style="font-size:15px;font-weight:700;color:var(--text)">出庫記録の印刷</div>
@@ -1312,11 +1312,11 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
   </div>
 </div>
 
-<!-- 卸売管理（納品書作成・預かりリスト） -->
+<!-- 卸売管理（納品書作成・委託リスト） -->
 <div id="screen-inv-wholesale" class="screen" style="display:none;padding-top:8px">
   <div class="tab-switch" style="margin-bottom:12px">
     <button class="tab-switch-btn active" id="wh-tab-deliv" onclick="switchWhTab('deliv')">📝 納品書作成</button>
-    <button class="tab-switch-btn" id="wh-tab-consign" onclick="switchWhTab('consign')">📦 預かりリスト</button>
+    <button class="tab-switch-btn" id="wh-tab-consign" onclick="switchWhTab('consign')">📦 委託リスト</button>
   </div>
 
   <!-- 請求書（freee）作成済みへのまとめ：通常の納品書／精算分の納品書のどちらのタブで
@@ -1547,7 +1547,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 
 <!-- 請求書（freee）としてまとめるモーダル：選択した納品書（通常／精算分を問わない）の一覧と
      合計、任意のメモ（freeeの請求書番号など）を確認してから「請求書作成済み」としてまとめる -->
-<div id="freee-invoice-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:16px">
+<div id="freee-invoice-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom)) 16px">
   <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.2);max-height:85vh;overflow-y:auto">
     <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">請求書としてまとめる</div>
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">以下の納品書を、freeeで発行した1枚の請求書としてまとめて「請求書作成済み」にします</div>
@@ -1566,7 +1566,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 
 <!-- 請求書（freee）まとめの内訳モーダル：「✅ 請求書作成済み」バッジから開き、
      どの納品書がまとめられているか確認したり、間違えてまとめた場合に解除できる -->
-<div id="freee-invoice-detail-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:16px">
+<div id="freee-invoice-detail-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom)) 16px">
   <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.2);max-height:85vh;overflow-y:auto">
     <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">請求書のまとめ内容</div>
     <div id="freee-invoice-detail-memo" style="display:none;font-size:12px;color:var(--text-muted);margin-bottom:10px"></div>
@@ -1580,7 +1580,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 </div>
 
 <!-- 預かり商品の精算モーダル -->
-<div id="wh-settle-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:16px">
+<div id="wh-settle-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom)) 16px">
   <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:340px;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">精算（売れた）</div>
     <div id="wh-settle-desc" style="font-size:12px;color:var(--text-muted);margin-bottom:14px"></div>
@@ -1607,7 +1607,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 </div>
 
 <!-- 預かり商品の編集モーダル（数量の変更に加えて、納品書作成と同じ感覚で別の商品もその場で追加できる） -->
-<div id="wh-consign-edit-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:16px">
+<div id="wh-consign-edit-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom)) 16px">
   <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:400px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">預かりを編集</div>
     <div id="wh-consign-edit-desc" style="font-size:12px;color:var(--text-muted);margin-bottom:14px"></div>
@@ -1636,7 +1636,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 
 <!-- EC売上：日別グラフの下の日付をタップすると開く、その日の売上を編集するモーダル。
      Amazon側の数字が後から変わっていた、といったケースにその場で気づいて直せるようにする -->
-<div id="ec-day-edit-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:16px">
+<div id="ec-day-edit-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom)) 16px">
   <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px" id="ec-day-edit-title">売上を編集</div>
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">金額の修正や、間違って登録した売上の削除ができます</div>
@@ -1670,7 +1670,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 </div>
 
 <!-- 実際にPDF・印刷される見た目そのままの印刷プレビュー（納品書作成の「内容を見る」「PDF保存」から表示） -->
-<div id="wh-deliv-preview-modal" style="display:none;position:fixed;inset:0;z-index:610;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;padding:16px">
+<div id="wh-deliv-preview-modal" style="display:none;position:fixed;inset:0;z-index:610;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom)) 16px">
   <div style="background:var(--white);border-radius:16px;padding:16px;width:100%;max-width:900px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-shrink:0">
       <div style="font-size:15px;font-weight:700;color:var(--text)">印刷プレビュー</div>
@@ -1701,12 +1701,12 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
   </div>
 </div>
 
-<!-- 預かりリストの「内容を見る」プレビュー。取引先に何を預けているかまとめて確認・共有できるよう、
+<!-- 委託リストの「内容を見る」プレビュー。取引先に何を預けているかまとめて確認・共有できるよう、
      納品書のプレビュー・共有と同じ見た目・仕組み（PDF直接共有＋失敗時は印刷にフォールバック）を使う。
      さらに、取引先自身が「精算した・返却した」を自社に連絡できるよう、取引先が開いて操作できる
      単独のHTMLページ（自社のデータベースには直接書き込まない・自社側で内容を承認してから
      実際の精算・返却を反映する）を作成して共有するボタンも用意する -->
-<div id="wh-consign-preview-modal" style="display:none;position:fixed;inset:0;z-index:610;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;padding:16px">
+<div id="wh-consign-preview-modal" style="display:none;position:fixed;inset:0;z-index:610;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom)) 16px">
   <div style="background:var(--white);border-radius:16px;padding:16px;width:100%;max-width:900px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-shrink:0">
       <div style="font-size:15px;font-weight:700;color:var(--text)">預り明細プレビュー</div>
@@ -1835,7 +1835,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 <!-- z-indexは他のどのモーダル（プレビュー610・カテゴリ追加650など）よりも高くしてある。
      showConfirm()は納品書プレビューを開いたまま「取り消す」を確認する場合など、他のモーダルが
      すでに表示された状態で呼ばれることがあるため、常に一番手前に表示される必要がある -->
-<div id="confirm-modal" style="display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:24px">
+<div id="confirm-modal" style="display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:max(24px,env(safe-area-inset-top)) 24px max(24px,env(safe-area-inset-bottom)) 24px">
   <div style="background:var(--white);border-radius:16px;padding:24px;width:100%;max-width:320px;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div id="confirm-msg" style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:20px;text-align:center"></div>
     <div style="display:flex;gap:10px">
@@ -1846,7 +1846,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 </div>
 <!-- 取引先ポータルの「まとめて精算」送信前の確認モーダル。誤送信を防ぐため、どの商品を
      どれだけ・いくらで精算しようとしているかを一覧で見せてから、実際の送信ボタンを押してもらう -->
-<div id="portal-batch-confirm-modal" style="display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:24px">
+<div id="portal-batch-confirm-modal" style="display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:max(24px,env(safe-area-inset-top)) 24px max(24px,env(safe-area-inset-bottom)) 24px">
   <div style="background:var(--white);border-radius:16px;padding:22px;width:100%;max-width:360px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px">精算内容の確認</div>
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">以下の内容で店舗に精算のご連絡を送信します</div>
@@ -1858,7 +1858,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     </div>
   </div>
 </div>
-<div id="add-subcat-modal" style="display:none;position:fixed;inset:0;z-index:650;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:24px">
+<div id="add-subcat-modal" style="display:none;position:fixed;inset:0;z-index:650;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:max(24px,env(safe-area-inset-top)) 24px max(24px,env(safe-area-inset-bottom)) 24px">
   <div style="background:var(--white);border-radius:16px;padding:24px;width:100%;max-width:320px;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px">新しいサブカテゴリーを追加</div>
     <div id="add-subcat-cat-label" style="font-size:12px;color:var(--text-muted);margin-bottom:14px"></div>
@@ -1875,7 +1875,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     </div>
   </div>
 </div>
-<div id="pack-edit-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:16px">
+<div id="pack-edit-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom)) 16px">
   <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:16px">梱包リストを編集</div>
     <input type="hidden" id="pack-edit-key">
@@ -1914,7 +1914,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     </div>
   </div>
 </div>
-<div id="product-edit-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:16px">
+<div id="product-edit-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom)) 16px">
   <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:16px">商品を編集</div>
     <input type="hidden" id="prod-edit-key">
@@ -1961,7 +1961,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     </div>
   </div>
 </div>
-<div id="stocktake-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:16px">
+<div id="stocktake-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom)) 16px">
   <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">棚卸（実地在庫の確認）</div>
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">実際に数えた在庫数を入力してください。システム上の在庫数と異なる商品だけが対象になります。</div>
@@ -2101,7 +2101,7 @@ let products = [], stockMoves = [], wholesaleClients = [], overseasClients = [];
 // 1グループ = { slipIds:[...], memo:'', createdAt } で、通常の納品書（slip_...）と
 // 精算分の納品書（cslip_...）を種類をまたいで自由に組み合わせられる。
 let freeeInvoiceGroups = [];
-// 取引先ポータル（預かりリストの精算・返却を取引先自身が連絡できるページ）から届いたリクエスト。
+// 取引先ポータル（委託リストの精算・返却を取引先自身が連絡できるページ）から届いたリクエスト。
 // /consignRequests/{portalId}/{requestId} という2階層構造なので、_portalId・_key（requestId）を
 // それぞれ保持したフラットな配列にして扱う。
 let consignRequests = [];
@@ -2135,7 +2135,7 @@ function updateConsignNavBadge(pendingCount) {
   });
 }
 
-// 卸売管理の預かりリスト（精算・返却タブ）を開いたときに、その時点の件数を「既読」として記録する
+// 卸売管理の委託リスト（精算・返却タブ）を開いたときに、その時点の件数を「既読」として記録する
 function markConsignRequestsSeen() {
   const pendingCount = (consignRequests || []).filter(r => r.status === 'pending').length;
   _lastSeenConsignCount = pendingCount;
@@ -2181,7 +2181,7 @@ async function requestConsignNotifyPermission() {
 function updateConsignNotifyPromptVisibility() {
   const supported = 'Notification' in window;
   const show = supported && Notification.permission === 'default';
-  // 卸売管理（預かりリスト）側とホーム画面側、どちらの案内バナーも同じブラウザ通知許可を
+  // 卸売管理（委託リスト）側とホーム画面側、どちらの案内バナーも同じブラウザ通知許可を
   // 使うため、まとめて表示・非表示を切り替える
   ['wh-consign-notify-prompt', 'home-notify-prompt'].forEach(id => {
     const el = document.getElementById(id);
@@ -2290,7 +2290,7 @@ function escapeHtmlMain(s) {
 }
 // 預かり品（stockMovesのtype:'consign'レコード）の型番を求める共通ヘルパー。
 // レコード自身にmodelが記録されていればそれを使い、無ければ商品マスタ（products）から
-// 型番を引き、それも無ければ最後の手段として商品名で代用する（預かりリスト・履歴・
+// 型番を引き、それも無ければ最後の手段として商品名で代用する（委託リスト・履歴・
 // 取引先ポータルへのスナップショット送信のすべてで同じ優先順位を使う）。
 function consignItemModel(m) {
   return (m && m.model) || (products.find(p => p._key === (m && m.productKey)) || {}).model || (m && m.productName) || '';
@@ -2340,7 +2340,7 @@ function splitQtyAcrossMoveKeys(moveKeys, requestedQty) {
 // 型番の検索・一致判定を、大文字小文字やハイフン・スペース・スラッシュ・カッコの有無に
 // 左右されないようにするための正規化。英数字だけを取り出して小文字化する。
 // 例：「55Z875R」と「55z875r」、「RA-B100」と「RAB100」、「FDR-AX45A(B)」と「FDR AX45A B」は
-// すべて同じ型番として扱う（商品登録・入出庫・在庫一覧・納品書作成・預かりリストの型番検索で共通利用）
+// すべて同じ型番として扱う（商品登録・入出庫・在庫一覧・納品書作成・委託リストの型番検索で共通利用）
 function normalizeModelStr(s) {
   return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
@@ -2568,7 +2568,7 @@ function switchMode(mode) {
 }
 
 function showInvScreen(name) {
-  // 卸売管理（納品書作成・預かりリスト）は管理者専用。倉庫作業員は入出庫・出荷管理・在庫一覧のみ担当するため、
+  // 卸売管理（納品書作成・委託リスト）は管理者専用。倉庫作業員は入出庫・出荷管理・在庫一覧のみ担当するため、
   // ナビボタンを隠していても直接呼び出された場合に備えて念のためここでもブロックしておく
   if (name === 'inv-wholesale' && !isAdmin()) {
     showToast('この機能は管理者のみ利用できます');
@@ -2716,7 +2716,7 @@ function handleClientOtherInput(prefix) {
   hidden.value = otherInput ? otherInput.value : '';
   if (prefix === 'wh-deliv') saveWhDelivDraftDebounced();
 }
-// 卸売管理（納品書作成・預かりリスト）両方の取引先選択UIをまとめて更新する
+// 卸売管理（納品書作成・委託リスト）両方の取引先選択UIをまとめて更新する
 function renderWhClientDatalist() {
   renderClientSelectUI('wh-deliv');
   renderClientSelectUI('wh-consign');
@@ -2800,7 +2800,7 @@ async function ensureOverseasClient(name) {
   } catch(e) { console.error('overseas client add error', e); }
 }
 
-// ── 卸売管理（納品書作成・預かりリスト） ──
+// ── 卸売管理（納品書作成・委託リスト） ──
 let _whDelivItems = [];
 let _editingSlipId = null; // 発行済みの納品書を編集中の場合、そのslipIdが入る（新規作成時はnull）
 let _whDelivItemUidSeq = 1; // 明細行を一意に識別するID（配列の並びが変わっても「傷・潰れ分割」の元行を追跡できるようにする）
@@ -3135,6 +3135,26 @@ function removeWhDelivItem(idx) {
   saveWhDelivDraft();
 }
 
+// 要望：「納品書作成のところで、型番を入力したら商品が表示され、数量と金額を入力できるが、
+// そこに委託リストへ追加するボタンを追加できないか」への対応。
+// 当初は押した時点でこの納品書の明細から取り除いて即座に委託（holding）として登録していたが、
+// 「納品書の明細から消さず、その行に『委託』の印を付けて残したい（実際に発行・印刷される
+// 納品書にもそのまま反映してほしい）」という要望を受け、押しても明細からは消さず、その行に
+// _consignMarkedの印だけを付ける（在庫やサーバーへの登録はまだ行わない）方式に変更した。
+// 実際の委託登録・在庫減算は、他の商品と同じく納品書を発行する（submitWhDeliverySlip）タイミングで
+// まとめて行う。もう一度押すと印を解除できる（トグル式）。
+// ※「委託リスト」という名称・「委託」の表記は、要望「委託リストの名前を委託リストに変更してほしい／
+// 単価の欄の『委託』は委託にしてほしい」への対応で統一した（内部の変数名・関数名
+// （_consignMarked・moveWhDelivItemToConsignなど）は変更していない）。
+function moveWhDelivItemToConsign(idx) {
+  const it = _whDelivItems[idx];
+  if (!it) return;
+  it._consignMarked = !it._consignMarked;
+  renderWhDelivItems();
+  saveWhDelivDraft();
+  showToast(it._consignMarked ? `「${it.name || ''}」に委託の印を付けました` : '委託の印を解除しました');
+}
+
 // 追加した商品の並び順を入れ替える（▲▼ボタン）。納品書に印字される順番はこの配列の順になるため、
 // 見せたい順（まとめて並べたい商品同士を隣接させるなど）に自由に並べ替えられるようにする
 function moveWhDelivItem(idx, dir) {
@@ -3186,7 +3206,8 @@ function updateWhDelivTotalDisplay() {
   const totalEl = document.getElementById('wh-deliv-total');
   if (!totalEl) return;
   if (!_whDelivItems.length) { totalEl.style.display = 'none'; return; }
-  const total = _whDelivItems.reduce((s,it) => s + it.amount, 0);
+  // 委託の印が付いた行は単価が未確定（精算時に別途決める）ため、合計金額には含めない
+  const total = _whDelivItems.reduce((s,it) => s + (it._consignMarked ? 0 : it.amount), 0);
   const totalQty = _whDelivItems.reduce((s,it) => s + (it.qty || 0), 0);
   totalEl.style.display = 'flex';
   totalEl.innerHTML = `<span>合計（${totalQty}個）</span><span>¥${total.toLocaleString('ja-JP')}</span>`;
@@ -3268,6 +3289,16 @@ function renderWhDelivItems() {
         </div>
         <button onclick="removeWhDelivItem(${idx})" style="background:none;border:none;color:var(--danger);font-size:16px;cursor:pointer;padding:0 4px;flex-shrink:0">✕</button>
       </div>
+      ${it._consignMarked ? `
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="flex:1">
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">数量</div>
+          <input type="number" min="1" value="${it.qty}" oninput="updateWhItemField(${idx},'qty',this.value)" style="width:100%;padding:6px 8px;font-size:13px;border:1.5px solid var(--border);border-radius:6px">
+        </div>
+        <div style="flex:2;text-align:center">
+          <span style="display:inline-block;padding:6px 12px;font-size:12px;font-weight:700;color:var(--teal);background:var(--teal-bg);border-radius:20px">📦 委託</span>
+        </div>
+      </div>` : `
       <div style="display:flex;gap:8px;align-items:flex-end">
         <div style="flex:1">
           <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">数量</div>
@@ -3281,9 +3312,14 @@ function renderWhDelivItems() {
           <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">金額</div>
           <div id="wh-item-amount-${idx}" style="font-weight:700;color:var(--text);padding:6px 0">¥${it.amount.toLocaleString('ja-JP')}</div>
         </div>
+      </div>`}
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px">
+        ${(!it._consignMarked && it.qty > 1) ? `<button onclick="splitWhDelivItem(${idx})" style="background:none;border:none;color:var(--text-muted);font-size:11px;text-decoration:underline;cursor:pointer;padding:0">傷・潰れなどで1個だけ単価を変える</button>` : ''}
+        ${it._consignMarked
+          ? `<button onclick="moveWhDelivItemToConsign(${idx})" style="background:none;border:none;color:var(--text-muted);font-size:11px;text-decoration:underline;cursor:pointer;padding:0">↩︎ 委託の印を解除</button>`
+          : `<button onclick="moveWhDelivItemToConsign(${idx})" style="background:none;border:none;color:var(--text-muted);font-size:11px;text-decoration:underline;cursor:pointer;padding:0">📦 委託リストへ追加</button>`}
       </div>
-      ${it.qty > 1 ? `<button onclick="splitWhDelivItem(${idx})" style="margin-top:6px;background:none;border:none;color:var(--text-muted);font-size:11px;text-decoration:underline;cursor:pointer;padding:0">傷・潰れなどで1個だけ単価を変える</button>` : ''}
-      ${it._splitFrom != null ? whItemDamageSectionHtml(it, idx) : ''}
+      ${(!it._consignMarked && it._splitFrom != null) ? whItemDamageSectionHtml(it, idx) : ''}
     </div>`).join('');
   updateWhDelivTotalDisplay();
 }
@@ -3348,6 +3384,30 @@ function clearWhItemDamagePhoto(idx) {
   saveWhDelivDraft();
 }
 
+// 指定slipIdに属する明細を、_whDelivItemsへ戻せる形に変換して返す共通処理。
+// 通常のtype:'out'出庫記録に加え、「委託」の印を付けたまま発行した行
+// （type:'consign', status:'holding'のstockMoveで、同じslipIdが埋め込まれているもの）も
+// 対象に含める。ただし、その後すでに精算・返却されて status が 'holding' でなくなった行は、
+// もう下書きとして編集し直せる状態ではなくなった（他の操作で確定済みの実績になった）と考え、
+// 対象から除外する（＝編集画面には出てこないが、発行済み納品書の印刷内容にはそのまま残り続ける。
+// buildDeliverySlipDataFromSlipIdはstatusを問わずslipId一致で拾うため、印刷側には影響しない）。
+// editDeliverySlip（編集モードで読み込む）と、submitWhDeliverySlipの自動マージ（同じ取引先・
+// 日付・件名の納品書に追記する場合）の両方から使う。
+function deliverySlipMovesToItems(slipId) {
+  const outMoves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'out');
+  const consignMoves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'consign' && m.status === 'holding');
+  const moves = outMoves.concat(consignMoves).sort(compareDeliverySlipItemOrder);
+  return moves.map(m => ({
+    productKey: m.productKey, jan: m.jan, name: m.productName,
+    model: m.model || (products.find(p => p._key === m.productKey) || {}).model || '',
+    qty: m.qty, unitPrice: m.unitPrice || 0, amount: m.amount || 0,
+    damageMode: m.damageDetail ? 'detail' : (m.damagePhoto ? 'photo' : null),
+    damageDetail: m.damageDetail || '', damagePhoto: m.damagePhoto || '',
+    _consignMarked: m.type === 'consign',
+    _uid: _whDelivItemUidSeq++
+  }));
+}
+
 // 納品書を発行：明細ごとに出庫記録＋在庫減算、まとめて売上（未入金）を1件登録し、印刷用の納品書を開く
 // （_editingSlipIdが設定されている場合は、既存の納品書を一度取り消してから新しい内容で作り直す＝実質的な「編集」）
 // 明示的に「編集する」から呼ばれたのではない通常の発行時、同じ日付・取引先・件名の納品書が
@@ -3381,23 +3441,15 @@ async function submitWhDeliverySlip() {
     if (mergeTargetSlipId) {
       editingSlipId = mergeTargetSlipId;
       mergedFromExisting = true;
-      const oldMoves = (stockMoves || []).filter(m => m.slipId === mergeTargetSlipId && m.type === 'out')
-        .sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
-      const oldItems = oldMoves.map(m => ({
-        productKey: m.productKey, jan: m.jan, name: m.productName,
-        model: m.model || (products.find(p => p._key === m.productKey) || {}).model || '',
-        qty: m.qty, unitPrice: m.unitPrice, amount: m.amount,
-        damageMode: m.damageDetail ? 'detail' : (m.damagePhoto ? 'photo' : null),
-        damageDetail: m.damageDetail || '', damagePhoto: m.damagePhoto || '',
-        _uid: _whDelivItemUidSeq++
-      }));
-      _whDelivItems = [...oldItems, ..._whDelivItems];
+      _whDelivItems = [...deliverySlipMovesToItems(mergeTargetSlipId), ..._whDelivItems];
     }
   }
   // 編集中（＝既存の納品書を作り直す）場合、元の納品書がすでに減らしている分は「まだ在庫にある」ものとして在庫チェックする
+  // （通常の出庫記録に加え、委託の印付きで発行された行＝type:'consign'のholding記録も、
+  // このあとcancelDeliverySlipで一度取り消してから作り直すため、同様に「まだ在庫にある」扱いにする）
   const oldQtyByProduct = {};
   if (editingSlipId) {
-    stockMoves.filter(m => m.slipId === editingSlipId && m.type === 'out').forEach(m => {
+    stockMoves.filter(m => m.slipId === editingSlipId && (m.type === 'out' || (m.type === 'consign' && m.status === 'holding'))).forEach(m => {
       oldQtyByProduct[m.productKey] = (oldQtyByProduct[m.productKey] || 0) + m.qty;
     });
   }
@@ -3418,7 +3470,8 @@ async function submitWhDeliverySlip() {
   }
 
   const slipId = editingSlipId || ('slip_' + Date.now());
-  const total = _whDelivItems.reduce((s,it) => s + it.amount, 0);
+  // 委託の印が付いた行は単価が未確定のため、合計金額（発行後のトースト表示用）には含めない
+  const total = _whDelivItems.reduce((s,it) => s + (it._consignMarked ? 0 : it.amount), 0);
   try {
     await ensureWholesaleClient(client);
 
@@ -3441,14 +3494,27 @@ async function submitWhDeliverySlip() {
     // 商品の順番が変わってしまう」不具合の原因になっていた。登録時の並び順（_whDelivItemsの
     // 配列順）をitemSeqとして明細ごとに明示的に埋め込み、発行・編集時はこちらを優先して
     // 並び替えることで、常に登録した順を保つようにする。
-    await Promise.all(_whDelivItems.map((it, idx) => fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
-      productKey: it.productKey, productName: it.name, model: it.model || '', jan: it.jan,
-      type: 'out', channel: '卸売', client, subject, qty: it.qty, unitPrice: it.unitPrice, amount: it.amount,
-      slipId, date, memo: '', stockBefore: stockBeforeByProduct[it.productKey], stockAfter: stockBeforeByProduct[it.productKey] - newQtyByProduct[it.productKey], createdAt: Date.now(), itemSeq: idx,
-      // 傷・つぶれの記録：詳細（テキスト）は納品書にも表示されるが、写真は社内記録用のみで納品書には出さない
-      damageDetail: it.damageMode === 'detail' ? (it.damageDetail || '') : '',
-      damagePhoto: it.damageMode === 'photo' ? (it.damagePhoto || '') : ''
-    })})));
+    // 委託の印が付いた行は、通常の出庫（type:'out'／卸売）としてではなく、
+    // 预かりリストの他の登録と同じtype:'consign', status:'holding'として登録する
+    // （売上・卸売の集計は基本的にtype:'out'を見て計算しているため、こちらに含めることで
+    // 二重計上を避けられる）。ただし同じslipId・itemSeqを埋め込んでおくことで、
+    // buildDeliverySlipDataFromSlipIdがこの行も納品書の明細として拾い、明細から消さずに
+    // 「委託」の印付きでそのまま印刷できるようにする。
+    await Promise.all(_whDelivItems.map((it, idx) => fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify(
+      it._consignMarked ? {
+        productKey: it.productKey, productName: it.name, jan: it.jan, model: it.model || '',
+        type: 'consign', status: 'holding', client, qty: it.qty, date, memo: '',
+        stockBefore: stockBeforeByProduct[it.productKey], stockAfter: stockBeforeByProduct[it.productKey] - newQtyByProduct[it.productKey],
+        createdAt: Date.now(), slipId, itemSeq: idx
+      } : {
+        productKey: it.productKey, productName: it.name, model: it.model || '', jan: it.jan,
+        type: 'out', channel: '卸売', client, subject, qty: it.qty, unitPrice: it.unitPrice, amount: it.amount,
+        slipId, date, memo: '', stockBefore: stockBeforeByProduct[it.productKey], stockAfter: stockBeforeByProduct[it.productKey] - newQtyByProduct[it.productKey], createdAt: Date.now(), itemSeq: idx,
+        // 傷・つぶれの記録：詳細（テキスト）は納品書にも表示されるが、写真は社内記録用のみで納品書には出さない
+        damageDetail: it.damageMode === 'detail' ? (it.damageDetail || '') : '',
+        damagePhoto: it.damageMode === 'photo' ? (it.damagePhoto || '') : ''
+      }
+    )})));
 
     // 納品書は金額未確定の商談段階で使うものであり、正式な請求金額が決まった請求書とは別物のため、
     // ここでは業務の売り上げには自動反映しない（在庫の増減記録・納品書自体の発行のみ行う）。
@@ -3569,7 +3635,9 @@ function renderDeliverySlipColumns(root, items) {
   const headerHtml = '<div class="ds-row ds-headrow ds-measurable"><span class="ds-model">型番</span><span class="ds-qty">数量</span><span class="ds-price">単価</span></div>';
   // 商品数が多いときに見やすいよう、1行おきに背景色を交互にする（列ごとに1行目から数え直す）
   const rowHtml = function(it, idx) {
-    const priceDisp = it.unitPrice ? ('¥' + it.unitPrice.toLocaleString('ja-JP')) : '';
+    // 委託の印が付いた行は、単価がまだ確定していないため単価欄に金額の代わりに
+    // 「委託」と表記する
+    const priceDisp = it.isConsignNote ? '委託' : (it.unitPrice ? ('¥' + it.unitPrice.toLocaleString('ja-JP')) : '');
     // 傷・つぶれの詳細（テキスト）が入力されている行だけ、注記として下に表示する（写真は納品書には出さない）
     const noteHtml = it.damageDetail ? '<div class="ds-note">※' + it.damageDetail + '</div>' : '';
     const altClass = (idx % 2 === 1) ? ' ds-row-alt' : '';
@@ -3773,9 +3841,15 @@ function compareDeliverySlipItemOrder(a, b) {
 
 // 発行済みの納品書について、保存されている出庫記録から取引先・日付・明細を再構成する
 // （印刷・PDF保存のどちらからも同じ内容を使えるよう共通化）
+// 通常のtype:'out'出庫記録に加え、委託の印付きで発行された行（type:'consign'で
+// 同じslipIdが埋め込まれているもの）も明細に含める。その後精算・返却されて状態が変わっても、
+// 「その納品書で委託として渡した」という記録自体はここでは変わらないため、statusは
+// 問わずslipIdの一致だけで拾う（＝発行済み納品書の印刷内容は、後から委託リスト側で
+// どう処理されても変わらない、その時点のスナップショットとして扱う）。
 function buildDeliverySlipDataFromSlipId(slipId) {
-  const moves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'out')
-    .sort(compareDeliverySlipItemOrder);
+  const outMoves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'out');
+  const consignMoves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'consign');
+  const moves = outMoves.concat(consignMoves).sort(compareDeliverySlipItemOrder);
   if (!moves.length) return null;
   const items = moves.map(m => ({
     // 型番は納品書の明細でその場修正できるようになったため、記録済みの値を優先する。
@@ -3783,7 +3857,8 @@ function buildDeliverySlipDataFromSlipId(slipId) {
     model: m.model || (products.find(p => p._key === m.productKey) || {}).model || '',
     qty: m.qty, unitPrice: m.unitPrice, amount: m.amount,
     // 傷・つぶれの詳細（テキスト）のみ納品書に載せる。写真（damagePhoto）はここで一切扱わない
-    damageDetail: m.damageDetail || ''
+    damageDetail: m.damageDetail || '',
+    isConsignNote: m.type === 'consign'
   }));
   return { client: moves[0].client, date: moves[0].date, subject: moves[0].subject || '', items };
 }
@@ -3910,8 +3985,14 @@ function closeDeliverySlipPreview() {
 // slipIdに紐づく出庫記録を取り消して在庫を戻し、対応する売上記録も削除する（編集・取消の両方から呼ばれる共通処理）
 // 編集（取消→作り直し）から呼ばれた直後にloadInventory()を待たずに新しい在庫数を計算できるよう、
 // サーバー側の更新だけでなく、ローカルのproducts/stockMovesの状態もその場で反映しておく。
+// 委託の印付きで発行された行（type:'consign', status:'holding'で同じslipIdを持つもの）も
+// 対象に含めて在庫を戻す。ただし、すでに精算・返却されてstatusが変わった行は、委託リスト側の
+// 操作によってすでに決着した実績とみなし、ここでは削除・在庫の巻き戻しをしない
+// （発行済み納品書の印刷内容には引き続きそのまま残る＝過去の記録として保持される）。
 async function cancelDeliverySlip(slipId) {
-  const moves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'out');
+  const outMoves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'out');
+  const consignMoves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'consign' && m.status === 'holding');
+  const moves = outMoves.concat(consignMoves);
   if (!moves.length) return;
   // 同じ商品が複数行にまたがっていても正しく計算できるよう、商品ごとにまとめて在庫を戻す
   const qtyByProduct = {};
@@ -3923,7 +4004,8 @@ async function cancelDeliverySlip(slipId) {
     if (prod) prod.stock = newStock;
   }));
   await Promise.all(moves.map(m => fetch(authedUrl('/stockMoves/' + m._key + '.json'), { method: 'DELETE' })));
-  stockMoves = stockMoves.filter(m => !(m.slipId === slipId && m.type === 'out'));
+  const movesKeySet = new Set(moves.map(m => m._key));
+  stockMoves = stockMoves.filter(m => !movesKeySet.has(m._key));
   const salesRecs = (window._getSales?.() || []).filter(s => s.slipId === slipId);
   await Promise.all(salesRecs.map(s => window._fbRemoveSales(s._key)));
   await removeSlipFromFreeeInvoiceGroups(slipId);
@@ -3945,19 +4027,15 @@ function confirmCancelDeliverySlip(slipId) {
 
 // 発行済みの納品書を編集モードで読み込む（内容を修正して保存すると、元の分を取り消して新しい内容で作り直す）
 function editDeliverySlip(slipId) {
-  const moves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'out')
+  // 通常の出庫記録に加え、委託の印付きで発行された行（まだholding状態のもの）も含める
+  const headerMoves = (stockMoves || []).filter(m => m.slipId === slipId && (m.type === 'out' || (m.type === 'consign' && m.status === 'holding')))
     .sort(compareDeliverySlipItemOrder);
-  if (!moves.length) { showToast('対象の納品書が見つかりません'); return; }
-  _whDelivItems = moves.map(m => ({
-    productKey: m.productKey, jan: m.jan, name: m.productName,
-    // 型番はその納品書で修正済みの値があればそれを優先し、古い記録（保存前）のみ商品マスタから補う
-    model: m.model || (products.find(p => p._key === m.productKey) || {}).model || '',
-    qty: m.qty, unitPrice: m.unitPrice, amount: m.amount
-  }));
-  document.getElementById('wh-deliv-client').value = moves[0].client || '';
+  if (!headerMoves.length) { showToast('対象の納品書が見つかりません'); return; }
+  _whDelivItems = deliverySlipMovesToItems(slipId);
+  document.getElementById('wh-deliv-client').value = headerMoves[0].client || '';
   renderClientSelectUI('wh-deliv');
-  document.getElementById('wh-deliv-date').value = moves[0].date || '';
-  document.getElementById('wh-deliv-subject').value = moves[0].subject || '';
+  document.getElementById('wh-deliv-date').value = headerMoves[0].date || '';
+  document.getElementById('wh-deliv-subject').value = headerMoves[0].subject || '';
   _editingSlipId = slipId;
   renderWhDelivItems();
   updateWhDelivSubmitButtonLabel();
@@ -3990,9 +4068,9 @@ function updateWhDelivSubmitButtonLabel() {
 }
 
 // ===== 請求書（freee）作成済みトラッキング =====
-// 要望：「納品書作成と預かりリストの精算分の納品書のところに、請求書を作成したらチェックを
+// 要望：「納品書作成と委託リストの精算分の納品書のところに、請求書を作成したらチェックを
 // つけれる項目が欲しい。請求書はfreeeで作成しているので、どの納品書を作成済みか分かるように
-// したい。また、複数の納品書をまとめて一枚の請求書にしたり、複数の納品書と預かりリストの
+// したい。また、複数の納品書をまとめて一枚の請求書にしたり、複数の納品書と委託リストの
 // 納品書をまとめて一枚の請求書にすることもあるので、どれをまとめるかも分かりやすくして
 // 欲しい」への対応。
 //
@@ -4009,7 +4087,11 @@ function findFreeeInvoiceGroupForSlip(slipId) {
 // 指定slipIdの納品書（通常／精算分どちらでも）の概要を返す。まとめ作成時の確認画面や、
 // 既存グループの内訳表示で共通して使う。
 function freeeInvoiceSlipInfo(slipId) {
-  const moves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'out');
+  const outMoves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'out');
+  // 委託の印付きの行だけで構成された納品書（通常のtype:'out'記録が1件もない場合）も
+  // 概要を返せるよう、そちらも合わせて拾う
+  const consignNoteMoves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'consign');
+  const moves = outMoves.concat(consignNoteMoves);
   if (!moves.length) return null;
   const first = moves[0];
   const isConsignInvoice = first.channel === CONSIGN_INVOICE_CHANNEL;
@@ -4161,8 +4243,13 @@ function renderWhDelivHistory() {
   const listEl = document.getElementById('wh-deliv-history-list');
   if (!listEl) return;
   const outMoves = (stockMoves || []).filter(m => m.type === 'out' && m.channel === '卸売' && m.slipId);
+  // 明細のすべての行に委託の印が付いていた場合、通常のtype:'out'記録が1件もない納品書に
+  // なりうる。そのような納品書も一覧から漏れて開けなくなってしまわないよう、委託の印付きで
+  // 発行された行（slipIdを持つtype:'consign'記録）も合わせて拾う
+  // （通常の預かり登録＝submitConsignにはslipIdが付かないため、slipId有無で区別できる）
+  const consignNoteMoves = (stockMoves || []).filter(m => m.type === 'consign' && m.slipId);
   const bySlip = {};
-  outMoves.forEach(m => { (bySlip[m.slipId] = bySlip[m.slipId] || []).push(m); });
+  outMoves.concat(consignNoteMoves).forEach(m => { (bySlip[m.slipId] = bySlip[m.slipId] || []).push(m); });
   const slips = Object.keys(bySlip).map(slipId => {
     const items = bySlip[slipId];
     const first = items[0];
@@ -4371,7 +4458,7 @@ function lookupWhConsignItem() {
 }
 
 // JANコードが手元にない・読み取りにくい場合でも、登録済みの商品を型番や商品名の一部から探せるようにする
-// （納品書作成画面の検索と同じ仕組みを、預かりリストの追加にも使う）
+// （納品書作成画面の検索と同じ仕組みを、委託リストの追加にも使う）
 function searchWhConsignItemByModel() {
   const input = document.getElementById('wh-consign-model-search');
   const resultsEl = document.getElementById('wh-consign-model-results');
@@ -4491,6 +4578,21 @@ let _whConsignExpandedClients = new Set();
 let _whConsignClientSearchQuery = {}; // { [client]: '検索文字列' }
 let _whConsignClientOrder = [];       // 直近の描画時点のカード並び順（onclick="...(${idx})"からidxで取引先名を逆引きするため）
 
+// 要望：「预かりリストのところで商品が返却された時に同じ商品が別々に表示されるので、
+// 同じ型番のものは一緒にして欲しい」への対応。同じ取引先に対して、日付違いで複数回に
+// 分けて预かっていたり、精算・返却の取り消しで预け中レコードが複数に分かれたりした場合、
+// 同じ型番（正規化した型番文字列で判定）のholdingレコードをまとめて1行（合計数量）で
+// 表示する。精算・返却・数量編集は引き続きレコード単位の操作のため、まとめた行をタップすると
+// 元の预け入れごとの内訳（従来通りの行、操作ボタン付き）が開く。1件しかない型番は、
+// まとめる必要が無いのでこれまで通りそのまま1行で表示する。
+let _whConsignExpandedModelGroups = new Set(); // Set<`${idx}::${normalizedModelKey}`>
+function toggleWhConsignModelGroup(idx, groupKey) {
+  const setKey = idx + '::' + groupKey;
+  if (_whConsignExpandedModelGroups.has(setKey)) _whConsignExpandedModelGroups.delete(setKey);
+  else _whConsignExpandedModelGroups.add(setKey);
+  renderWhConsignClientItemsList(idx);
+}
+
 // 「現在预けている商品」カード内の商品1件分の行（精算・返却・数量編集の操作はここに集約されている）
 function whConsignItemRowHtml(m) {
   return `
@@ -4562,9 +4664,39 @@ function renderWhConsignClientItemsList(idx) {
   const filtered = qNorm ? holding.filter(m => normalizeModelStr(consignItemModel(m)).includes(qNorm)) : holding;
   const countEl = document.getElementById('wh-consign-client-search-count-' + idx);
   if (countEl) countEl.textContent = q ? `${filtered.length}件見つかりました` : '';
-  root.innerHTML = filtered.length
-    ? filtered.map(whConsignItemRowHtml).join('')
-    : `<div style="text-align:center;color:var(--text-muted);font-size:12px;padding:16px 0">該当する型番が見つかりませんでした</div>`;
+  if (!filtered.length) {
+    root.innerHTML = `<div style="text-align:center;color:var(--text-muted);font-size:12px;padding:16px 0">該当する型番が見つかりませんでした</div>`;
+    return;
+  }
+  // 同じ型番（正規化して判定）のholdingレコードをまとめて1行にする。1件しかない型番は
+  // これまで通りそのまま表示し、2件以上ある場合だけ合計数量のまとめ行にする
+  const modelGroups = {};
+  const modelOrder = [];
+  filtered.forEach(m => {
+    const gk = normalizeModelStr(consignItemModel(m)) || '__unknown__';
+    if (!modelGroups[gk]) { modelGroups[gk] = []; modelOrder.push(gk); }
+    modelGroups[gk].push(m);
+  });
+  root.innerHTML = modelOrder.map(gk => {
+    const items = modelGroups[gk];
+    if (items.length === 1) return whConsignItemRowHtml(items[0]);
+    const totalQty = items.reduce((s, m) => s + (m.qty || 0), 0);
+    const setKey = idx + '::' + gk;
+    const isOpen = _whConsignExpandedModelGroups.has(setKey);
+    return `
+      <div style="border-bottom:1px solid var(--border)">
+        <div style="padding:10px 0;display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer" onclick="toggleWhConsignModelGroup(${idx}, '${gk}')">
+          <div style="min-width:0">
+            <div style="color:var(--text);font-weight:600">${escapeHtmlMain(consignItemModel(items[0]))}</div>
+            <div style="color:var(--text-muted);font-size:11px;margin-top:2px">合計${totalQty}個（${items.length}件に分かれています）</div>
+          </div>
+          <span class="accordion-arrow${isOpen ? ' open' : ''}" style="font-size:10px;flex-shrink:0">▼</span>
+        </div>
+        <div class="accordion-body${isOpen ? ' open' : ''}">
+          ${items.map(whConsignItemRowHtml).join('')}
+        </div>
+      </div>`;
+  }).join('');
 }
 
 function renderWhConsignList() {
@@ -4678,6 +4810,38 @@ let _whConsignHistoryFull = [];
 // 単発の「日付」は期間の開始・終了を同じ日にすれば代用できるため、別項目としては持たない
 let _whConsignHistoryFilter = { q: '', month: '', dateStart: '', dateEnd: '' };
 
+// 要望：「取引先の過去の履歴のところ、精算・返却したらどんどん溜まっていくので、下の方は
+// スクロールしないと見にくい。1ページ、2ページのようにページ分けしたい」への対応。
+// 取引先ごとのカード内、精算済み・返却済みそれぞれ独立に20件を1ページとしてページ分けする
+// （精算済みと返却済みは別々のリストのため、ページ数もそれぞれ別に持つ）
+const WH_CONSIGN_HISTORY_PAGE_SIZE = 20;
+let _whConsignHistoryPage = {}; // { [client]: { settled: 1, returned: 1 } }
+function goToWhConsignHistoryPage(client, status, page) {
+  if (!_whConsignHistoryPage[client]) _whConsignHistoryPage[client] = { settled: 1, returned: 1 };
+  _whConsignHistoryPage[client][status] = page;
+  renderWhConsignHistorySection();
+}
+
+// ページ番号ボタン一式のHTMLを組み立てる共通ヘルパー（店舗側・取引先ポータル側の履歴一覧で共用）。
+// 件数が多くてもボタンが際限なく並ばないよう、先頭・末尾・現在ページの前後だけを表示し、
+// 間は「…」で省略する（例：1 … 4 5 [6] 7 8 … 12）。onClickExprTemplate内の{p}をページ番号に置き換える
+function paginationButtonsHtml(page, totalPages, onClickExprTemplate) {
+  if (totalPages <= 1) return '';
+  const keep = new Set([1, totalPages, page - 1, page, page + 1].filter(p => p >= 1 && p <= totalPages));
+  const sorted = Array.from(keep).sort((a, b) => a - b);
+  let html = '<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:8px">';
+  let prevP = 0;
+  sorted.forEach(p => {
+    if (p - prevP > 1) html += `<span style="padding:0 3px;color:var(--text-muted);font-size:12px">…</span>`;
+    const isCurrent = p === page;
+    const onclickExpr = onClickExprTemplate.split('{p}').join(p);
+    html += `<button type="button" onclick="event.stopPropagation();${onclickExpr}" ${isCurrent ? 'disabled' : ''} style="min-width:26px;padding:4px 6px;font-size:11.5px;font-weight:${isCurrent ? '700' : '500'};border:1.2px solid var(--border);border-radius:6px;background:${isCurrent ? 'var(--text)' : 'var(--white)'};color:${isCurrent ? '#fff' : 'var(--text)'};cursor:${isCurrent ? 'default' : 'pointer'}">${p}</button>`;
+    prevP = p;
+  });
+  html += '</div>';
+  return html;
+}
+
 // タイムスタンプ（ミリ秒）から、月・日付での絞り込み比較に使うローカル日付キー（YYYY-MM-DD）を作る。
 // toISOString()はUTC基準になり日付がズレることがあるため、ローカルの年月日から組み立てる
 function localDateKeyFromTs(ts) {
@@ -4775,11 +4939,18 @@ function renderWhConsignHistorySection() {
       ${deleteLinkHtml(m)}
     </div>`;
   };
-  const renderHistoryStatusSection = (label, color, list) => {
+  const renderHistoryStatusSection = (label, color, list, client, status) => {
     if (!list.length) return '';
+    const totalPages = Math.max(1, Math.ceil(list.length / WH_CONSIGN_HISTORY_PAGE_SIZE));
+    if (!_whConsignHistoryPage[client]) _whConsignHistoryPage[client] = { settled: 1, returned: 1 };
+    const page = Math.min(Math.max(1, _whConsignHistoryPage[client][status] || 1), totalPages);
+    const pageItems = list.slice((page - 1) * WH_CONSIGN_HISTORY_PAGE_SIZE, page * WH_CONSIGN_HISTORY_PAGE_SIZE);
+    const clientB64 = btoa(unescape(encodeURIComponent(client)));
+    const pagerHtml = paginationButtonsHtml(page, totalPages, `goToWhConsignHistoryPage(decodeURIComponent(escape(atob('${clientB64}'))),'${status}',{p})`);
     return `<div style="margin-bottom:10px">
-      <div style="font-size:11.5px;font-weight:700;color:${color};margin-bottom:4px">${label}（${list.length}件）</div>
-      ${list.map(renderHistoryRow).join('')}
+      <div style="font-size:11.5px;font-weight:700;color:${color};margin-bottom:4px">${label}（${list.length}件）${totalPages > 1 ? `<span style="font-weight:400;color:var(--text-muted)">　${page}/${totalPages}ページ</span>` : ''}</div>
+      ${pageItems.map(renderHistoryRow).join('')}
+      ${pagerHtml}
     </div>`;
   };
 
@@ -4816,8 +4987,8 @@ function renderWhConsignHistorySection() {
           <div style="font-size:13.5px;font-weight:700;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtmlMain(client)}<span style="font-weight:400;color:var(--text-muted);font-size:12px">　${countParts.join('／')}</span></div>
         </div>
         <div class="accordion-body${isOpen ? ' open' : ''}" style="margin-top:8px">
-          ${renderHistoryStatusSection('精算済み', 'var(--success)', items.filter(m => m.status === 'settled'))}
-          ${renderHistoryStatusSection('返却済み', 'var(--text-muted)', items.filter(m => m.status === 'returned'))}
+          ${renderHistoryStatusSection('精算済み', 'var(--success)', items.filter(m => m.status === 'settled'), client, 'settled')}
+          ${renderHistoryStatusSection('返却済み', 'var(--text-muted)', items.filter(m => m.status === 'returned'), client, 'returned')}
         </div>
       </div>`;
   }).join('');
@@ -4835,6 +5006,8 @@ function filterWhConsignHistory() {
     dateStart: dateStartInput ? dateStartInput.value : '',
     dateEnd: dateEndInput ? dateEndInput.value : ''
   };
+  // 絞り込み条件が変わると各ページの中身も変わるため、ページ位置は1ページ目に戻す
+  _whConsignHistoryPage = {};
   updateWhConsignHistoryFilterClearBtn();
   renderWhConsignHistorySection();
 }
@@ -4857,6 +5030,7 @@ function clearWhConsignHistoryFilter() {
   if (dateStartInput) dateStartInput.value = '';
   if (dateEndInput) dateEndInput.value = '';
   _whConsignHistoryFilter = { q: '', month: '', dateStart: '', dateEnd: '' };
+  _whConsignHistoryPage = {};
   updateWhConsignHistoryFilterClearBtn();
   renderWhConsignHistorySection();
 }
@@ -5105,15 +5279,18 @@ async function approveConsignRequest(portalId, requestId) {
     // 実際と違えば店舗側で数量を修正してから確定してもよい）
     const qtyInput = document.getElementById('wh-settle-qty');
     if (qtyInput) qtyInput.value = requestedQty;
-    // 取引先が売値も申告してきた場合は、店舗側の自動提案（前回の価格）よりもそれを優先して反映し、
-    // 確定価格欄の初期値にもそのまま使う（実際と違えば店舗側で確定価格欄を修正してから確定してもよい）
+    // 取引先が売値も申告してきた場合は、店舗側の自動提案（前回の価格）よりもそれを優先して
+    // 「売値」欄（参考情報）に反映する。ただし確定価格欄は、取引先の申告額をそのまま鵜呑みに
+    // せず、店舗側が内容を確認したうえで自分で入力できるよう、あえて空欄のままにしておく
+    // （要望：「確定価格を入力する欄に、すでに取引先の売値と同じ金額が入力されている。
+    // 最初から何も入力されていない状況のがやりやすい」）
     if (req.unitPrice != null) {
       const priceInput = document.getElementById('wh-settle-price');
       const hint = document.getElementById('wh-settle-hint');
       const finalInput = document.getElementById('wh-settle-final-price');
       if (priceInput) priceInput.value = req.unitPrice;
       if (hint) hint.textContent = `取引先から申告された売値です（必要なら修正してください）`;
-      if (finalInput) finalInput.value = req.unitPrice;
+      if (finalInput) finalInput.value = '';
       _settleFinalPriceManuallyEdited = false;
     }
   }
@@ -5128,7 +5305,7 @@ async function rejectConsignRequest(portalId, requestId) {
   });
 }
 
-// ── 預かりリストの取引先ごとの「内容を見る」プレビュー・共有 ──
+// ── 委託リストの取引先ごとの「内容を見る」プレビュー・共有 ──
 // 納品書のプレビュー・共有（PDF直接共有＋失敗時は印刷にフォールバック、独立iframeでのPDFキャプチャ）と
 // 同じ仕組みを流用する。ただし対象のDOM（プレビューモーダル・ページ要素）は納品書と共用せず、
 // 別のID（ds-consign-preview-page等）を使う専用のものにしてある。同じCSS（.ds-preview-page等）は
@@ -5169,7 +5346,7 @@ function consignListBodyHtml(client) {
 }
 
 // 納品書のrenderDeliverySlipColumnsと同じ列分割・縦線描画のロジックを流用しつつ、
-// 見出しと各行の内容（型番/数量/単価 → 型番/数量/預けた日付）だけ預かりリスト向けに変える
+// 見出しと各行の内容（型番/数量/単価 → 型番/数量/預けた日付）だけ委託リスト向けに変える
 function renderConsignListColumns(root, items) {
   const doc = root.ownerDocument || root;
   const headerHtml = '<div class="ds-row ds-headrow ds-measurable"><span class="ds-model">商品名・型番</span><span class="ds-qty">数量</span><span class="ds-price">預けた日付</span></div>';
@@ -5537,7 +5714,7 @@ function closeEditConsignQty() {
   _consignEditAddItems = [];
 }
 
-// JANが商品と一致した瞬間だけ、追加リストに自動で追加する（預かりリスト作成時のクイック追加と同じ挙動）
+// JANが商品と一致した瞬間だけ、追加リストに自動で追加する（委託リスト作成時のクイック追加と同じ挙動）
 function lookupConsignEditAddItem() {
   const input = document.getElementById('wh-consign-edit-add-jan');
   const status = document.getElementById('wh-consign-edit-add-status');
@@ -7728,7 +7905,7 @@ window._initApp = async function() {
   applyRoleUI();
   await loadAll();
   setInterval(loadAll, 30000);
-  // 預かりリストの精算・返却連絡は卸売管理（管理者専用画面）向けの機能なので、
+  // 委託リストの精算・返却連絡は卸売管理（管理者専用画面）向けの機能なので、
   // 一般ユーザー（倉庫作業員）の端末では余計な通信・通知許可のお願いをしない
   if (isAdmin()) {
     pollConsignRequestsForNotify();
@@ -7758,7 +7935,7 @@ function applyRoleUI() {
   const modeSwitch = document.querySelector('.mode-switch');
   if (modeSwitch) modeSwitch.style.display = '';
   // 一般ユーザー（倉庫作業員）は入出庫・出荷管理・在庫一覧のみ担当し、
-  // 納品書作成や預かりリストを扱う卸売管理は管理者専用とする
+  // 納品書作成や委託リストを扱う卸売管理は管理者専用とする
   const wholesaleNav = document.getElementById('nav-inv-wholesale');
   if (wholesaleNav) wholesaleNav.parentElement.style.display = admin ? '' : 'none';
 }
@@ -8227,7 +8404,7 @@ const EXP_CATS = ['パーキング','タクシー','定期','ガソリン','配�
 const PUR_SUPS = ['店舗','電脳','（株）HAK','（株）GAIN'];
 const DOM_CLIENTS = ['昇輝株式会社','株式会社RISE','ピュアクリエイト株式会社','東谷株式会社','株式会社グルラジトレイディングコーポレイション','株式会社サプライズ','エル・ダブル株式会社','環盛株式会社','株式会社HAK'];
 const OVS_CLIENTS = ['ANGCO INTERNATIONAL TRADING COMPANY（香港）'];
-// 国内の卸先は、あらかじめ用意した一覧に加えて、卸売管理（納品書作成・預かりリスト）や
+// 国内の卸先は、あらかじめ用意した一覧に加えて、卸売管理（納品書作成・委託リスト）や
 // この売上入力の「その他」で新しく追加された取引先も選択肢に含める（一度追加すれば次回から選べる）
 function getDomesticSalesClients() {
   const set = new Set(DOM_CLIENTS);
@@ -8242,7 +8419,7 @@ function getOverseasSalesClients() {
   oc.forEach(c => { if (c && c.name) set.add(c.name); });
   return sortJa(Array.from(set));
 }
-// 納品書作成・預かりリストの取引先選択でも、この国内卸先の一覧をあわせて候補に出せるようにしておく
+// 納品書作成・委託リストの取引先選択でも、この国内卸先の一覧をあわせて候補に出せるようにしておく
 window._domesticClientsSeed = DOM_CLIENTS;
 const NAMES_LIST = ['金髙孝紀','金髙裕亮'];
 const NAME_AMT = {'金髙孝紀':20000,'金髙裕亮':10000};
@@ -8364,6 +8541,30 @@ function updateSalesClientOptions(rowId) {
   if (!typeEl||!clientEl) return;
   const clients = typeEl.value==='国内（請求書）' ? getDomesticSalesClients() : getOverseasSalesClients();
   clientEl.innerHTML = clients.map(c=>`<option value="${c}">${c}</option>`).join('');
+}
+
+// 要望：「業務の一覧の売上のところで、月毎に折りたたまれているのをタップしたら、その月の
+// 売上の上位順に取引先が並んでいる。その月毎の順位グラフ（棒グラフ）を作れないか」への対応。
+// 月を開いたときに、既存の取引先ランキング一覧（合計金額の多い順）と同じ並び順・同じ合計金額を
+// 使って、取引先ごとの棒グラフを表示する。バーの長さはその月の最高額の取引先を100%とした相対値
+function monthlyClientRankingChartHtml(rankedClients) {
+  if (!rankedClients.length) return '';
+  const maxV = rankedClients[0].total || 1;
+  return `<div style="margin-bottom:10px;padding:10px 12px;background:var(--white);border:1px solid var(--border);border-radius:var(--radius)">
+    <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:8px">取引先別 売上ランキング</div>
+    ${rankedClients.map(({ client, total }) => {
+      const pct = total > 0 ? Math.max(2, Math.round((total / maxV) * 100)) : 0;
+      return `<div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;gap:8px;font-size:11.5px;color:var(--text);margin-bottom:3px">
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${escapeHtmlMain(client)}</span>
+          <span style="font-weight:700;color:var(--teal);flex-shrink:0">${yen(total)}</span>
+        </div>
+        <div style="height:10px;border-radius:3px;background:var(--surface);overflow:hidden">
+          <div style="height:100%;border-radius:3px;background:var(--teal);width:${pct}%"></div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
 }
 
 function renderList() {
@@ -8645,10 +8846,12 @@ function renderList() {
       const uid = 'sal_'+month.replace('-','')+'_'+m_idx;
       const byClient = {};
       mi.forEach(s => { const k = s.client || '不明'; if (!byClient[k]) byClient[k] = []; byClient[k].push(s); });
-      const clientHtml = Object.entries(byClient)
-        .sort((a,b) => b[1].reduce((s,x)=>s+x.amount,0) - a[1].reduce((s,x)=>s+x.amount,0))
-        .map(([client, rows], c_idx) => {
-        const clientTotal = rows.reduce((s,a)=>s+a.amount,0);
+      // ランキング一覧・棒グラフの両方で並び順・合計金額がずれないよう、ここで一度だけ
+      // 取引先ごとの合計金額を計算し、多い順に並べたものを両方から使い回す
+      const rankedClients = Object.entries(byClient)
+        .map(([client, rows]) => ({ client, rows, total: rows.reduce((s,x)=>s+x.amount,0) }))
+        .sort((a,b) => b.total - a.total);
+      const clientHtml = rankedClients.map(({ client, rows, total: clientTotal }, c_idx) => {
         const cuid = 'sal_cli_'+month.replace('-','')+'_'+c_idx;
         const sorted = [...rows].sort((a,b)=>b.date.localeCompare(a.date));
         return `<div style="margin-bottom:8px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--white)">
@@ -8662,6 +8865,7 @@ function renderList() {
           <div id="${cuid}" style="display:none">${sorted.map(s=>salItemHtml(s)).join('')}</div>
         </div>`;
       }).join('');
+      const rankingChartHtml = monthlyClientRankingChartHtml(rankedClients);
       return `<div style="margin-bottom:20px">
         <div onclick="toggleDayGroup('${uid}')" style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:linear-gradient(135deg,#c8c8c8,#b8b8b8);border-radius:10px;margin-bottom:8px;border:1px solid #a8a8a8;cursor:pointer">
           <span style="font-size:13px;font-weight:700;color:#3a3a3a">${fmtYM(month)}</span>
@@ -8670,7 +8874,7 @@ function renderList() {
             <span id="arr_${uid}" style="font-size:11px;color:#a0a0a0;transition:transform 0.2s">▼</span>
           </span>
         </div>
-        <div id="${uid}" style="display:none">${clientHtml}</div>
+        <div id="${uid}" style="display:none">${rankingChartHtml}${clientHtml}</div>
       </div>`;
     }).join('');
 
@@ -11633,6 +11837,16 @@ function renderPortalHistory(historyItems) {
   renderPortalHistoryList();
 }
 
+// 要望：「取引先の過去の履歴のところ、精算・返却したらどんどん溜まっていくので、下の方は
+// スクロールしないと見にくい。1ページ、2ページのようにページ分けしたい」への対応。
+// ポータル側は取引先1件分の履歴を1つの一覧で表示しているため、単純に20件を1ページとして
+// ページ分けする（ページサイズは店舗側と共通のWH_CONSIGN_HISTORY_PAGE_SIZEを使う）
+let _portalHistoryPage = 1;
+function goToPortalHistoryPage(page) {
+  _portalHistoryPage = page;
+  renderPortalHistoryList();
+}
+
 // 現在の検索・月・日付の絞り込み条件に沿って#portal-history-listだけを描画し直す
 // （検索欄自体は再描画で消えないよう、リスト部分だけを差し替える）
 function renderPortalHistoryList() {
@@ -11662,7 +11876,13 @@ function renderPortalHistoryList() {
     listEl.innerHTML = `<div style="text-align:center;color:var(--text-muted);font-size:12.5px;padding:12px 0">${filterActive ? '条件に一致する記録が見つかりませんでした' : '履歴はありません'}</div>`;
     return;
   }
-  listEl.innerHTML = items.map(it => {
+  const totalPages = Math.max(1, Math.ceil(items.length / WH_CONSIGN_HISTORY_PAGE_SIZE));
+  _portalHistoryPage = Math.min(Math.max(1, _portalHistoryPage || 1), totalPages);
+  const pageItems = items.slice((_portalHistoryPage - 1) * WH_CONSIGN_HISTORY_PAGE_SIZE, _portalHistoryPage * WH_CONSIGN_HISTORY_PAGE_SIZE);
+  const pageLabelHtml = totalPages > 1
+    ? `<div style="text-align:right;font-size:11px;color:var(--text-muted);margin-bottom:4px">${items.length}件中　${_portalHistoryPage}/${totalPages}ページ</div>`
+    : '';
+  listEl.innerHTML = pageLabelHtml + pageItems.map(it => {
     const label = it.status === 'settled' ? '精算済み' : '返却済み';
     const color = it.status === 'settled' ? 'var(--success)' : 'var(--text-muted)';
     const dateStr = it.date ? fmtDateJP(it.date) : '';
@@ -11673,7 +11893,7 @@ function renderPortalHistoryList() {
       </div>
       <span style="font-size:11px;font-weight:700;color:${color};flex-shrink:0">${label}</span>
     </div>`;
-  }).join('');
+  }).join('') + paginationButtonsHtml(_portalHistoryPage, totalPages, 'goToPortalHistoryPage({p})');
 }
 
 // 検索・月・期間（開始／終了）いずれかの入力欄が変わるたびに呼ばれる
