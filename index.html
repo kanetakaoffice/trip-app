@@ -11812,6 +11812,9 @@ function doExportSalesPDF() {
   // 要望：「売上管理表の下に卸売の売上があるが、EC売上のように表の上に何の売上か分かるように
   // なっていない。卸売の売上だと分かるようにしてほしい」への対応。EC売上のセクションと同じ
   // 見た目になるよう、明細表の直前に見出し（subtitle）を追加した（表記は「卸売売上」）。
+  // その後、「卸売売上にメモは追加しない」という結論に加え、「EC売上のメモ列も消してほしい」
+  // という要望があったため、EC売上の明細表からもメモ列を削除した（両方とも日付・卸先(販路)・
+  // 金額の3列構成になり、表示が揃っている）。
   let html = `<h2>売上管理表　${year}年${month}月分</h2><p>出力日: ${new Date().toLocaleDateString('ja-JP')}</p>
   <div class="subtitle">卸売売上</div>
   <table style="table-layout:fixed">
@@ -11830,9 +11833,9 @@ function doExportSalesPDF() {
     const channelRows = Object.entries(channelMap).map(([k,v])=>`<tr><td>${k}</td><td style="text-align:right">¥${v.toLocaleString('ja-JP')}</td></tr>`).join('');
     html += `
     <div class="subtitle">EC売上（Amazon・自社EC）</div>
-    <table><tr><th>日付</th><th>販路</th><th>金額（円）</th><th>メモ</th></tr>
-    ${ecRows.map(e=>`<tr><td>${e.date}</td><td>${e.channel||''}</td><td style="text-align:right">¥${e.amount.toLocaleString('ja-JP')}</td><td>${e.note||''}</td></tr>`).join('')}
-    <tr class="total"><td colspan="2" style="text-align:right">EC合計</td><td style="text-align:right">¥${ecTotal.toLocaleString('ja-JP')}</td><td></td></tr>
+    <table><tr><th>日付</th><th>販路</th><th>金額（円）</th></tr>
+    ${ecRows.map(e=>`<tr><td>${e.date}</td><td>${e.channel||''}</td><td style="text-align:right">¥${e.amount.toLocaleString('ja-JP')}</td></tr>`).join('')}
+    <tr class="total"><td colspan="2" style="text-align:right">EC合計</td><td style="text-align:right">¥${ecTotal.toLocaleString('ja-JP')}</td></tr>
     </table>
     <div class="subtitle">EC販路別合計</div>
     <table><tr><th>販路</th><th>金額（円）</th></tr>${channelRows}
