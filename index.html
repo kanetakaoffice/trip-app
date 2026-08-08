@@ -11798,14 +11798,27 @@ function doExportSalesPDF() {
   // その下の卸先別合計・EC売上などの表は幅が理想的なので、一番上の明細表もそこに合わせたい」
   // への対応。table-layout:autoのままだと、列幅が各行の内容量（卸先の名前の長さなど）に
   // 引っ張られて月ごとに変動してしまうため、colgroupで列幅の割合を固定した
-  // （table-layout:fixed）。卸先列に十分な幅（37%）を確保することで、長い取引先名も
-  // 1行に収まるようにしつつ、他の列や他の表との横幅の見え方を揃えている。
+  // （table-layout:fixed）。
+  // さらに「縦幅（行の高さ）が下の卸先別合計などの表より広くなってしまっている。メモ列は
+  // 不要なので消してほしい。日付は表の見出しに『2026年』とあるので年の部分は消してほしい」
+  // への対応として、メモ列自体を削除し、日付は年を省いた「月-日」表記にした。列が1つ減り、
+  // 日付の表示も短くなったことで卸先列に十分な余裕ができ、折り返しが起きにくくなった
+  // （＝行の高さも他の表と同じ1行分に揃う）。
+  // さらに「金額の横幅が狭く、数字が枠に被って見にくい」への対応として、卸先列の余裕分から
+  // 少し金額列に幅を回した。
+  // さらに「区分（国内請求書／国外インボイス）も不要なので消してほしい」への対応として、
+  // 区分列自体を削除した（卸先46%・金額22%だった分を、卸先・金額に振り分けている。長い
+  // 海外取引先名は引き続き1行に収まる幅を確保している）。
+  // 要望：「売上管理表の下に卸売の売上があるが、EC売上のように表の上に何の売上か分かるように
+  // なっていない。卸売の売上だと分かるようにしてほしい」への対応。EC売上のセクションと同じ
+  // 見た目になるよう、明細表の直前に見出し（subtitle）を追加した（表記は「卸売売上」）。
   let html = `<h2>売上管理表　${year}年${month}月分</h2><p>出力日: ${new Date().toLocaleDateString('ja-JP')}</p>
+  <div class="subtitle">卸売売上</div>
   <table style="table-layout:fixed">
-  <colgroup><col style="width:12%"><col style="width:18%"><col style="width:44%"><col style="width:11%"><col style="width:15%"></colgroup>
-  <tr><th>日付</th><th>区分</th><th>卸先</th><th>金額（円）</th><th>メモ</th></tr>
-  ${rows.map(r=>`<tr><td>${r.date}</td><td>${r.salesType||''}</td><td>${r.client}</td><td style="text-align:right">¥${r.amount.toLocaleString('ja-JP')}</td><td>${r.note||''}</td></tr>`).join('')}
-  <tr class="total"><td colspan="3" style="text-align:right">合計</td><td style="text-align:right">¥${total.toLocaleString('ja-JP')}</td><td></td></tr>
+  <colgroup><col style="width:10%"><col style="width:65%"><col style="width:25%"></colgroup>
+  <tr><th>日付</th><th>卸先</th><th>金額（円）</th></tr>
+  ${rows.map(r=>`<tr><td>${(r.date||'').slice(5)}</td><td>${r.client}</td><td style="text-align:right">¥${r.amount.toLocaleString('ja-JP')}</td></tr>`).join('')}
+  <tr class="total"><td colspan="2" style="text-align:right">合計</td><td style="text-align:right">¥${total.toLocaleString('ja-JP')}</td></tr>
   </table>
   <div class="subtitle">卸先別合計</div>
   <table><tr><th>卸先</th><th>金額（円）</th></tr>${clientRows}
