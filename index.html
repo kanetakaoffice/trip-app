@@ -11684,7 +11684,15 @@ function buildPrintHtml(title, tableHtml) {
     /* @pageのmarginを0にすると、一部のブラウザ（Chromeなど）では印刷時のヘッダー・フッターが
        表示されなくなるため、それを利用しつつ内容側の余白で調整しておく（iPhoneのSafariには
        効果がない。納品書はこの印刷機能を使わず、アプリ内で直接PDFを作る方式にしている） */
-    @page { size: auto; margin: 0; }
+    /* 要望：「月次出力のPDFで、月によって卸先別合計・EC売上の表の幅が違う（狭い月と広い月が
+       ある）ので、全ての月で同じ幅に統一してほしい」への対応。
+       原因：sizeを"auto"にしていたため、iPhoneのSafariで印刷→PDF化する際、ページ幅がその時の
+       表示内容の量（テキストの長さや行数）によって決まってしまい、月ごとにデータの中身が
+       違うと結果的にページ全体の幅（＝各テーブルのwidth:100%が基準にする幅）も変わって
+       しまっていたと考えられる。ページ幅をA4に固定することで、中身の量に関わらず常に同じ
+       幅でPDFが生成されるようにした（marginは0のまま変更していないので、上のChrome向けの
+       ヘッダー・フッター非表示の効果はそのまま維持される）。 */
+    @page { size: A4; margin: 0; }
     @media print { .btn-bar { display:none; } .content { padding:14mm 10mm; } }
   </style></head><body>
   <div class="btn-bar">
