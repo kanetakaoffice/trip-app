@@ -10689,6 +10689,13 @@ function tripsForMonth(y, m)     { return (window._getTrips?.()||[]).filter(a =>
 function expensesForMonth(y, m)  { return (window._getExpenses?.()||[]).filter(a => a.date?.startsWith(getMonthKey(y,m))); }
 function purchasesForMonth(y, m) { return (window._getPurchases?.()||[]).filter(a => a.date?.startsWith(getMonthKey(y,m))); }
 function salesForMonth(y, m) { return (window._getSales?.()||[]).filter(a => a.date?.startsWith(getMonthKey(y,m))); }
+// 要望：「月次出力は月次決算で税理士に提出する資料になるので、全ての売上の合計が表示される
+// ようにしてほしい」への対応。月次出力の売上は元々、業務→売上で手入力する卸売分
+// （国内請求書・国外インボイス）のみを集計していたが、出荷管理のEC売上タブで記録している
+// Amazon・自社EC分はここに含まれていなかった。selectMonth内でこの関数を使ってEC売上も
+// あわせて取得し、卸売とは別のアコーディオンとして内訳を出しつつ、「売上 vs 仕入」の
+// 売上合計・粗利益には卸売+ECの合計額を反映するようにした。
+function ecSalesForMonth(y, m) { return (window._getEcSales?.()||[]).filter(a => a.date?.startsWith(getMonthKey(y,m))); }
 
 function renderMonthGrid(restoreState) {
   const year = parseInt(document.getElementById('year-sel').value);
@@ -10701,7 +10708,7 @@ function renderMonthGrid(restoreState) {
   }
   grid.innerHTML = '';
   for (let m = 1; m <= 12; m++) {
-    const hasData = tripsForMonth(year,m).length > 0 || expensesForMonth(year,m).length > 0 || purchasesForMonth(year,m).length > 0 || salesForMonth(year,m).length > 0;
+    const hasData = tripsForMonth(year,m).length > 0 || expensesForMonth(year,m).length > 0 || purchasesForMonth(year,m).length > 0 || salesForMonth(year,m).length > 0 || ecSalesForMonth(year,m).length > 0;
     const btn = document.createElement('button');
     btn.textContent = m + '月';
     btn.className = 'month-btn' + (hasData ? ' has-data' : ' no-data');
@@ -10733,13 +10740,14 @@ function selectMonth(year, month, btnEl) {
   const eApps = expensesForMonth(year, month);
   const pApps = purchasesForMonth(year, month);
   const sApps = salesForMonth(year, month);
+  const ecApps = ecSalesForMonth(year, month);
   document.querySelectorAll('.month-btn').forEach(b => b.classList.remove('selected'));
   btnEl.classList.add('selected');
   if (window._setSelectedMonth) window._setSelectedMonth({ year, month });
   const preview = document.getElementById('preview-area');
   const noData  = document.getElementById('no-data-msg');
   const preBox  = document.getElementById('preview-box');
-  if (!tApps.length && !eApps.length && !pApps.length && !sApps.length) {
+  if (!tApps.length && !eApps.length && !pApps.length && !sApps.length && !ecApps.length) {
     preview.style.display='none'; noData.style.display='block'; return;
   }
   noData.style.display = 'none';
@@ -10852,7 +10860,7 @@ function selectMonth(year, month, btnEl) {
     }).join('');
     html += `
       <div class="accordion-header" onclick="toggleAccordion('sales')">
-        <span class="accordion-title">💹 売上 <span style="font-size:11px;color:var(--text-muted);font-weight:400">${sApps.length}件</span></span>
+        <span class="accordion-title">💹 売上（卸売） <span style="font-size:11px;color:var(--text-muted);font-weight:400">${sApps.length}件</span></span>
         <span style="display:flex;align-items:center;gap:8px">
           <span class="accordion-summary" style="color:var(--teal)">¥${salTotal.toLocaleString('ja-JP')}</span>
           <span class="accordion-arrow" id="acc-arrow-sales">▼</span>
@@ -10861,14 +10869,60 @@ function selectMonth(year, month, btnEl) {
       <div class="accordion-body" id="acc-body-sales">${clientSections}</div>`;
   }
 
-  if (pApps.length && sApps.length) {
+  // 要望：「月次出力は税理士に提出する資料になるので、全ての売上の合計が表示されるように
+  // してほしい」への対応。ここまでの「💹 売上（卸売）」は業務→売上で手入力した卸売分のみ
+  // だったため、出荷管理のEC売上タブで記録しているAmazon・自社EC分を、販路（channel）別の
+  // 内訳として別アコーディオンで追加する。下の「売上 vs 仕入」の売上合計・粗利益にも
+  // 卸売+ECを合算した金額を反映する。
+  if (ecApps.length) {
+    const ecTotal = ecApps.reduce((s,a) => s+a.amount, 0);
+    const sorted = [...ecApps].sort((a,b) => a.date.localeCompare(b.date));
+    const ecByChannel = {};
+    sorted.forEach(e => { const k = e.channel||'不明'; if(!ecByChannel[k]) ecByChannel[k]=[]; ecByChannel[k].push(e); });
+    const channelSections = Object.entries(ecByChannel).sort((a,b)=>b[1].reduce((s,p)=>s+p.amount,0)-a[1].reduce((s,p)=>s+p.amount,0)).map(([channel, rows], idx)=>{
+      const channelTotal = rows.reduce((s,p)=>s+p.amount,0);
+      const aid = 'ec_channel_'+idx;
+      const detail = rows.map(e=>`
+        <div class="detail-row" style="cursor:pointer" onclick="openEcDayEdit('${e.date}')">
+          <span class="detail-date">${e.date}</span>
+          <span class="detail-name">${e.note||''}</span>
+          <span class="detail-amount" style="color:var(--teal)">¥${e.amount.toLocaleString('ja-JP')}</span>
+          <span style="font-size:10px;color:#a0a0a0;margin-left:4px">✏️</span>
+        </div>`).join('');
+      return `<div style="margin-bottom:4px">
+        <div onclick="toggleAccordion('${aid}')" style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:#f8f8f8;border-radius:6px;cursor:pointer;border:1px solid #e8e8e8">
+          <span style="font-size:12px;font-weight:700;color:#3a3a3a">${channel} <span style="font-weight:400;color:var(--text-muted)">${rows.length}件</span></span>
+          <span style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:12px;font-weight:700;color:var(--teal)">¥${channelTotal.toLocaleString('ja-JP')}</span>
+            <span class="accordion-arrow" id="acc-arrow-${aid}">▼</span>
+          </span>
+        </div>
+        <div class="accordion-body" id="acc-body-${aid}">${detail}</div>
+      </div>`;
+    }).join('');
+    html += `
+      <div class="accordion-header" onclick="toggleAccordion('ecsales')">
+        <span class="accordion-title">💰 EC売上（Amazon・自社EC） <span style="font-size:11px;color:var(--text-muted);font-weight:400">${ecApps.length}件</span></span>
+        <span style="display:flex;align-items:center;gap:8px">
+          <span class="accordion-summary" style="color:var(--teal)">¥${ecTotal.toLocaleString('ja-JP')}</span>
+          <span class="accordion-arrow" id="acc-arrow-ecsales">▼</span>
+        </span>
+      </div>
+      <div class="accordion-body" id="acc-body-ecsales">${channelSections}</div>`;
+  }
+
+  if (pApps.length && (sApps.length || ecApps.length)) {
     const purTotal = pApps.reduce((s,a) => s+a.amount, 0);
     const salTotal = sApps.reduce((s,a) => s+a.amount, 0);
-    const profit = salTotal - purTotal;
+    const ecTotal  = ecApps.reduce((s,a) => s+a.amount, 0);
+    const salGrandTotal = salTotal + ecTotal;
+    const profit = salGrandTotal - purTotal;
     html += `<div style="margin-top:12px;padding:12px;background:var(--gold-bg);border:1px solid var(--gold);border-radius:8px;">`;
     html += `<div style="font-size:11px;color:var(--gold-dark);margin-bottom:8px;font-weight:700">📊 売上 vs 仕入</div>`;
     html += `<div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:13px"><span style="color:var(--text-sub)">仕入合計</span><span style="color:var(--orange)">¥${purTotal.toLocaleString('ja-JP')}</span></div>`;
-    html += `<div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:13px"><span style="color:var(--text-sub)">売上合計</span><span style="color:var(--teal)">¥${salTotal.toLocaleString('ja-JP')}</span></div>`;
+    html += `<div style="display:flex;justify-content:space-between;margin-bottom:2px;font-size:12px"><span style="color:var(--text-sub)">　売上（卸売）</span><span style="color:var(--text-sub)">¥${salTotal.toLocaleString('ja-JP')}</span></div>`;
+    html += `<div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:12px"><span style="color:var(--text-sub)">　売上（EC）</span><span style="color:var(--text-sub)">¥${ecTotal.toLocaleString('ja-JP')}</span></div>`;
+    html += `<div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:13px"><span style="color:var(--text-sub);font-weight:700">売上合計（卸売+EC）</span><span style="color:var(--teal);font-weight:700">¥${salGrandTotal.toLocaleString('ja-JP')}</span></div>`;
     html += `<div style="display:flex;justify-content:space-between;border-top:1px solid var(--gold);padding-top:8px;font-size:14px"><span style="font-weight:700">粗利益</span><span style="font-weight:700;color:${profit>=0?'var(--success)':'var(--danger)'}">¥${profit.toLocaleString('ja-JP')}</span></div>`;
     html += `</div>`;
   }
@@ -11123,8 +11177,16 @@ function doExportSales() {
   if (!sm) return;
   const { year, month } = sm;
   const rows = salesForMonth(year, month).sort((a,b) => a.date.localeCompare(b.date));
-  if (!rows.length) { showToast('この月の売上データがありません'); return; }
+  const ecRows = ecSalesForMonth(year, month).sort((a,b) => a.date.localeCompare(b.date));
+  // 要望：「月次出力は税理士に提出する資料になるので、全ての売上の合計が表示されるように
+  // してほしい」への対応。この売上Excelは元々、業務→売上の卸売分（国内請求書・国外
+  // インボイス）しか集計していなかったため、出荷管理のEC売上タブで記録している
+  // Amazon・自社EC分を同じシートに追記し、末尾に卸売+ECの総合計を出すようにした。
+  // 卸売の明細・卸先別合計の部分は元の形式のまま変えていない。
+  if (!rows.length && !ecRows.length) { showToast('この月の売上データがありません'); return; }
   const total = rows.reduce((s,a) => s+a.amount, 0);
+  const ecTotal = ecRows.reduce((s,a) => s+a.amount, 0);
+  const grandTotal = total + ecTotal;
   const aoa = [
     [`売上管理表　${year}年${month}月分`], [],
     ['日付','区分','卸先','金額（円）','メモ'],
@@ -11138,7 +11200,24 @@ function doExportSales() {
     subtotals.push([c, cRows.length, cRows.reduce((s,r)=>s+r.amount,0)]);
   });
   subtotals.push([], ['', '合計', total]);
-  const ws = XLSX.utils.aoa_to_sheet([...aoa, ...subtotals]);
+
+  const ecSection = [];
+  if (ecRows.length) {
+    ecSection.push([], ['EC売上（Amazon・自社EC）'], ['日付','販路','金額（円）','メモ']);
+    ecRows.forEach(e => ecSection.push([e.date, e.channel||'', e.amount, e.note||'']));
+    ecSection.push([], ['','EC合計', ecTotal]);
+    const channels = [...new Set(ecRows.map(e => e.channel))];
+    ecSection.push([], ['EC販路別合計'], ['販路','件数','合計金額（円）']);
+    channels.forEach(c => {
+      const cRows = ecRows.filter(e => e.channel === c);
+      ecSection.push([c, cRows.length, cRows.reduce((s,e)=>s+e.amount,0)]);
+    });
+    ecSection.push([], ['', 'EC合計', ecTotal]);
+  }
+
+  const grandSection = [[], ['売上総合計（卸売+EC）', grandTotal]];
+
+  const ws = XLSX.utils.aoa_to_sheet([...aoa, ...subtotals, ...ecSection, ...grandSection]);
   ws['!cols'] = [{wch:14},{wch:16},{wch:28},{wch:14},{wch:20}];
   ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:4}}];
   const wb = XLSX.utils.book_new();
@@ -11691,12 +11770,17 @@ function doExportSalesPDF() {
   if (!sm) return;
   const { year, month } = sm;
   const rows = salesForMonth(year, month).sort((a,b)=>a.date.localeCompare(b.date));
-  if (!rows.length) { showToast('この月の売上データがありません'); return; }
+  const ecRows = ecSalesForMonth(year, month).sort((a,b)=>a.date.localeCompare(b.date));
+  // Excel出力（doExportSales）と同様、税理士提出資料として全ての売上（卸売+EC）の
+  // 合計が分かるよう、EC売上（Amazon・自社EC）のセクションと総合計を追加している。
+  if (!rows.length && !ecRows.length) { showToast('この月の売上データがありません'); return; }
   const total = rows.reduce((s,a)=>s+a.amount,0);
+  const ecTotal = ecRows.reduce((s,a)=>s+a.amount,0);
+  const grandTotal = total + ecTotal;
   const clientMap = {};
   rows.forEach(r => { const k = r.client||'不明'; clientMap[k]=(clientMap[k]||0)+r.amount; });
   const clientRows = Object.entries(clientMap).map(([k,v])=>`<tr><td>${k}</td><td style="text-align:right">¥${v.toLocaleString('ja-JP')}</td></tr>`).join('');
-  const html = `<h2>売上管理表　${year}年${month}月分</h2><p>出力日: ${new Date().toLocaleDateString('ja-JP')}</p>
+  let html = `<h2>売上管理表　${year}年${month}月分</h2><p>出力日: ${new Date().toLocaleDateString('ja-JP')}</p>
   <table><tr><th>日付</th><th>区分</th><th>卸先</th><th>金額（円）</th><th>メモ</th></tr>
   ${rows.map(r=>`<tr><td>${r.date}</td><td>${r.salesType||''}</td><td>${r.client}</td><td style="text-align:right">¥${r.amount.toLocaleString('ja-JP')}</td><td>${r.note||''}</td></tr>`).join('')}
   <tr class="total"><td colspan="3" style="text-align:right">合計</td><td style="text-align:right">¥${total.toLocaleString('ja-JP')}</td><td></td></tr>
@@ -11705,6 +11789,24 @@ function doExportSalesPDF() {
   <table><tr><th>卸先</th><th>金額（円）</th></tr>${clientRows}
   <tr class="total"><td style="text-align:right">合計</td><td style="text-align:right">¥${total.toLocaleString('ja-JP')}</td></tr>
   </table>`;
+  if (ecRows.length) {
+    const channelMap = {};
+    ecRows.forEach(e => { const k = e.channel||'不明'; channelMap[k]=(channelMap[k]||0)+e.amount; });
+    const channelRows = Object.entries(channelMap).map(([k,v])=>`<tr><td>${k}</td><td style="text-align:right">¥${v.toLocaleString('ja-JP')}</td></tr>`).join('');
+    html += `
+    <div class="subtitle">EC売上（Amazon・自社EC）</div>
+    <table><tr><th>日付</th><th>販路</th><th>金額（円）</th><th>メモ</th></tr>
+    ${ecRows.map(e=>`<tr><td>${e.date}</td><td>${e.channel||''}</td><td style="text-align:right">¥${e.amount.toLocaleString('ja-JP')}</td><td>${e.note||''}</td></tr>`).join('')}
+    <tr class="total"><td colspan="2" style="text-align:right">EC合計</td><td style="text-align:right">¥${ecTotal.toLocaleString('ja-JP')}</td><td></td></tr>
+    </table>
+    <div class="subtitle">EC販路別合計</div>
+    <table><tr><th>販路</th><th>金額（円）</th></tr>${channelRows}
+    <tr class="total"><td style="text-align:right">EC合計</td><td style="text-align:right">¥${ecTotal.toLocaleString('ja-JP')}</td></tr>
+    </table>`;
+  }
+  html += `
+  <div class="subtitle">売上総合計（卸売+EC）</div>
+  <table><tr class="total"><td style="text-align:right">総合計</td><td style="text-align:right">¥${grandTotal.toLocaleString('ja-JP')}</td></tr></table>`;
   const w = window.open('','_blank');
   w.document.write(buildPrintHtml(`売上管理表_${year}年${month}月`, html));
   w.document.close();
