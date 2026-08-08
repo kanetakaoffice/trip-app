@@ -11672,7 +11672,20 @@ function buildPrintHtml(title, tableHtml) {
     .btn-bar { display:flex; gap:10px; padding:12px 16px; background:#f0f0f0; border-bottom:1px solid #ddd; position:sticky; top:0; z-index:10; }
     .btn-print { flex:1; padding:12px; background:linear-gradient(135deg,#d8d8d8,#a8a8a8); color:#1a1a1a; border:none; border-radius:8px; font-size:15px; font-weight:700; cursor:pointer; }
     .btn-close { flex:1; padding:12px; background:#fff; color:#555; border:1.5px solid #ccc; border-radius:8px; font-size:15px; cursor:pointer; }
-    .content { padding:20px; }
+    /* 要望：「月次出力のPDFで、月によって卸先別合計・EC売上の表の幅が違う」「プレビュー画面の
+       まま印刷・PDF保存したいのに、印刷ボタンを押すとレイアウトが変わってしまう」への対応。
+       原因：これまでこのプレビュー画面の.content（表を含む本文）には横幅の上限を指定して
+       おらず、開いたウィンドウ（または印刷プレビューの表示領域）の幅にそのまま合わせて
+       表がwidth:100%で広がる作りになっていた。一方、実際の印刷・PDF保存はA4サイズの紙面に
+       固定される。そのため、ウィンドウを大きく開いた時と小さく開いた時とでプレビュー上の
+       表の幅が変わってしまい（＝月によって幅が違って見えていた本当の原因）、さらに
+       プレビューでの見た目と実際に印刷される結果も一致していなかった。
+       今回、画面表示時の.contentの最大幅をA4の紙面サイズ（210mm）に固定し、それより
+       ウィンドウが広い場合は中央寄せで余白を灰色背景にすることで、常に同じ幅で表示され、
+       かつ実際の印刷・PDF保存時の見た目とも一致するようにした（＝プレビューがそのまま
+       印刷結果になる）。 */
+    body { background:#e2e2e2; }
+    .content { padding:20px; max-width:210mm; margin:0 auto; background:#fff; box-shadow:0 0 14px rgba(0,0,0,0.15); }
     h2 { font-size:16px; margin-bottom:4px; }
     p { font-size:11px; color:#666; margin-bottom:16px; }
     table { width:100%; border-collapse:collapse; margin-bottom:16px; }
@@ -11684,16 +11697,8 @@ function buildPrintHtml(title, tableHtml) {
     /* @pageのmarginを0にすると、一部のブラウザ（Chromeなど）では印刷時のヘッダー・フッターが
        表示されなくなるため、それを利用しつつ内容側の余白で調整しておく（iPhoneのSafariには
        効果がない。納品書はこの印刷機能を使わず、アプリ内で直接PDFを作る方式にしている） */
-    /* 要望：「月次出力のPDFで、月によって卸先別合計・EC売上の表の幅が違う（狭い月と広い月が
-       ある）ので、全ての月で同じ幅に統一してほしい」への対応。
-       原因：sizeを"auto"にしていたため、iPhoneのSafariで印刷→PDF化する際、ページ幅がその時の
-       表示内容の量（テキストの長さや行数）によって決まってしまい、月ごとにデータの中身が
-       違うと結果的にページ全体の幅（＝各テーブルのwidth:100%が基準にする幅）も変わって
-       しまっていたと考えられる。ページ幅をA4に固定することで、中身の量に関わらず常に同じ
-       幅でPDFが生成されるようにした（marginは0のまま変更していないので、上のChrome向けの
-       ヘッダー・フッター非表示の効果はそのまま維持される）。 */
     @page { size: A4; margin: 0; }
-    @media print { .btn-bar { display:none; } .content { padding:14mm 10mm; } }
+    @media print { .btn-bar { display:none; } body { background:#fff; } .content { padding:14mm 10mm; max-width:none; margin:0; box-shadow:none; } }
   </style></head><body>
   <div class="btn-bar">
     <button class="btn-print" onclick="window.print()">🖨 印刷 / PDF保存</button>
@@ -11788,8 +11793,17 @@ function doExportSalesPDF() {
   const clientMap = {};
   rows.forEach(r => { const k = r.client||'不明'; clientMap[k]=(clientMap[k]||0)+r.amount; });
   const clientRows = Object.entries(clientMap).map(([k,v])=>`<tr><td>${k}</td><td style="text-align:right">¥${v.toLocaleString('ja-JP')}</td></tr>`).join('');
+  // 要望：「5月から海外取引先（ANGCO INTERNATIONAL TRADING COMPANY（香港）のような長い名前）と
+  // 取引を始めたので、卸先の名前が2行に折り返されてしまう。折り返さず1行に収めたい。また、
+  // その下の卸先別合計・EC売上などの表は幅が理想的なので、一番上の明細表もそこに合わせたい」
+  // への対応。table-layout:autoのままだと、列幅が各行の内容量（卸先の名前の長さなど）に
+  // 引っ張られて月ごとに変動してしまうため、colgroupで列幅の割合を固定した
+  // （table-layout:fixed）。卸先列に十分な幅（37%）を確保することで、長い取引先名も
+  // 1行に収まるようにしつつ、他の列や他の表との横幅の見え方を揃えている。
   let html = `<h2>売上管理表　${year}年${month}月分</h2><p>出力日: ${new Date().toLocaleDateString('ja-JP')}</p>
-  <table><tr><th>日付</th><th>区分</th><th>卸先</th><th>金額（円）</th><th>メモ</th></tr>
+  <table style="table-layout:fixed">
+  <colgroup><col style="width:12%"><col style="width:18%"><col style="width:44%"><col style="width:11%"><col style="width:15%"></colgroup>
+  <tr><th>日付</th><th>区分</th><th>卸先</th><th>金額（円）</th><th>メモ</th></tr>
   ${rows.map(r=>`<tr><td>${r.date}</td><td>${r.salesType||''}</td><td>${r.client}</td><td style="text-align:right">¥${r.amount.toLocaleString('ja-JP')}</td><td>${r.note||''}</td></tr>`).join('')}
   <tr class="total"><td colspan="3" style="text-align:right">合計</td><td style="text-align:right">¥${total.toLocaleString('ja-JP')}</td><td></td></tr>
   </table>
