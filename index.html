@@ -10000,9 +10000,21 @@ function renderECListSP() {
         <span style="font-weight:700;color:#4a4a4a">${yen(total)}</span>
       </div>`;
     }).join('');
+    // 要望：「月別売上推移に、月毎の合計金額だけでなく1年間の合計金額も表示してほしい」
+    // への対応。表の一番下に、その会計年度（3月始まり）12か月分の合計を示す行を追加した。
+    const yearTotalAmazon = monthlyData.reduce((s,m)=>s+m.amazon,0);
+    const yearTotalJisha  = monthlyData.reduce((s,m)=>s+m.jisha,0);
+    const yearTotal = yearTotalAmazon + yearTotalJisha;
+    const mYearTotalRow = `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;font-size:12px;background:var(--gold-bg)">
+      <span style="font-weight:700;color:var(--text)">年間合計</span>
+      <span style="font-weight:700;color:#16a34a">${yen(yearTotalAmazon)}</span>
+      <span style="font-weight:700;color:#0ea5e9">${yen(yearTotalJisha)}</span>
+      <span style="font-weight:700;color:#4a4a4a">${yen(yearTotal)}</span>
+    </div>`;
     const mSummaryTable = `<div style="background:var(--white);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;margin-top:10px">
       <div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--surface);font-size:11px;font-weight:700;color:var(--text-muted);border-bottom:1px solid var(--border)"><span>月</span><span style="color:#16a34a">Amazon</span><span style="color:#0ea5e9">自社EC</span><span>合計</span></div>
       ${mSummaryRows}
+      ${mYearTotalRow}
     </div>`;
     // 一覧グラフと同じように、一番上の目盛り（＝一番高い棒）の上にも少し余白を持たせる
     monthlyEl.innerHTML = `<div style="display:flex;gap:0;margin-top:12px">
