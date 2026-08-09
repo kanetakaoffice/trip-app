@@ -10584,7 +10584,13 @@ function renderChart(container) {
       </div>
     </div>`;
   }).filter(Boolean).join('');
-  const summaryTable=`<div style="background:var(--white);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;margin-bottom:16px"><div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--surface);font-size:11px;font-weight:700;color:var(--text-muted);border-bottom:1px solid var(--border)"><span>月</span><span>仕入合計</span><span style="color:var(--teal)">売上合計</span><span>粗利益</span></div>${summaryRows||'<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">データがありません</div>'}</div>`;
+  // 要望：「業務の一覧のグラフの下の月毎の仕入合計・売上合計・粗利益合計に、1年間の合計金額も
+  // 表示してほしい」への対応。表の一番下に、今期（3月始まり12ヶ月）の年間合計行を追加した。
+  const yearPurTotal = purCurr.reduce((s,v)=>s+v,0);
+  const yearSalTotal = salCurr.reduce((s,v)=>s+v,0);
+  const yearProfitTotal = yearSalTotal - yearPurTotal;
+  const yearTotalRow = summaryRows ? `<div style="border-top:2px solid var(--border);padding:8px 12px;background:var(--gold-bg)"><div style="display:flex;justify-content:space-between;align-items:center;font-size:12px"><span style="font-weight:700;color:var(--text)">年間合計</span><span style="font-weight:700;color:#4a4a4a">${yen(yearPurTotal)}</span><span style="font-weight:700;color:var(--teal)">${yen(yearSalTotal)}</span><span style="font-weight:700;color:${yearProfitTotal>=0?'var(--success)':'var(--danger)'}">${yen(yearProfitTotal)}</span></div></div>` : '';
+  const summaryTable=`<div style="background:var(--white);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;margin-bottom:16px"><div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--surface);font-size:11px;font-weight:700;color:var(--text-muted);border-bottom:1px solid var(--border)"><span>月</span><span>仕入合計</span><span style="color:var(--teal)">売上合計</span><span>粗利益</span></div>${summaryRows||'<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">データがありません</div>'}${yearTotalRow}</div>`;
 
   container.innerHTML=`
   <div style="background:var(--white);border-radius:var(--radius);border:1px solid var(--border);padding:14px;margin-bottom:16px">
