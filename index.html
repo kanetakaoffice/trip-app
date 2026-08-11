@@ -1452,6 +1452,20 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <span class="accordion-arrow" id="acc-arrow-wh-deliv-history" style="font-size:10px;color:var(--text-muted)">▼</span>
       </div>
       <div class="accordion-body" id="acc-body-wh-deliv-history" style="margin-top:8px">
+        <!-- 要望：「ある型番をいつどこに卸したか検索をかけて引っ掛かるようにしたい。型番検索と
+             日にちの期間指定の機能を追加して、該当の型番のある納品書を抽出できるようにして
+             ほしい」への対応。委託の履歴検索（wh-consign-history）と同じ考え方で、型番
+             （部分一致・表記ゆれを吸収）と期間（開始〜終了、片方だけの指定も可）で絞り込める
+             ようにした -->
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+          <input type="text" id="wh-deliv-history-search" placeholder="🔍 型番で検索" oninput="filterWhDelivHistory()" style="flex:1;min-width:130px;padding:7px 9px;border:1.2px solid var(--border);border-radius:8px;font-size:12.5px;box-sizing:border-box">
+          <label style="display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text-muted);white-space:nowrap">期間
+            <input type="date" id="wh-deliv-history-date-start" onchange="filterWhDelivHistory()" aria-label="期間の開始日" style="padding:7px 9px;border:1.2px solid var(--border);border-radius:8px;font-size:12.5px">
+            〜
+            <input type="date" id="wh-deliv-history-date-end" onchange="filterWhDelivHistory()" aria-label="期間の終了日" style="padding:7px 9px;border:1.2px solid var(--border);border-radius:8px;font-size:12.5px">
+          </label>
+          <button type="button" id="wh-deliv-history-filter-clear" onclick="clearWhDelivHistoryFilter()" style="display:none;padding:7px 10px;border:1.2px solid var(--border);border-radius:8px;background:var(--white);color:var(--text-muted);font-size:12px;cursor:pointer;white-space:nowrap">✕ 条件をクリア</button>
+        </div>
         <div id="wh-deliv-history-list"></div>
       </div>
     </div>
@@ -4255,7 +4269,16 @@ async function removeSlipFromFreeeInvoiceGroups(slipId) {
   } catch (e) { console.error('freeeInvoiceGroup cleanup failed', e); }
 }
 
+// 発行済みの納品書の絞り込み状態（型番検索・期間）。renderWhDelivHistory()が呼ばれる
+// たびにこの内容で絞り込む
+let _whDelivHistoryFilter = { q: '', dateStart: '', dateEnd: '' };
+
 // 発行済みの納品書一覧（slipIdごとにまとめて表示。編集・取消ができる）
+// 要望：「ある型番をいつどこに卸したか検索をかけて引っ掛かるようにしたい。型番検索と
+// 日にちの期間指定の機能を追加して、該当の型番のある納品書を抽出できるようにしてほしい」
+// への対応。_whDelivHistoryFilterの型番（部分一致・normalizeModelStrで表記ゆれを吸収）と
+// 期間（開始〜終了、片方だけの指定も可）で納品書（slip単位）を絞り込む。型番で絞り込み中は、
+// その納品書のどの商品が何個該当したのかも一緒にわかるよう、一致した明細を行の下に表示する。
 function renderWhDelivHistory() {
   const listEl = document.getElementById('wh-deliv-history-list');
   if (!listEl) return;
@@ -4267,7 +4290,7 @@ function renderWhDelivHistory() {
   const consignNoteMoves = (stockMoves || []).filter(m => m.type === 'consign' && m.slipId);
   const bySlip = {};
   outMoves.concat(consignNoteMoves).forEach(m => { (bySlip[m.slipId] = bySlip[m.slipId] || []).push(m); });
-  const slips = Object.keys(bySlip).map(slipId => {
+  let slips = Object.keys(bySlip).map(slipId => {
     const items = bySlip[slipId];
     const first = items[0];
     return {
@@ -4277,19 +4300,43 @@ function renderWhDelivHistory() {
       subject: first.subject || '',
       total: items.reduce((s,m) => s + (m.amount || 0), 0),
       itemQty: items.reduce((s,m) => s + (m.qty || 0), 0),
-      createdAt: Math.max(...items.map(m => m.createdAt || 0))
+      createdAt: Math.max(...items.map(m => m.createdAt || 0)),
+      items
     };
   }).sort((a,b) => b.createdAt - a.createdAt);
 
   // 件数バッジ：アコーディオンを開かなくても発行済みの納品書があることに気付けるようにする
+  // （絞り込みに関わらず、発行済みの総件数を表示する）
   const badge = document.getElementById('wh-deliv-history-badge');
   if (badge) {
     if (slips.length > 0) { badge.textContent = slips.length; badge.style.display = 'inline-flex'; }
     else { badge.style.display = 'none'; }
   }
 
+  const f = _whDelivHistoryFilter;
+  const qNorm = normalizeModelStr(f.q || '');
+  const matchedItemsBySlip = {};
+  if (qNorm) {
+    slips = slips.filter(s => {
+      const matches = s.items.filter(it => normalizeModelStr(it.model || it.productName || '').includes(qNorm));
+      if (!matches.length) return false;
+      matchedItemsBySlip[s.slipId] = matches;
+      return true;
+    });
+  }
+  if (f.dateStart || f.dateEnd) {
+    slips = slips.filter(s => {
+      const k = s.date || '';
+      if (!k) return false;
+      if (f.dateStart && k < f.dateStart) return false;
+      if (f.dateEnd && k > f.dateEnd) return false;
+      return true;
+    });
+  }
+  const filterActive = !!(f.q || f.dateStart || f.dateEnd);
+
   if (!slips.length) {
-    listEl.innerHTML = `<div style="font-size:12px;color:var(--text-muted)">まだ発行した納品書はありません</div>`;
+    listEl.innerHTML = `<div style="font-size:12px;color:var(--text-muted)">${filterActive ? '条件に一致する納品書が見つかりませんでした' : 'まだ発行した納品書はありません'}</div>`;
     updateFreeeInvoiceSelectBar();
     return;
   }
@@ -4298,15 +4345,54 @@ function renderWhDelivHistory() {
   // 用意している（updateDsPreviewActionButtons／previewEditDeliverySlip／previewCancelDeliverySlip）。
   // 請求書作成済みのチェック・まとめ表示（footer部分）は、チェックボックス／バッジ側の
   // onclickでevent.stopPropagation()しているため、行タップ（プレビューを開く）とは干渉しない。
-  listEl.innerHTML = slips.map(s => `
+  listEl.innerHTML = slips.map(s => {
+    const matched = matchedItemsBySlip[s.slipId];
+    const matchedHtml = matched ? `<div style="margin-top:4px;font-size:11px;color:var(--gold-dark)">該当：${matched.map(it => `${escapeHtmlMain(it.model || it.productName || '')} ${it.qty}個`).join('／')}</div>` : '';
+    return `
     <div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;cursor:pointer" onclick="showDeliverySlipPreview('${s.slipId}')">
       <div>
         <div style="color:var(--text);font-weight:600">${s.client || ''}／${fmtDateJP(s.date)}${s.subject ? '／' + s.subject : ''}</div>
         <div style="color:var(--text-muted);font-size:11px;margin-top:2px">数量合計 ${s.itemQty}個／合計 ¥${s.total.toLocaleString('ja-JP')}</div>
+        ${matchedHtml}
       </div>
       <div style="margin-top:6px">${freeeInvoiceGroupSummaryHtml(s.slipId)}</div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   updateFreeeInvoiceSelectBar();
+}
+
+// 型番検索・期間（開始／終了）いずれかの入力欄が変わるたびに呼ばれ、フィルター条件を読み取って再描画する
+function filterWhDelivHistory() {
+  const qInput = document.getElementById('wh-deliv-history-search');
+  const dateStartInput = document.getElementById('wh-deliv-history-date-start');
+  const dateEndInput = document.getElementById('wh-deliv-history-date-end');
+  _whDelivHistoryFilter = {
+    q: qInput ? qInput.value.trim() : '',
+    dateStart: dateStartInput ? dateStartInput.value : '',
+    dateEnd: dateEndInput ? dateEndInput.value : ''
+  };
+  updateWhDelivHistoryFilterClearBtn();
+  renderWhDelivHistory();
+}
+
+function updateWhDelivHistoryFilterClearBtn() {
+  const btn = document.getElementById('wh-deliv-history-filter-clear');
+  if (!btn) return;
+  const f = _whDelivHistoryFilter;
+  btn.style.display = (f.q || f.dateStart || f.dateEnd) ? 'inline-block' : 'none';
+}
+
+// 「✕ 条件をクリア」から呼ばれる。すべての入力欄と絞り込み状態を空に戻し、全件表示に戻す
+function clearWhDelivHistoryFilter() {
+  const qInput = document.getElementById('wh-deliv-history-search');
+  const dateStartInput = document.getElementById('wh-deliv-history-date-start');
+  const dateEndInput = document.getElementById('wh-deliv-history-date-end');
+  if (qInput) qInput.value = '';
+  if (dateStartInput) dateStartInput.value = '';
+  if (dateEndInput) dateEndInput.value = '';
+  _whDelivHistoryFilter = { q: '', dateStart: '', dateEnd: '' };
+  updateWhDelivHistoryFilterClearBtn();
+  renderWhDelivHistory();
 }
 
 // プレビューを見ながら、ブラウザの印刷機能でPDFの保存・共有まで行う（納品書のPDF保存・共有はこちらに一本化した）。
