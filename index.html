@@ -1721,6 +1721,11 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <button onclick="shareDeliverySlipPdfDirect()" aria-label="共有" title="共有" style="background:none;border:none;padding:8px;margin:-8px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text)">
           <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
         </button>
+        <!-- 要望：「納品書作成のところで、作成した納品書をExcelで出力できるようにしてほしい」への対応。
+             プレビュー中の納品書（_dsPreviewSlipId）の明細をそのままExcelの表として書き出す -->
+        <button onclick="exportDeliverySlipExcel()" aria-label="Excelで出力" title="Excelで出力" style="background:none;border:none;padding:8px;margin:-8px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text)">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line></svg>
+        </button>
         <div style="width:1px;height:20px;background:var(--border);flex-shrink:0"></div>
         <button id="ds-preview-cancel-btn" onclick="previewCancelDeliverySlip()" aria-label="取り消す" title="取り消す" style="display:none;background:none;border:none;padding:8px;margin:-8px;cursor:pointer;align-items:center;justify-content:center;color:var(--danger)">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>
@@ -3900,6 +3905,47 @@ function buildDeliverySlipDataFromSlipId(slipId) {
     isConsignNote: m.type === 'consign'
   }));
   return { client: moves[0].client, date: moves[0].date, subject: moves[0].subject || '', items };
+}
+
+// 要望：「納品書作成のところで、作成した納品書をExcelで出力できるようにしてほしい」への対応。
+// 各納品書をタップして開いたプレビュー（編集する・共有・取り消すのアイコン列がある画面）から、
+// プレビュー中の納品書（_dsPreviewSlipId）の明細をそのままExcelの表として書き出す。
+// 印刷・PDF共有（shareDeliverySlipPdfDirect／printFromDeliverySlipPreview）と同じく
+// buildDeliverySlipDataFromSlipIdで組み立てたデータを使うため、内容は常に一致する。
+function exportDeliverySlipExcel() {
+  if (!_dsPreviewSlipId) { showToast('対象の納品書が見つかりません'); return; }
+  const data = buildDeliverySlipDataFromSlipId(_dsPreviewSlipId);
+  if (!data) { showToast('対象の納品書が見つかりません'); return; }
+  // XLSXはCDNから読み込んでいるため、オフライン等で読み込めていない場合はその場で案内する
+  // （他のExcel出力＝doExportSales等と同じ制約）
+  if (!window.XLSX) { showToast('Excel出力の準備ができていません。しばらくしてから再度お試しください'); return; }
+  const { client, date, subject, items } = data;
+  const totalQty = items.reduce((s, it) => s + (it.qty || 0), 0);
+  const totalAmount = items.reduce((s, it) => s + (it.isConsignNote ? 0 : ((it.unitPrice || 0) * (it.qty || 0))), 0);
+  const aoa = [
+    ['納品書'], [],
+    ['取引先', client ? client + '　御中' : ''],
+    ['納品日', fmtDateJPLong(date)],
+    ...(subject ? [['件名', subject]] : []),
+    [],
+    ['型番', '数量', '単価（円）', '金額（円）', '備考'],
+    ...items.map(it => [
+      it.model || '',
+      it.qty || 0,
+      it.isConsignNote ? '委託' : (it.unitPrice != null ? it.unitPrice : ''),
+      it.isConsignNote ? '' : ((it.unitPrice || 0) * (it.qty || 0)),
+      it.damageDetail || ''
+    ]),
+    [],
+    ['合計', totalQty, '', totalAmount, '']
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 24 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 30 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '納品書');
+  const fileName = `納品書_${client}_${date}`.replace(/[\\/:*?"<>|]/g, '_');
+  XLSX.writeFile(wb, fileName + '.xlsx');
+  showToast('納品書のExcelを出力しました');
 }
 
 // 発行済みの納品書をブラウザの印刷機能で開く（紙のプリンターに直接送りたい場合や、
