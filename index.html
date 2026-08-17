@@ -3670,7 +3670,14 @@ function dsSlipBodyHtml(client, date, subject) {
           </div>
         </div>
       </div>
-      <div id="ds-measure" style="position:absolute;visibility:hidden;left:-9999px;top:0;width:50%"></div>
+      <!-- 高さ測定用の非表示div。以前はleft:-9999pxで画面外に飛ばしていたが、この#ds-measureの
+           親（#ds-preview-page）にtransform:scale()とoverflow:hiddenが同時にかかる作りのため、
+           WebKit/iOS Safariでabsolute配置の子要素が極端な負のオフセットを持つと、overflow:hiddenの
+           クリップ計算が壊れて「プレビューが左にズレる」「縦スクロール範囲が異常に広がる（-9999pxの
+           分まで含めてスクロール可能な領域として計算されてしまう）」「横スクロールも連動して壊れる」
+           という不具合が起きていた。visibility:hiddenだけで非表示・position:absoluteだけで
+           レイアウトから除外できるため、left:-9999pxのような極端なオフセットは本来不要。 -->
+      <div id="ds-measure" style="position:absolute;visibility:hidden;left:0;top:0;width:50%"></div>
       <div id="ds-final"></div>
     </div>`;
 }
@@ -5519,7 +5526,9 @@ function consignListBodyHtml(client) {
           </div>
         </div>
       </div>
-      <div id="ds-consign-measure" style="position:absolute;visibility:hidden;left:-9999px;top:0;width:50%"></div>
+      <!-- #ds-measure（納品書プレビュー）と同じ理由でleft:-9999pxをやめている。詳細はdsSlipBodyHtml内の
+           #ds-measureのコメントを参照。 -->
+      <div id="ds-consign-measure" style="position:absolute;visibility:hidden;left:0;top:0;width:50%"></div>
       <div id="ds-consign-final"></div>
     </div>`;
 }
