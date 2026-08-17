@@ -1899,6 +1899,25 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     </div>
   </div>
 </div>
+
+<!-- 要望：「納品書作成で同じ商品を複数入力した際に、その内の一部を委託にすることがたまにある。
+     一部を委託にできるようにして欲しい」への対応。数量が2以上の明細行で「📦 委託リストへ追加」を
+     押したときに、いくつを委託にするかをここで確認する。全数量を指定すればこれまで通り行全体が
+     委託になり、それより少ない数量を指定すると、その分だけ新しい行として切り分けて委託の印を付け、
+     残りは元の行に通常の卸売としてそのまま残す（moveWhDelivItemToConsign・confirmWhConsignSplit参照）。 -->
+<div id="wh-consign-split-modal" style="display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:max(24px,env(safe-area-inset-top)) 24px max(24px,env(safe-area-inset-bottom)) 24px">
+  <div style="background:var(--white);border-radius:16px;padding:24px;width:100%;max-width:320px;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">委託にする数量</div>
+    <div id="wh-consign-split-desc" style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px"></div>
+    <input type="number" id="wh-consign-split-qty" min="1" style="width:100%;box-sizing:border-box;padding:10px;font-size:16px;border:1.5px solid var(--border);border-radius:8px;text-align:center;margin-bottom:6px">
+    <div id="wh-consign-split-error" style="display:none;color:var(--danger);font-size:12px;margin-bottom:6px"></div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:18px">残りの数量は、そのまま通常の卸売としてこの納品書に残ります</div>
+    <div style="display:flex;gap:10px">
+      <button onclick="closeWhConsignSplitModal()" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">キャンセル</button>
+      <button onclick="confirmWhConsignSplit()" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8d8d8,#a8a8a8);color:#1a1a1a;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">委託にする</button>
+    </div>
+  </div>
+</div>
 <!-- 取引先ポータルの「まとめて精算」送信前の確認モーダル。誤送信を防ぐため、どの商品を
      どれだけ・いくらで精算しようとしているかを一覧で見せてから、実際の送信ボタンを押してもらう -->
 <div id="portal-batch-confirm-modal" style="display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:max(24px,env(safe-area-inset-top)) 24px max(24px,env(safe-area-inset-bottom)) 24px">
@@ -3165,7 +3184,10 @@ function addWhItemRow(prod) {
   const client = document.getElementById('wh-deliv-client').value.trim();
   const suggested = suggestUnitPrice(client, prod._key);
   const defaultPrice = suggested != null ? suggested : 0;
-  const existing = _whDelivItems.find(it => it.productKey === prod._key && it.unitPrice === defaultPrice);
+  // 委託の印が付いた行には合流させない（一部だけ委託にする機能により、同じ商品・同じ単価の
+  // 行が「通常」「委託」で並んで存在しうるようになったため。委託行が先に来るよう並べ替えられた
+  // 場合でも、誤って委託済みの数量に上乗せしてしまわないようにする）
+  const existing = _whDelivItems.find(it => it.productKey === prod._key && it.unitPrice === defaultPrice && !it._consignMarked);
   if (existing) {
     existing.qty += 1;
     existing.amount = existing.qty * existing.unitPrice;
@@ -3204,13 +3226,87 @@ function removeWhDelivItem(idx) {
 // ※「委託リスト」という名称・「委託」の表記は、要望「委託リストの名前を委託リストに変更してほしい／
 // 単価の欄の『委託』は委託にしてほしい」への対応で統一した（内部の変数名・関数名
 // （_consignMarked・moveWhDelivItemToConsignなど）は変更していない）。
+// 要望：「納品書作成で同じ商品を複数入力した際に、その内の一部を委託にすることがたまにある。
+// 一部を委託にできるようにして欲しい」への対応。数量が2以上の行では、押した時点ではまだ
+// 印を付けず、いくつを委託にするか（openWhConsignSplitModal）を確認してから確定する。
+// 全数量を指定すればこれまで通り行全体が委託になり、それより少ない数量を指定すると、
+// その分だけ新しい行に切り分けて委託の印を付け、残りは元の行にそのまま卸売として残す
+// （実際の切り分けはconfirmWhConsignSplitで行う）。数量が1（そもそも分けようがない）の行と、
+// すでに委託の印が付いている行（解除する場合）は、これまで通りその場でトグルする。
 function moveWhDelivItemToConsign(idx) {
   const it = _whDelivItems[idx];
   if (!it) return;
-  it._consignMarked = !it._consignMarked;
+  if (it._consignMarked) {
+    it._consignMarked = false;
+    renderWhDelivItems();
+    saveWhDelivDraft();
+    showToast('委託の印を解除しました');
+    return;
+  }
+  if (it.qty > 1) {
+    openWhConsignSplitModal(idx);
+    return;
+  }
+  it._consignMarked = true;
   renderWhDelivItems();
   saveWhDelivDraft();
-  showToast(it._consignMarked ? `「${it.name || ''}」に委託の印を付けました` : '委託の印を解除しました');
+  showToast(`「${it.name || ''}」に委託の印を付けました`);
+}
+
+let _whConsignSplitIdx = null;
+function openWhConsignSplitModal(idx) {
+  const it = _whDelivItems[idx];
+  if (!it) return;
+  _whConsignSplitIdx = idx;
+  const descEl = document.getElementById('wh-consign-split-desc');
+  if (descEl) descEl.textContent = `${it.name || it.model || '商品'}（現在の数量：${it.qty}個）のうち、いくつを委託にしますか？`;
+  const qtyInput = document.getElementById('wh-consign-split-qty');
+  if (qtyInput) { qtyInput.max = it.qty; qtyInput.value = it.qty; }
+  const errEl = document.getElementById('wh-consign-split-error');
+  if (errEl) errEl.style.display = 'none';
+  const modal = document.getElementById('wh-consign-split-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeWhConsignSplitModal() {
+  const modal = document.getElementById('wh-consign-split-modal');
+  if (modal) modal.style.display = 'none';
+  _whConsignSplitIdx = null;
+}
+
+function confirmWhConsignSplit() {
+  if (_whConsignSplitIdx == null) return;
+  const idx = _whConsignSplitIdx;
+  const it = _whDelivItems[idx];
+  const errEl = document.getElementById('wh-consign-split-error');
+  const setErr = msg => { if (errEl) { errEl.textContent = msg; errEl.style.display = msg ? 'block' : 'none'; } };
+  if (!it) { closeWhConsignSplitModal(); return; }
+  const qtyInput = document.getElementById('wh-consign-split-qty');
+  const qty = qtyInput ? parseInt(qtyInput.value, 10) : NaN;
+  if (!Number.isFinite(qty) || qty < 1) { setErr('1以上の数量を入力してください'); return; }
+  if (qty > it.qty) { setErr(`現在の数量（${it.qty}個）を超えています`); return; }
+  const isFullQty = (qty === it.qty);
+  if (isFullQty) {
+    // 全数量を委託にする場合は、これまで通り行を分割せずそのまま委託の印を付ける
+    it._consignMarked = true;
+  } else {
+    // 一部だけ委託にする場合：委託にする分を新しい行として切り分け、残りは元の行にそのまま残す。
+    // splitWhDelivItem（傷・潰れ用の1個切り分け）と同じく_splitFromを記録しておくことで、
+    // 切り分けた委託行を後から取り消した（✕で削除した）場合に、元の行の数量へ自動的に戻る
+    // （removeWhDelivItemの既存ロジックがそのまま働く）。
+    if (it._uid == null) it._uid = _whDelivItemUidSeq++;
+    it.qty -= qty;
+    it.amount = it.qty * it.unitPrice;
+    _whDelivItems.splice(idx + 1, 0, {
+      productKey: it.productKey, jan: it.jan, name: it.name, model: it.model,
+      qty: qty, unitPrice: it.unitPrice, amount: qty * it.unitPrice,
+      _uid: _whDelivItemUidSeq++, _splitFrom: it._uid, _consignMarked: true
+    });
+  }
+  closeWhConsignSplitModal();
+  renderWhDelivItems();
+  saveWhDelivDraft();
+  showToast(isFullQty ? `「${it.name || ''}」に委託の印を付けました` : `「${it.name || ''}」のうち${qty}個を委託にしました`);
 }
 
 // 追加した商品の並び順を入れ替える（▲▼ボタン）。納品書に印字される順番はこの配列の順になるため、
