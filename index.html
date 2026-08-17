@@ -228,7 +228,14 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 .ptr-spinner.spinning { animation: spin 0.8s linear infinite; }
 .toast { position: fixed; bottom: calc(env(safe-area-inset-bottom, 0px) + 76px); left: 16px; right: 16px; background: linear-gradient(135deg, #c8c8c8, #b0b0b0); color: #1a1a1a; padding: 14px 16px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; text-align: center; z-index: 200; opacity: 0; transform: translateY(10px); transition: opacity 0.2s, transform 0.2s; pointer-events: none; border: 1px solid #a0a0a0; box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
 .toast.show { opacity: 1; transform: translateY(0); }
-.ds-preview-scale-wrap { width: 100%; overflow: hidden; background: #e5e5e5; border-radius: 8px; padding: 12px 0; display: flex; justify-content: center; align-items: flex-start; }
+/* 要望：「納品書の印刷プレビューでズームしようとすると、左にずれて見れなくなる。
+   スクロールは必要な時だけ上下のみにしてほしい」への対応。ピンチズーム操作が入ると、
+   JS側で計算しているラッパーの高さ（fitDeliverySlipPreviewScale）とブラウザ側の
+   表示倍率がズレてしまい、左右にずれて見えなくなる・下に大きくスクロールできてしまう
+   不具合につながっていたため、このラッパー内ではピンチズーム・横方向のドラッグを行わせず、
+   縦スクロールだけを許可する（touch-action: pan-y）。あわせてgesturestartイベント自体も
+   防ぐ（後述のJS側の対応）ことで、iOS Safariでもピンチズームが起きないようにしている。 */
+.ds-preview-scale-wrap { width: 100%; overflow: hidden; background: #e5e5e5; border-radius: 8px; padding: 12px 0; display: flex; justify-content: center; align-items: flex-start; touch-action: pan-y; }
 .ds-preview-page { width: 794px; background: #fff; padding: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.15); transform-origin: top center; flex-shrink: 0; position: relative; overflow: hidden; }
 /* 納品書の印刷・PDF保存は、隠しiframeの中に納品書だけの独立したHTML文書を書き出し、
    そのiframeに対してprint()を呼ぶ方式にしている（openDeliverySlipPrint関数を参照）。
@@ -904,7 +911,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
           </div>
           <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">連続スキャンで読み取れない場合は「写真で読み取る」をお試しください（ピントが合った状態で撮影されるため読み取りやすくなります）</div>
           <div style="position:relative">
-            <input type="text" id="inv-jan" placeholder="または手入力" oninput="lookupJan(); toggleInvJanClearBtn();" style="padding-right:34px">
+            <input type="text" id="inv-jan" placeholder="または手入力" oninput="lookupJan(); toggleInvJanClearBtn();" onkeydown="if(event.key==='Enter'){event.preventDefault();lookupJanImmediate();}" style="padding-right:34px">
             <button type="button" id="inv-jan-clear" onclick="clearInvJan()" aria-label="JANコードをクリア" style="display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);width:24px;height:24px;border:none;background:transparent;color:var(--text-muted);font-size:16px;line-height:1;cursor:pointer;padding:0">✕</button>
           </div>
           <input type="hidden" id="inv-existing-key">
@@ -6291,9 +6298,23 @@ function guessMaker(name) {
   return clean;
 }
 
-async function lookupJan() {
+// 要望：「携帯のカメラ機能でJANコードを読み取り、型番・JANコード・メーカー・商品名が
+// すぐ入力されるようにしたい。買取スキャナーから自動入力されるようにしたい」への対応。
+// カメラでのスキャン（startScan→handleScanResultがinv-janに値を入れてlookupJan()を呼ぶ）は
+// 元々ここで対応済みだったが、買取スキャナーのような「読み取った文字をキーボード入力として
+// そのまま送り込む」タイプの外付けスキャナー（キーボードウェッジ方式。一般的な有線・
+// Bluetoothバーコードスキャナーのほとんどがこの方式で、OS側で通常のキーボードとして
+// ペアリングするだけで使える）で使うと、1桁ずつ猛スピードで入力されるため、oninputが
+// 桁が確定するたびに連続で発火し、そのたびに価格.com検索を投げてしまっていた
+// （無駄な通信が飛ぶうえ、途中経過の検索結果が後から遅れて届いて最終結果を上書きして
+// しまう可能性もあった）。型番欄（lookupModel／runModelPriceSearch）と同じ考え方で、
+// 入力が一段落してから検索するようデバウンスし、検索開始時点で値が変わっていないかも
+// 確認するようにした（手入力・カメラスキャン・買取スキャナーのいずれでも同じ挙動になる）。
+let _janLookupTimer = null;
+function lookupJan() {
   const jan = document.getElementById('inv-jan').value.trim();
   const status = document.getElementById('jan-lookup-status');
+  clearTimeout(_janLookupTimer);
   if (!jan) { status.textContent = ''; clearInvAddExistingMode(); return; }
 
   const found = products.find(p => p.jan === jan);
@@ -6305,6 +6326,27 @@ async function lookupJan() {
   }
   clearInvAddExistingMode();
 
+  status.innerHTML = '入力が終わると自動で商品名・型番・メーカーを検索します…';
+  status.style.color = 'var(--text-muted)';
+  _janLookupTimer = setTimeout(() => { runJanPriceSearch(jan); }, 600);
+}
+
+// 買取スキャナーなど、バーコードを読み取ったあとに確定のEnterキーを送ってくるタイプの
+// キーボードウェッジ機器向け：Enterが来た時点で600msのデバウンスを待たず即座に検索を始める
+// （lookupJan()のoninputで既にローカルの登録済み商品との一致確認は済んでいるはずのため、
+// ここでは価格.com検索の即時実行のみを担当する）
+function lookupJanImmediate() {
+  clearTimeout(_janLookupTimer);
+  const jan = document.getElementById('inv-jan').value.trim();
+  if (!jan || document.getElementById('inv-existing-key').value) return;
+  runJanPriceSearch(jan);
+}
+
+async function runJanPriceSearch(jan) {
+  // 検索を開始しようとした時点からJAN欄の内容が変わっていれば（入力継続中など）何もしない
+  const current = document.getElementById('inv-jan').value.trim();
+  if (current !== jan || document.getElementById('inv-existing-key').value) return;
+  const status = document.getElementById('jan-lookup-status');
   status.innerHTML = '🔍 価格.comで商品情報を検索中...';
   status.style.color = 'var(--text-muted)';
 
@@ -6313,6 +6355,10 @@ async function lookupJan() {
     const url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${SEARCH_ENGINE_ID}&q=${query}&num=1`;
     const r = await fetch(url);
     const d = await r.json();
+
+    // 検索を待っている間にJAN欄の内容が変わっていた場合（さらに続けてスキャン・入力された場合など）は
+    // 古い結果で画面を上書きしないよう、ここでも改めて確認する
+    if (document.getElementById('inv-jan').value.trim() !== jan) return;
 
     // 検索APIそのものがエラーを返した場合（キーの利用制限・クォータ超過など）は、
     // 「見つからなかった」と区別してその旨を表示する（原因の切り分けをしやすくするため）
@@ -6366,6 +6412,7 @@ async function lookupJan() {
     }
   } catch(e) {
     console.error('価格.com検索リクエスト失敗:', e);
+    if (document.getElementById('inv-jan').value.trim() !== jan) return;
     status.innerHTML = `商品情報の検索に失敗しました（通信エラーの可能性があります）。お手数ですが商品名・型番・メーカーは手入力をお願いします。<br>${kakakuLinkHtml(jan, null, '価格.comで手動検索する')}`;
     status.style.color = 'var(--danger)';
   }
@@ -11501,6 +11548,17 @@ async function manualRefresh() {
     if (btn) { btn.disabled = false; btn.classList.remove('refresh-spinning'); }
   }
 }
+
+// 要望：「納品書の印刷プレビューでズームしようとすると、左にずれて見れなくなる」への対応。
+// ページ全体は<meta name="viewport" ... user-scalable=no>でピンチズームを無効化する
+// 意図だが、iOS Safariはアクセシビリティ上の理由からuser-scalable=noを無視してピンチズームを
+// 許可してしまうことがある（iOS 10以降の既知の挙動）。印刷プレビュー内でピンチズームが
+// 起きると、プレビューの表示サイズをJS側で計算している仕組み（fitDeliverySlipPreviewScale等）と
+// ブラウザ側の拡大率がズレて、表示が左右にずれる・スクロール範囲がおかしくなるといった不具合に
+// つながっていた。gesturestart（iOS Safari独自のピンチ操作イベント）自体を止めることで、
+// user-scalable=noの意図通りアプリ全体でピンチズームが起きないようにする
+// （通常の縦スクロールなど1本指の操作はgesturestartの対象外のため影響しない）。
+document.addEventListener('gesturestart', (e) => { e.preventDefault(); });
 
 (function() {
   let startY = 0;
