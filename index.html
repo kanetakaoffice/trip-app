@@ -235,7 +235,14 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
    不具合につながっていたため、このラッパー内ではピンチズーム・横方向のドラッグを行わせず、
    縦スクロールだけを許可する（touch-action: pan-y）。あわせてgesturestartイベント自体も
    防ぐ（後述のJS側の対応）ことで、iOS Safariでもピンチズームが起きないようにしている。 */
-.ds-preview-scale-wrap { width: 100%; overflow: hidden; background: #e5e5e5; border-radius: 8px; padding: 12px 0; display: flex; justify-content: center; align-items: flex-start; touch-action: pan-y; }
+/* 追加調査：「上下にスクロールすると左にパッとズレる」への対応。
+   このラッパー内側の縦スクロール（overflow-y:auto）が上端・下端に達すると、その先の
+   スクロール操作が背面のページ（document.body）に伝わってしまう「スクロールチェイン」が
+   起きていた。モーダル自体はposition:fixedで固定されていて動かないが、背面のページが
+   その裏でわずかに動いてしまうと、transform:scale()で縮小表示している納品書の描画位置が
+   一瞬ズレて見える（iOS Safariでよく起きる類の不具合）。overscroll-behavior: containで
+   スクロールの伝播をこの要素の内側で止め、背面のページに影響が及ばないようにする。 */
+.ds-preview-scale-wrap { width: 100%; overflow: hidden; background: #e5e5e5; border-radius: 8px; padding: 12px 0; display: flex; justify-content: center; align-items: flex-start; touch-action: pan-y; overscroll-behavior: contain; }
 .ds-preview-page { width: 794px; background: #fff; padding: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.15); transform-origin: top center; flex-shrink: 0; position: relative; overflow: hidden; }
 /* 納品書の印刷・PDF保存は、隠しiframeの中に納品書だけの独立したHTML文書を書き出し、
    そのiframeに対してprint()を呼ぶ方式にしている（openDeliverySlipPrint関数を参照）。
@@ -3979,6 +3986,31 @@ let _dsPreviewSlipId = null;
 // 請求用納品書）。ヘッダーの「編集する」「取り消す」ボタンをどちらの操作につなぐか、また編集ボタン
 // 自体を表示するかどうか（預かり精算分には編集機能が無いため）の判定に使う。
 let _dsPreviewChannel = '';
+
+// 追加調査：「上下にスクロールすると左にパッとズレる」への対応（続き）。
+// #ds-preview-scale-wrap / #ds-consign-preview-scale-wrap の内側で縦スクロールが上端・下端に
+// 達したとき、その先の操作が背面のdocument.bodyに伝わる「スクロールチェイン」が起きると、
+// 見えないはずの背面ページがわずかに動き、transform:scale()で縮小表示している納品書の描画が
+// 一瞬ズレて見えることがある（overscroll-behavior: containだけでも対応しているが、念のため
+// 二重の対策として、納品書・預り明細のプレビューを開いている間は背面ページ自体のスクロールを
+// 止めておく）。2つのプレビューモーダルが将来同時に開かれる可能性を考慮し、カウンタ方式で
+// 元のoverflow設定を保持・復元する。
+let _dsBodyScrollLockCount = 0;
+function lockBodyScrollForPreview() {
+  if (_dsBodyScrollLockCount === 0) {
+    document.body.dataset.dsPrevOverflow = document.body.style.overflow || '';
+    document.body.style.overflow = 'hidden';
+  }
+  _dsBodyScrollLockCount++;
+}
+function unlockBodyScrollForPreview() {
+  _dsBodyScrollLockCount = Math.max(0, _dsBodyScrollLockCount - 1);
+  if (_dsBodyScrollLockCount === 0) {
+    document.body.style.overflow = document.body.dataset.dsPrevOverflow || '';
+    delete document.body.dataset.dsPrevOverflow;
+  }
+}
+
 function showDeliverySlipPreview(slipId) {
   const data = buildDeliverySlipDataFromSlipId(slipId);
   if (!data) { showToast('対象の納品書が見つかりません'); return; }
@@ -3993,6 +4025,7 @@ function showDeliverySlipPreview(slipId) {
   // 必ず先にモーダルを表示してから、中身を組み立てる。
   const modal = document.getElementById('wh-deliv-preview-modal');
   if (modal) modal.style.display = 'flex';
+  lockBodyScrollForPreview();
   const pageEl = document.getElementById('ds-preview-page');
   if (pageEl) {
     // 前回別の納品書を表示した際にfitDeliverySlipPreviewScaleが付けた縮小率(transform)が
@@ -4074,6 +4107,7 @@ function fitDeliverySlipPreviewScale() {
 function closeDeliverySlipPreview() {
   const modal = document.getElementById('wh-deliv-preview-modal');
   if (modal) modal.style.display = 'none';
+  unlockBodyScrollForPreview();
   const pageEl = document.getElementById('ds-preview-page');
   if (pageEl) pageEl.innerHTML = '';
   _dsPreviewSlipId = null;
@@ -5387,10 +5421,14 @@ function renderConsignRequestsPanel() {
     const priceDisp = (r.type === 'settle' && r.unitPrice != null)
       ? `／取引先申告の販売価格：¥${Number(r.unitPrice).toLocaleString('ja-JP')}／合計：¥${(Number(r.unitPrice) * (r.qty || 0)).toLocaleString('ja-JP')}`
       : '';
+    // 要望：「取引先の委託リスト画面の各型番の売値の下に備考欄を作成してください」への対応。
+    // 取引先が書き添えた備考があれば、精算・返却の確認前にここで見えるようにする
+    const memoDisp = r.memo ? `<div style="color:var(--text);font-size:11.5px;margin-top:3px;background:var(--surface);border-radius:6px;padding:5px 7px">備考：${escapeHtmlMain(r.memo)}</div>` : '';
     return `
       <div style="padding:8px 0;border-bottom:1px solid rgba(0,0,0,0.08);font-size:12.5px">
         <div style="color:var(--text)"><b>${escapeHtmlMain(r.client || '')}</b>／${escapeHtmlMain(r.model || '')}／${r.qty || ''}個${priceDisp}</div>
         <div style="color:var(--text-muted);font-size:11px;margin-top:2px">${kindLabel}（${dateDisp}）</div>
+        ${memoDisp}
         <div style="display:flex;gap:8px;margin-top:6px">
           <button onclick="approveConsignRequest('${r._portalId}','${r._key}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--gold-dark);border-radius:8px;background:var(--white);color:var(--gold-dark);cursor:pointer">${r.type === 'settle' ? '確認して精算する' : '確認して返却する'}</button>
           <button onclick="rejectConsignRequest('${r._portalId}','${r._key}')" style="flex:0.6;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text-muted);cursor:pointer">却下</button>
@@ -5601,6 +5639,7 @@ function showConsignListPreview(client) {
   if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
   const modal = document.getElementById('wh-consign-preview-modal');
   if (modal) modal.style.display = 'flex';
+  lockBodyScrollForPreview();
   const pageEl = document.getElementById('ds-consign-preview-page');
   if (pageEl) {
     pageEl.style.transform = 'none';
@@ -5632,6 +5671,7 @@ function fitConsignPreviewScale() {
 function closeConsignListPreview() {
   const modal = document.getElementById('wh-consign-preview-modal');
   if (modal) modal.style.display = 'none';
+  unlockBodyScrollForPreview();
   const pageEl = document.getElementById('ds-consign-preview-page');
   if (pageEl) pageEl.innerHTML = '';
   _dsConsignPreviewClient = null;
@@ -12492,6 +12532,11 @@ function renderPortalItemsList(pairs) {
     const saved = (window._portalEnteredValues || {})[idx];
     const qtyVal = saved && saved.qty != null ? saved.qty : it.qty;
     const priceVal = saved && saved.price != null ? saved.price : '';
+    // 要望：「取引先の委託リスト画面の各型番の売値の下に備考欄を作成してください」への対応。
+    // 販売条件の詳細や返却・精算に関する連絡事項など、取引先が自由に書き添えられる任意の
+    // テキスト欄。数量・売値と同じく、検索の絞り込み・解除で再描画されても入力内容が
+    // 消えないよう保存・復元する。
+    const memoVal = saved && saved.memo != null ? saved.memo : '';
     const pendingBadge = getPortalPendingBadgeHtml(it.model);
     return `
     <div style="border:1.2px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:var(--white)">
@@ -12507,6 +12552,10 @@ function renderPortalItemsList(pairs) {
         <label for="portal-price-${idx}" style="font-size:12px;color:var(--text-muted)">売値（円）</label>
         <input type="number" id="portal-price-${idx}" min="0" placeholder="任意" value="${priceVal}" oninput="updatePortalItemTotal(${idx})" style="width:88px;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
         <span style="font-size:12px;color:var(--text-muted)">精算する場合はこちらに入力してください</span>
+      </div>
+      <div style="margin-top:8px">
+        <label for="portal-memo-${idx}" style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">備考</label>
+        <textarea id="portal-memo-${idx}" placeholder="任意（店舗への連絡事項があればご記入ください）" oninput="updatePortalItemTotal(${idx})" rows="2" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical">${escapeHtmlMain(memoVal)}</textarea>
       </div>
       <div id="portal-total-${idx}" style="display:none;font-size:12.5px;font-weight:700;color:var(--text);margin-top:6px;text-align:right"></div>
       <div style="margin-top:10px">
@@ -12525,12 +12574,14 @@ function renderPortalItemsList(pairs) {
 function updatePortalItemTotal(idx) {
   const qtyInput = document.getElementById('portal-qty-' + idx);
   const priceInput = document.getElementById('portal-price-' + idx);
+  const memoInput = document.getElementById('portal-memo-' + idx);
   const totalEl = document.getElementById('portal-total-' + idx);
   // 検索の絞り込み・解除でカードが作り直されても入力内容が消えないよう、ここで保存しておく
   if (!window._portalEnteredValues) window._portalEnteredValues = {};
   window._portalEnteredValues[idx] = {
     qty: qtyInput && qtyInput.value !== '' ? qtyInput.value : null,
-    price: priceInput && priceInput.value !== '' ? priceInput.value : null
+    price: priceInput && priceInput.value !== '' ? priceInput.value : null,
+    memo: memoInput && memoInput.value !== '' ? memoInput.value : null
   };
   if (totalEl) {
     const qty = qtyInput ? parseInt(qtyInput.value, 10) : NaN;
@@ -12555,12 +12606,14 @@ function getPortalSettleCandidates() {
   items.forEach((it, idx) => {
     const qtyInput = document.getElementById('portal-qty-' + idx);
     const priceInput = document.getElementById('portal-price-' + idx);
+    const memoInput = document.getElementById('portal-memo-' + idx);
     if (!qtyInput || !priceInput) return;
     const qty = parseInt(qtyInput.value, 10);
     const rawPrice = priceInput.value.trim();
     const price = rawPrice !== '' ? parseInt(rawPrice, 10) : NaN;
+    const memo = memoInput ? memoInput.value.trim() : '';
     if (Number.isFinite(qty) && qty > 0 && qty <= it.qty && Number.isFinite(price) && price >= 0) {
-      candidates.push({ idx, it, qty, price });
+      candidates.push({ idx, it, qty, price, memo });
     }
   });
   return candidates;
@@ -12597,7 +12650,7 @@ function updatePortalGrandTotal() {
 // 必要な数だけ割り当て、レコードごとに個別のconsignRequestとして送信する。同じ商品を複数回に
 // 分けて預けていた場合（ポータル上はまとめて1行に表示されている）でも、店舗側は今まで通り
 // レコード単位で内容を確認・精算できる。
-async function postConsignRequestsForItem(it, qty, type, unitPrice) {
+async function postConsignRequestsForItem(it, qty, type, unitPrice, memo) {
   const slices = splitQtyAcrossMoveKeys(it.moveKeys, qty);
   if (!slices.length) throw new Error('割り当てできる預け入れ記録が見つかりませんでした');
   for (const slice of slices) {
@@ -12606,6 +12659,9 @@ async function postConsignRequestsForItem(it, qty, type, unitPrice) {
       client: window._portalClient || '', requestedAt: Date.now(), status: 'pending'
     };
     if (unitPrice != null) body.unitPrice = unitPrice;
+    // 要望：「取引先の委託リスト画面の各型番の売値の下に備考欄を作成してください」への対応。
+    // 取引先が任意で書き添えた連絡事項を、店舗側が確認できるようリクエストに含めて送る。
+    if (memo) body.memo = memo;
     await fetch(authedUrl('/consignRequests/' + window._portalId + '.json'), {
       method: 'POST',
       body: JSON.stringify(body)
@@ -12636,8 +12692,10 @@ async function sendPortalRequest(idx, type) {
   // ボタンの誤タップでそのまま送信されてしまわないよう、送信前に必ず確認を挟む
   const ok = await showConfirm(`${it.model || '商品'}を${qty}個、返却します。よろしいですか？`);
   if (!ok) return;
+  const memoInput = document.getElementById('portal-memo-' + idx);
+  const memo = memoInput ? memoInput.value.trim() : '';
   try {
-    await postConsignRequestsForItem(it, qty, type, null);
+    await postConsignRequestsForItem(it, qty, type, null, memo);
     setStatus(`✓ ${qty}個の返却のご連絡を送信しました。店舗からの確認をお待ちください。`, false);
   } catch (e) {
     console.error('sendPortalRequest failed:', e);
@@ -12663,10 +12721,13 @@ function openBatchSettleConfirm() {
   const listEl = document.getElementById('portal-batch-confirm-list');
   if (listEl) {
     listEl.innerHTML = candidates.map(c => `
-      <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12.5px">
-        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${escapeHtmlMain(c.it.model || '商品')}</span>
-        <span style="flex-shrink:0;color:var(--text-muted)">${c.qty}個 × ¥${c.price.toLocaleString('ja-JP')}</span>
-        <span style="flex-shrink:0;font-weight:700;color:var(--text)">¥${(c.qty * c.price).toLocaleString('ja-JP')}</span>
+      <div style="padding:7px 0;border-bottom:1px solid var(--border);font-size:12.5px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${escapeHtmlMain(c.it.model || '商品')}</span>
+          <span style="flex-shrink:0;color:var(--text-muted)">${c.qty}個 × ¥${c.price.toLocaleString('ja-JP')}</span>
+          <span style="flex-shrink:0;font-weight:700;color:var(--text)">¥${(c.qty * c.price).toLocaleString('ja-JP')}</span>
+        </div>
+        ${c.memo ? `<div style="color:var(--text-muted);font-size:11px;margin-top:3px">備考：${escapeHtmlMain(c.memo)}</div>` : ''}
       </div>`).join('');
   }
   const totalEl = document.getElementById('portal-batch-confirm-total');
@@ -12714,7 +12775,7 @@ async function submitBatchSettle() {
       itemStatusEl.style.display = msg ? 'block' : 'none';
     };
     try {
-      await postConsignRequestsForItem(c.it, c.qty, 'settle', c.price);
+      await postConsignRequestsForItem(c.it, c.qty, 'settle', c.price, c.memo);
       succeeded++;
       grandTotal += c.qty * c.price;
       setItemStatus(`✓ ${c.qty}個（売値¥${c.price.toLocaleString('ja-JP')}／合計¥${(c.qty * c.price).toLocaleString('ja-JP')}）の精算のご連絡を送信しました。店舗からの確認をお待ちください。`, false);
