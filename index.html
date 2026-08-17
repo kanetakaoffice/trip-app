@@ -280,6 +280,10 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     <div id="portal-items-summary" style="display:none;text-align:center;font-size:12.5px;color:var(--text-muted);margin-bottom:12px"></div>
     <div id="portal-pending-wrap" style="display:none;background:#fff8e1;border:1.2px solid #e0c56a;border-radius:10px;padding:10px 12px;margin-bottom:12px">
       <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px">⏳ ご連絡内容を確認中です <span id="portal-pending-count" style="font-weight:400;color:var(--text-muted)"></span></div>
+      <!-- 要望：「委託リストのところで、売れた商品が黄色く表示されますが、その合計が分からない
+           ので合計金額と個数が分かるようにしてほしい」への対応。精算（売れた）の連絡だけを
+           対象に、合計金額・合計個数をまとめて表示する（返却の連絡には金額がないため対象外） -->
+      <div id="portal-pending-total" style="display:none;font-size:12.5px;font-weight:700;color:var(--gold-dark);margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(0,0,0,0.08)"></div>
       <div id="portal-pending-list"></div>
     </div>
     <div id="portal-search-wrap" style="display:none;margin-bottom:14px">
@@ -1528,6 +1532,10 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     </div>
     <div id="wh-consign-requests-panel" style="display:none;background:#fff8e1;border:1.2px solid #e0c56a;border-radius:10px;padding:10px 12px;margin-bottom:12px">
       <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px">🔔 取引先からのリクエスト <span id="wh-consign-requests-count" style="font-weight:400;color:var(--text-muted)"></span></div>
+      <!-- 要望：「委託リストのところで、売れた商品が黄色く表示されますが、その合計が分からない
+           ので合計金額と個数が分かるようにしてほしい」への対応。精算（売れた）の連絡だけを
+           対象に、合計金額・合計個数をまとめて表示する（返却の連絡には金額がないため対象外） -->
+      <div id="wh-consign-requests-total" style="display:none;font-size:12.5px;font-weight:700;color:var(--gold-dark);margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(0,0,0,0.08)"></div>
       <div id="wh-consign-requests-list"></div>
     </div>
     <div id="wh-consign-list"></div>
@@ -5292,12 +5300,27 @@ function renderConsignRequestsPanel() {
   const panel = document.getElementById('wh-consign-requests-panel');
   const listEl = document.getElementById('wh-consign-requests-list');
   const countEl = document.getElementById('wh-consign-requests-count');
+  const totalEl = document.getElementById('wh-consign-requests-total');
   if (!panel || !listEl) return;
   const pending = (consignRequests || []).filter(r => r.status === 'pending')
     .sort((a,b) => (a.requestedAt||0) - (b.requestedAt||0));
-  if (!pending.length) { panel.style.display = 'none'; listEl.innerHTML = ''; return; }
+  if (!pending.length) { panel.style.display = 'none'; listEl.innerHTML = ''; if (totalEl) totalEl.style.display = 'none'; return; }
   panel.style.display = 'block';
   if (countEl) countEl.textContent = pending.length + '件';
+  // 要望：「委託リストのところで、売れた商品が黄色く表示されますが、その合計が分からない
+  // ので合計金額と個数が分かるようにしてほしい」への対応。精算（売れた）の連絡だけを対象に
+  // 合計金額・合計個数を表示する（返却の連絡には金額がないため対象外）
+  if (totalEl) {
+    const settleReqs = pending.filter(r => r.type === 'settle');
+    if (settleReqs.length) {
+      const totalQty = settleReqs.reduce((s,r) => s + (r.qty || 0), 0);
+      const totalAmount = settleReqs.reduce((s,r) => s + (r.unitPrice != null ? Number(r.unitPrice) * (r.qty || 0) : 0), 0);
+      totalEl.textContent = `精算（売れた）分の合計：¥${totalAmount.toLocaleString('ja-JP')}／${totalQty}個`;
+      totalEl.style.display = 'block';
+    } else {
+      totalEl.style.display = 'none';
+    }
+  }
   listEl.innerHTML = pending.map(r => {
     const kindLabel = r.type === 'settle' ? '精算しました（売れました）とのご連絡' : '返却してほしいとのご連絡';
     const dateDisp = r.requestedAt ? fmtDateJP(new Date(r.requestedAt).toISOString().slice(0,10)) : '';
@@ -12072,11 +12095,26 @@ function renderPortalPendingRequests(pendingRequests) {
   const wrapEl = document.getElementById('portal-pending-wrap');
   const listEl = document.getElementById('portal-pending-list');
   const countEl = document.getElementById('portal-pending-count');
+  const totalEl = document.getElementById('portal-pending-total');
   if (!wrapEl || !listEl) return;
   const list = window._portalPendingRequests;
-  if (!list.length) { wrapEl.style.display = 'none'; listEl.innerHTML = ''; return; }
+  if (!list.length) { wrapEl.style.display = 'none'; listEl.innerHTML = ''; if (totalEl) totalEl.style.display = 'none'; return; }
   wrapEl.style.display = 'block';
   if (countEl) countEl.textContent = list.length + '件';
+  // 要望：「委託リストのところで、売れた商品が黄色く表示されますが、その合計が分からない
+  // ので合計金額と個数が分かるようにしてほしい」への対応。精算（売れた）の連絡だけを対象に
+  // 合計金額・合計個数を表示する（返却の連絡には金額がないため対象外）
+  if (totalEl) {
+    const settleReqs = list.filter(r => r.type === 'settle');
+    if (settleReqs.length) {
+      const totalQty = settleReqs.reduce((s,r) => s + (r.qty || 0), 0);
+      const totalAmount = settleReqs.reduce((s,r) => s + (r.unitPrice != null ? Number(r.unitPrice) * (r.qty || 0) : 0), 0);
+      totalEl.textContent = `精算（売れた）分の合計：¥${totalAmount.toLocaleString('ja-JP')}／${totalQty}個`;
+      totalEl.style.display = 'block';
+    } else {
+      totalEl.style.display = 'none';
+    }
+  }
   listEl.innerHTML = list.map(r => {
     const kindLabel = r.type === 'settle' ? '精算のご連絡' : '返却のご連絡';
     const dateDisp = r.requestedAt ? fmtDateJP(r.requestedAt) : '';
