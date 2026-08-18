@@ -1924,6 +1924,12 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
   <div style="background:var(--white);border-radius:16px;padding:22px;width:100%;max-width:360px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px">精算内容の確認</div>
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">以下の内容で店舗に精算のご連絡を送信します</div>
+    <!-- 要望：「同じ型番、同じ個数、同じ金額が同じ日に精算されてしまった時に、この動作が
+         間違いではないかとアラートが出るようにしたい」への対応。二重送信の可能性がある場合、
+         送信前の最後の確認画面であるここに警告を出す（findPortalSettleDuplicates参照）。
+         あくまで注意喚起であり、送信自体をブロックはしない（同じ商品を別々に複数回預けていて、
+         たまたま数量・金額が一致する正当なケースもあり得るため）。 -->
+    <div id="portal-batch-confirm-dup-warning" style="display:none;font-size:12px;color:#8a5a00;background:#fff3cd;border:1px solid #f0d78c;border-radius:8px;padding:8px 10px;margin-bottom:12px;line-height:1.6"></div>
     <div id="portal-batch-confirm-list"></div>
     <div id="portal-batch-confirm-total" style="text-align:right;font-size:14px;font-weight:800;color:var(--gold-dark);margin-top:10px"></div>
     <div style="display:flex;gap:10px;margin-top:18px">
@@ -4896,11 +4902,25 @@ function toggleWhConsignModelGroup(idx, groupKey) {
 
 // 「現在预けている商品」カード内の商品1件分の行（精算・返却・数量編集の操作はここに集約されている）
 function whConsignItemRowHtml(m) {
+  // 要望：「こちらが見る委託リストのところで、型番の横に原価を入力したい。ただし、この原価は
+  // 取引先の方には表示させないでください」への対応。店舗側だけが見るこの画面（wh-consign-list）に
+  // 型番と並べて原価の入力欄を置く。costPriceはstockMoves側のこのレコード（m._key）にだけ
+  // 保存し、取引先ポータルへのスナップショット（buildPortalSnapshotItemsForClient）には
+  // 意図的に含めていない（そちらはmodel・qty・moveKeys・date・memoしか渡さない作りのため、
+  // 何もしなくても取引先側には元々渡らない）。
+  const costVal = m.costPrice != null ? m.costPrice : '';
   return `
     <div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:13px">
-      <div style="min-width:0">
-        <div style="color:var(--text);font-weight:600">${escapeHtmlMain(consignItemModel(m))}</div>
-        <div style="color:var(--text-muted);font-size:11px;margin-top:2px">${fmtDateJP(m.date)}／${m.qty}個${m.memo ? '／' + escapeHtmlMain(m.memo) : ''}</div>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+        <div style="min-width:0;flex:1">
+          <div style="color:var(--text);font-weight:600">${escapeHtmlMain(consignItemModel(m))}</div>
+          <div style="color:var(--text-muted);font-size:11px;margin-top:2px">${fmtDateJP(m.date)}／${m.qty}個${m.memo ? '／' + escapeHtmlMain(m.memo) : ''}</div>
+        </div>
+        <div style="flex-shrink:0;text-align:right">
+          <div style="font-size:9px;color:var(--text-muted);margin-bottom:2px">原価（円）</div>
+          <input type="number" min="0" value="${costVal}" placeholder="任意" oninput="updateWhConsignCostPrice('${m._key}', this.value)" style="width:78px;padding:5px 6px;font-size:12px;border:1.2px solid var(--border);border-radius:6px;text-align:right">
+          <div style="font-size:9px;color:var(--text-muted);margin-top:2px">取引先には非表示</div>
+        </div>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px">
         <button onclick="openSettleConsign('${m._key}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">精算（売れた）</button>
@@ -4908,6 +4928,24 @@ function whConsignItemRowHtml(m) {
         <button onclick="openEditConsignQty('${m._key}')" style="flex:0.7;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">数量を編集</button>
       </div>
     </div>`;
+}
+
+// 原価の入力は、他の1項目だけのPUT（在庫数など）と同じパターンで、そのレコード（stockMoves/{key}）の
+// costPriceフィールドだけを更新する。入力のたびに毎回書き込むと頻度が高すぎるため、
+// 少し間を置いてまとめて保存する（キーごとに個別のタイマーを持たせ、複数行を同時に
+// 編集していても互いのタイマーを打ち消し合わないようにする）。
+let _whConsignCostSaveTimers = {};
+function updateWhConsignCostPrice(key, value) {
+  const m = (stockMoves || []).find(x => x._key === key);
+  if (!m) return;
+  const trimmed = String(value == null ? '' : value).trim();
+  const num = trimmed === '' ? null : parseInt(trimmed, 10);
+  m.costPrice = (num != null && !isNaN(num) && num >= 0) ? num : null;
+  if (_whConsignCostSaveTimers[key]) clearTimeout(_whConsignCostSaveTimers[key]);
+  _whConsignCostSaveTimers[key] = setTimeout(() => {
+    delete _whConsignCostSaveTimers[key];
+    fetch(authedUrl('/stockMoves/' + key + '/costPrice.json'), { method: 'PUT', body: JSON.stringify(m.costPrice) }).catch(e => console.error('updateWhConsignCostPrice failed:', e));
+  }, 500);
 }
 
 // 取引先カードの開閉（アコーディオン）。取引先名をタップすると、商品が多い取引先でも
@@ -5031,7 +5069,12 @@ function renderWhConsignList() {
       const snapshotHistoryItems = (historyByClient[client] || []).map(m => ({
         model: consignItemModel(m),
         qty: m.qty, status: m.status,
-        date: m.status === 'settled' ? (m.settledAt || null) : (m.returnedAt || null)
+        date: m.status === 'settled' ? (m.settledAt || null) : (m.returnedAt || null),
+        // 要望：「同じ型番、同じ個数、同じ金額が同じ日に精算されてしまった時に、この動作が
+        // 間違いではないかとアラートが出るようにしたい」への対応。すでに精算済みの履歴に対しても
+        // 同日・同条件の二重精算でないかを取引先ポータル側でチェックできるよう、精算済みの
+        // 行にだけ販売価格も含めておく（返却済みの行には価格の概念が無いのでnullのまま）
+        unitPrice: (m.status === 'settled' && m.unitPrice != null) ? m.unitPrice : null
       })).sort((a,b) => (b.date||0) - (a.date||0));
       // 取引先ポータルは/consignRequests/{portalId}を読めない（書き込み専用）ため、確認待ち
       // リクエストの状況は、店舗側が読み書きできるこのスナップショットに含めて渡す
@@ -12799,6 +12842,66 @@ async function sendPortalRequest(idx, type) {
   }
 }
 
+// タイムスタンプ・日付文字列のどちらを渡しても、その「日」を表す文字列（YYYY-MM-DD、
+// 端末のローカル日付基準）に揃える。同日判定（findPortalSettleDuplicates）で使う。
+function localDateStr(d) {
+  if (!d) return '';
+  const dt = typeof d === 'number' ? new Date(d) : new Date(d);
+  if (isNaN(dt.getTime())) return '';
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, '0');
+  const day = String(dt.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// 要望：「取引先の方が扱う委託リストの画面で、同じ型番、同じ個数、同じ金額が同じ日に
+// 精算されてしまった時に、この動作が間違いではないかとアラートが出るようにしたい」への対応。
+// 今まさに送信しようとしている精算候補（candidates）が、
+//   (a) 今回の送信内容の中に同じ型番・数量・金額が複数含まれている
+//   (b) 本日すでに送信済み・店舗の確認待ちの精算リクエスト（_portalPendingRequests）と
+//       型番・数量・金額が一致する
+//   (c) 本日すでに店舗が精算済みとして処理した履歴（_portalHistoryFull）と
+//       型番・数量・金額が一致する
+// のいずれかに当てはまる場合、二重送信の可能性がある旨の注意文を返す。あくまで注意喚起のため
+// 送信自体はブロックしない（同じ商品を別々に複数回預けていて、たまたま数量・金額が一致する
+// 正当なケースもあり得るため、最終判断は取引先自身に委ねる）。
+function findPortalSettleDuplicates(candidates) {
+  const today = localDateStr(Date.now());
+  const keyOf = (model, qty, price) => (model || '') + '|' + qty + '|' + price;
+  const countInBatch = {};
+  candidates.forEach(c => {
+    const key = keyOf(c.it.model, c.qty, c.price);
+    countInBatch[key] = (countInBatch[key] || 0) + 1;
+  });
+  const pendingToday = (window._portalPendingRequests || []).filter(r =>
+    r.type === 'settle' && r.requestedAt && localDateStr(r.requestedAt) === today
+  );
+  const settledToday = (window._portalHistoryFull || []).filter(h =>
+    h.status === 'settled' && h.unitPrice != null && h.date && localDateStr(h.date) === today
+  );
+  const warnings = [];
+  const warnedKeys = new Set();
+  candidates.forEach(c => {
+    const key = keyOf(c.it.model, c.qty, c.price);
+    if (warnedKeys.has(key)) return;
+    const dupInBatch = countInBatch[key] > 1;
+    const dupPending = pendingToday.some(r => (r.model || '') === (c.it.model || '') && Number(r.qty) === c.qty && Number(r.unitPrice) === c.price);
+    const dupSettled = settledToday.some(h => (h.model || '') === (c.it.model || '') && Number(h.qty) === c.qty && Number(h.unitPrice) === c.price);
+    if (!dupInBatch && !dupPending && !dupSettled) return;
+    warnedKeys.add(key);
+    const modelDisp = escapeHtmlMain(c.it.model || '商品');
+    const detail = `${modelDisp}／${c.qty}個／¥${c.price.toLocaleString('ja-JP')}`;
+    if (dupPending) {
+      warnings.push(`${detail}：本日すでに精算のご連絡を送信済みのようです`);
+    } else if (dupSettled) {
+      warnings.push(`${detail}：本日すでに店舗側で精算済みとして処理されているようです`);
+    } else {
+      warnings.push(`${detail}：今回送信する内容の中に同じ条件のものが複数含まれています`);
+    }
+  });
+  return warnings;
+}
+
 // 「まとめて精算」ボタンを押したときにまず開く確認モーダル。誤送信を防ぐため、実際に
 // consignRequestを送信する前に、どの商品を・いくつ・いくらで精算しようとしているのかを
 // 一覧と合計金額で確認できるようにしてから、改めて送信を確定してもらう。
@@ -12828,6 +12931,18 @@ function openBatchSettleConfirm() {
   }
   const totalEl = document.getElementById('portal-batch-confirm-total');
   if (totalEl) totalEl.textContent = `合計 ${candidates.length}件：¥${grandTotal.toLocaleString('ja-JP')}`;
+  const warnEl = document.getElementById('portal-batch-confirm-dup-warning');
+  if (warnEl) {
+    const dupWarnings = findPortalSettleDuplicates(candidates);
+    if (dupWarnings.length) {
+      // dupWarnings内の型番はfindPortalSettleDuplicatesの時点ですでにescapeHtmlMain済みのため、
+      // ここで再度エスケープはしない（二重エスケープを避ける）
+      warnEl.innerHTML = '⚠️ 二重の精算連絡ではないか、念のためご確認ください：<br>' + dupWarnings.join('<br>');
+      warnEl.style.display = 'block';
+    } else {
+      warnEl.style.display = 'none';
+    }
+  }
   const modal = document.getElementById('portal-batch-confirm-modal');
   if (modal) modal.style.display = 'flex';
 }
