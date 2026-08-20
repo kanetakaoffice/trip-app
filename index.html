@@ -2921,6 +2921,40 @@ function suggestUnitPrice(client, productKey) {
   return matches[0].unitPrice;
 }
 
+// 納品書番号：「発行日（YYMMDD・西暦下2桁）－その日の何枚目か（2桁）」の形式（例：260820-01）。
+// 8桁の西暦（20260820-01）だと長くなるため、下2桁の年に短縮している。枝番は1桁（-1）ではなく
+// 2桁（-01）でゼロ埋めしている方が、一覧で並べたときや手書きの控えで桁が揃って見やすく、
+// 「1」と「10」以降が並んだときの見分けもつきやすいため（3桁目＝100枚目以降になっても
+// 表示が壊れるわけではなく、単に-100のように桁が増えるだけ）。
+// 同じ納品日の納品書がすでにいくつ発行されているかをstockMovesに保存済みのslipNoから
+// 数え、その最大の枝番を返す（まだ1枚もなければ0）。呼び出し側はこれに+1して次の番号を作る。
+// 通常の卸売納品書（submitWhDeliverySlip）・預かり精算分の請求用納品書
+// （createConsignInvoiceSlipFromSelection）のどちらも同じ「納品書」というタイトルで
+// 印刷・プレビューされる（dsSlipBodyHtml）ため、番号の採番もこの共通関数でまかなう。
+function slipNoDateKey(dateStr) {
+  const parts = (dateStr || '').split('-');
+  if (parts.length !== 3 || parts[0].length < 2) return '';
+  return parts[0].slice(-2) + parts[1] + parts[2];
+}
+function slipNoMaxSeqForDate(dateStr) {
+  const dateKey = slipNoDateKey(dateStr);
+  if (!dateKey) return 0;
+  const prefix = dateKey + '-';
+  let maxSeq = 0;
+  (stockMoves || []).forEach(m => {
+    if (m.slipNo && m.slipNo.indexOf(prefix) === 0) {
+      const seq = parseInt(m.slipNo.slice(prefix.length), 10);
+      if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+    }
+  });
+  return maxSeq;
+}
+function formatSlipNo(dateStr, seq) {
+  const dateKey = slipNoDateKey(dateStr);
+  if (!dateKey || !seq) return '';
+  return dateKey + '-' + String(seq).padStart(2, '0');
+}
+
 // JANが商品と一致した瞬間だけ（部分入力中は何もしない）明細に自動追加する。すでに同じ商品があれば数量を+1する
 let _whQuickRegisterJan = '';
 let _whAutoSearchTimer = null;
@@ -3632,6 +3666,15 @@ async function submitWhDeliverySlip() {
   }
 
   const slipId = editingSlipId || ('slip_' + Date.now());
+  // 納品書番号：編集・同一納品書への追記（マージ）の場合は、既存の納品書に振られている番号を
+  // そのまま引き継ぐ（番号は「その文書」を指すものなので、内容を直しても変わらないようにする）。
+  // 新規発行の場合だけ、納品日を基準に新しい番号を割り当てる。
+  let slipNo = null;
+  if (editingSlipId) {
+    const existingNumberedMove = stockMoves.find(m => m.slipId === editingSlipId && m.slipNo);
+    if (existingNumberedMove) slipNo = existingNumberedMove.slipNo;
+  }
+  if (!slipNo) slipNo = formatSlipNo(date, slipNoMaxSeqForDate(date) + 1);
   // 委託の印が付いた行は単価が未確定のため、合計金額（発行後のトースト表示用）には含めない
   const total = _whDelivItems.reduce((s,it) => s + (it._consignMarked ? 0 : it.amount), 0);
   try {
@@ -3667,11 +3710,11 @@ async function submitWhDeliverySlip() {
         productKey: it.productKey, productName: it.name, jan: it.jan, model: it.model || '',
         type: 'consign', status: 'holding', client, qty: it.qty, date, memo: '',
         stockBefore: stockBeforeByProduct[it.productKey], stockAfter: stockBeforeByProduct[it.productKey] - newQtyByProduct[it.productKey],
-        createdAt: Date.now(), slipId, itemSeq: idx
+        createdAt: Date.now(), slipId, slipNo, itemSeq: idx
       } : {
         productKey: it.productKey, productName: it.name, model: it.model || '', jan: it.jan,
         type: 'out', channel: '卸売', client, subject, qty: it.qty, unitPrice: it.unitPrice, amount: it.amount,
-        slipId, date, memo: '', stockBefore: stockBeforeByProduct[it.productKey], stockAfter: stockBeforeByProduct[it.productKey] - newQtyByProduct[it.productKey], createdAt: Date.now(), itemSeq: idx,
+        slipId, slipNo, date, memo: '', stockBefore: stockBeforeByProduct[it.productKey], stockAfter: stockBeforeByProduct[it.productKey] - newQtyByProduct[it.productKey], createdAt: Date.now(), itemSeq: idx,
         // 傷・つぶれの記録：詳細（テキスト）は納品書にも表示されるが、写真は社内記録用のみで納品書には出さない
         damageDetail: it.damageMode === 'detail' ? (it.damageDetail || '') : '',
         damagePhoto: it.damageMode === 'photo' ? (it.damagePhoto || '') : ''
@@ -3719,9 +3762,14 @@ function openWhDelivHistoryAccordion() {
 // 同じ見た目で使えるよう、HTML/CSSの組み立てと、列分割の描画処理を分けて共通化してある。
 const DS_STYLE = `
       .ds-wrap { font-size:11px; background:#fff; }
-      .ds-title-row { display:grid; grid-template-columns:1fr auto 1fr; align-items:baseline; margin-bottom:12px; }
+      .ds-title-row { display:grid; grid-template-columns:1fr auto 1fr; align-items:start; margin-bottom:12px; }
       .ds-title { grid-column:2; text-align:center; font-size:18px; font-weight:700; letter-spacing:0.2em; }
-      .ds-date { grid-column:3; justify-self:end; font-size:10px; color:#555; }
+      /* 納品書番号は「納品日」のすぐ下に、右揃えで表示する（要望：前回の金額同様、番号があると
+         同じ取引先・同じ日に複数枚発行した場合などに問い合わせ・照合がしやすくなるため追加） */
+      .ds-date-block { grid-column:3; display:flex; flex-direction:column; align-items:flex-end; gap:3px; }
+      .ds-date { font-size:10px; color:#555; }
+      .ds-slipno { font-size:10px; color:#555; }
+      .ds-slipno .ds-slipno-label { color:#888; }
       .ds-head-box { padding:12px 0; margin-bottom:16px; }
       .ds-head-row { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
       .ds-client-block { min-width:0; }
@@ -3754,13 +3802,17 @@ const DS_STYLE = `
 
 // 単価は商談しながら決めるため、納品書には金額・小計・消費税・合計金額は表示しない（型番・数量・単価のみ）。
 // ただし合計数量は品数の確認に必要なため、明細の下に表示する。
-function dsSlipBodyHtml(client, date, subject) {
+function dsSlipBodyHtml(client, date, subject, slipNo) {
   return `
     <style>${DS_STYLE}</style>
     <div class="ds-wrap">
       <div class="ds-title-row">
+        <div></div>
         <div class="ds-title">納品書</div>
-        <div class="ds-date">納品日　${fmtDateJPLong(date)}</div>
+        <div class="ds-date-block">
+          <div class="ds-date">納品日　${fmtDateJPLong(date)}</div>
+          ${slipNo ? `<div class="ds-slipno"><span class="ds-slipno-label">納品書番号　</span>${escapeHtmlMain(slipNo)}</div>` : ''}
+        </div>
       </div>
       <div class="ds-head-box">
         <div class="ds-head-row">
@@ -3988,11 +4040,11 @@ function printRenderedDeliverySlip(htmlContent, client, date) {
 
 // プレビューを経由せず直接呼ばれた場合（テストからの直接呼び出しなど、プレビューの描画済みDOMが
 // 手元にない場合）のために、内容を組み立ててから印刷する
-function openDeliverySlipPrint(client, date, items, subject) {
+function openDeliverySlipPrint(client, date, items, subject, slipNo) {
   const fileName = `納品書_${client}_${date}`.replace(/[\\/:*?"<>|]/g, '_');
   const { iframe, idoc } = preparePrintIframeDoc(fileName);
   const rootEl = idoc.getElementById('ds-print-root');
-  rootEl.innerHTML = dsSlipBodyHtml(client, date, subject);
+  rootEl.innerHTML = dsSlipBodyHtml(client, date, subject, slipNo);
   renderDeliverySlipColumns(rootEl, items);
   triggerPrintOnIframe(iframe, fileName);
 }
@@ -4029,7 +4081,7 @@ function buildDeliverySlipDataFromSlipId(slipId) {
     damageDetail: m.damageDetail || '',
     isConsignNote: m.type === 'consign'
   }));
-  return { client: moves[0].client, date: moves[0].date, subject: moves[0].subject || '', items };
+  return { client: moves[0].client, date: moves[0].date, subject: moves[0].subject || '', slipNo: moves[0].slipNo || '', items };
 }
 
 // 要望：「納品書作成のところで、作成した納品書をExcelで出力できるようにしてほしい」への対応。
@@ -4044,13 +4096,14 @@ function exportDeliverySlipExcel() {
   // XLSXはCDNから読み込んでいるため、オフライン等で読み込めていない場合はその場で案内する
   // （他のExcel出力＝doExportSales等と同じ制約）
   if (!window.XLSX) { showToast('Excel出力の準備ができていません。しばらくしてから再度お試しください'); return; }
-  const { client, date, subject, items } = data;
+  const { client, date, subject, slipNo, items } = data;
   const totalQty = items.reduce((s, it) => s + (it.qty || 0), 0);
   const totalAmount = items.reduce((s, it) => s + (it.isConsignNote ? 0 : ((it.unitPrice || 0) * (it.qty || 0))), 0);
   const aoa = [
     ['納品書'], [],
     ['取引先', client ? client + '　御中' : ''],
     ['納品日', fmtDateJPLong(date)],
+    ...(slipNo ? [['納品書番号', slipNo]] : []),
     ...(subject ? [['件名', subject]] : []),
     [],
     ['型番', '数量', '単価（円）', '金額（円）', '備考'],
@@ -4080,7 +4133,7 @@ function exportDeliverySlipExcel() {
 function printDeliverySlip(slipId) {
   const data = buildDeliverySlipDataFromSlipId(slipId);
   if (!data) { showToast('対象の納品書が見つかりません'); return; }
-  openDeliverySlipPrint(data.client, data.date, data.items, data.subject);
+  openDeliverySlipPrint(data.client, data.date, data.items, data.subject, data.slipNo);
 }
 
 // 実際にPDF・印刷される見た目そのままの印刷プレビューを表示する（「内容を見る」「PDF保存」の
@@ -4136,7 +4189,7 @@ function showDeliverySlipPreview(slipId) {
     // 残ったままだと、getBoundingClientRectの測定値がその縮小率の分だけ縮んでしまい、
     // 縦線の位置・高さの計算が二重に縮小されて狂ってしまう。必ず等倍に戻してから測定・描画する。
     pageEl.style.transform = 'none';
-    pageEl.innerHTML = dsSlipBodyHtml(data.client, data.date, data.subject);
+    pageEl.innerHTML = dsSlipBodyHtml(data.client, data.date, data.subject, data.slipNo);
     renderDeliverySlipColumns(pageEl, data.items);
   }
   fitDeliverySlipPreviewScale();
@@ -4504,6 +4557,7 @@ function renderWhDelivHistory() {
       client: first.client,
       date: first.date,
       subject: first.subject || '',
+      slipNo: first.slipNo || '',
       total: items.reduce((s,m) => s + (m.amount || 0), 0),
       itemQty: items.reduce((s,m) => s + (m.qty || 0), 0),
       createdAt: Math.max(...items.map(m => m.createdAt || 0)),
@@ -4558,7 +4612,7 @@ function renderWhDelivHistory() {
     <div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;cursor:pointer" onclick="showDeliverySlipPreview('${s.slipId}')">
       <div>
         <div style="color:var(--text);font-weight:600">${s.client || ''}／${fmtDateJP(s.date)}${s.subject ? '／' + s.subject : ''}</div>
-        <div style="color:var(--text-muted);font-size:11px;margin-top:2px">数量合計 ${s.itemQty}個／合計 ¥${s.total.toLocaleString('ja-JP')}</div>
+        <div style="color:var(--text-muted);font-size:11px;margin-top:2px">${s.slipNo ? `No.${escapeHtmlMain(s.slipNo)}／` : ''}数量合計 ${s.itemQty}個／合計 ¥${s.total.toLocaleString('ja-JP')}</div>
         ${matchedHtml}
       </div>
       <div style="margin-top:6px">${freeeInvoiceGroupSummaryHtml(s.slipId)}</div>
@@ -5397,7 +5451,7 @@ function renderConsignInvoicesList() {
     const items = bySlip[slipId];
     const first = items[0];
     return {
-      slipId, client: first.client, date: first.date,
+      slipId, client: first.client, date: first.date, slipNo: first.slipNo || '',
       total: items.reduce((s,m) => s + (m.amount || 0), 0),
       itemQty: items.reduce((s,m) => s + (m.qty || 0), 0),
       createdAt: Math.max(...items.map(m => m.createdAt || 0)),
@@ -5412,7 +5466,7 @@ function renderConsignInvoicesList() {
   listEl.innerHTML = slips.map(s => `
     <div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:13px">
       <div style="color:var(--text);font-weight:600">${escapeHtmlMain(s.client || '')}／${fmtDateJP(s.date)}</div>
-      <div style="color:var(--text-muted);font-size:11px;margin-top:2px">数量合計 ${s.itemQty}個／合計 ¥${s.total.toLocaleString('ja-JP')}</div>
+      <div style="color:var(--text-muted);font-size:11px;margin-top:2px">${s.slipNo ? `No.${escapeHtmlMain(s.slipNo)}／` : ''}数量合計 ${s.itemQty}個／合計 ¥${s.total.toLocaleString('ja-JP')}</div>
       <div style="margin-top:6px">${freeeInvoiceGroupSummaryHtml(s.slipId)}</div>
       <div style="display:flex;gap:8px;margin-top:8px">
         <button onclick="showDeliverySlipPreview('${s.slipId}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">📄 内容を見る</button>
@@ -5443,17 +5497,25 @@ async function createConsignInvoiceSlipFromSelection() {
 
   try {
     let seq = 0;
+    const invoiceDate = todayStr();
+    // 納品書番号：この操作で取引先ごとに複数枚の納品書を続けてまとめて作ることがあるため、
+    // stockMovesへの反映（サーバーへの書き込み・再取得）を待たずに、この関数の実行中だけで
+    // 枝番をローカルにカウントアップしていく（slipNoMaxSeqForDateを毎回呼ぶと、まだ
+    // 反映されていない直前の1枚目が数に入らず、同じ番号が重複してしまうため）。
+    let slipSeqCounter = slipNoMaxSeqForDate(invoiceDate);
     for (const client of order) {
       const items = groups[client];
       const slipId = 'cslip_' + Date.now() + '_' + (seq++);
-      const date = todayStr();
+      const date = invoiceDate;
+      slipSeqCounter += 1;
+      const slipNo = formatSlipNo(date, slipSeqCounter);
       // 通常の納品書と同じく、Promise.allでの並行POSTによる到達順の入れ替わりを避けるため、
       // 選択（登録）した順をitemSeqとして明細ごとに埋め込んでおく（印刷・プレビューは
       // buildDeliverySlipDataFromSlipIdのcompareDeliverySlipItemOrderで、これを優先して並べる）
       await Promise.all(items.map((m, idx) => fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
         productKey: m.productKey, productName: m.productName || '', model: consignItemModel(m), jan: m.jan || '',
         type: 'out', channel: CONSIGN_INVOICE_CHANNEL, client, subject: '預かり精算分',
-        qty: m.qty, unitPrice: m.unitPrice, amount: m.amount, slipId, date, memo: '',
+        qty: m.qty, unitPrice: m.unitPrice, amount: m.amount, slipId, slipNo, date, memo: '',
         sourceConsignKey: m._key, createdAt: Date.now(), itemSeq: idx
       })})));
 
