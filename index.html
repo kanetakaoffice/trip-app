@@ -5519,24 +5519,13 @@ async function createConsignInvoiceSlipFromSelection() {
         sourceConsignKey: m._key, createdAt: Date.now(), itemSeq: idx
       })})));
 
-      // 精算した時点では商品ごとに個別の売上記録が作られているが、同じ納品書にまとめる
-      // 商品については、業務の売上一覧でも1件にまとめて見えるようにしたい（要望：「同じ
-      // 納品書で精算したものはそれ一つで考えて欲しい」）。そのため、個別の売上記録はここで
-      // いったん削除し、合計金額の売上記録を1件だけ新規作成して、対象の精算記録すべてに
-      // その共有のsalesKeyを書き戻す。（この納品書を取り消す場合は、cancelConsignInvoiceSlip
-      // 側でこのまとめ処理を逆に辿り、精算時点の個別の売上記録へ戻す）
-      await Promise.all(items.filter(m => m.salesKey).map(m => fetch(authedUrl('/sales/' + m.salesKey + '.json'), { method: 'DELETE' })));
-      const combinedAmount = items.reduce((s, m) => s + (m.amount || 0), 0);
-      const itemsLabel = items.length <= 3
-        ? items.map(m => `${consignItemModel(m)}／${m.qty}個`).join('、')
-        : `${items.slice(0, 2).map(m => `${consignItemModel(m)}／${m.qty}個`).join('、')}ほか${items.length - 2}件`;
-      const combinedSalesKey = await window._fbPushSales({
-        type: 'sales', date, salesType: '国内（請求書）', client, amount: combinedAmount, due: '',
-        note: `預かり精算（${itemsLabel}）より自動登録（納品書にまとめて記録）`,
-        payStatus: '未入金', submittedAt: new Date().toLocaleDateString('ja-JP')
-      });
+      // 要望：「業務の一覧の売上に、預かり精算を自動で反映しないでほしい」（通常の卸売納品書と
+      // 同じく、売上は業務→売上画面での手入力に統一する）への対応。以前はここで精算時点の
+      // 個別の売上記録を削除し、合計金額の売上記録を1件だけ自動作成していたが、その自動登録を
+      // やめた。既存の（この変更より前に自動登録された）売上記録がもし残っていても、ここでは
+      // 一切触れずそのままにする（勝手に削除すると、過去の月次集計から売上が消えてしまうため）。
       await Promise.all(items.map(m => fetch(authedUrl('/stockMoves/' + m._key + '.json'), { method: 'PATCH', body: JSON.stringify({
-        invoicedSlipId: slipId, salesKey: combinedSalesKey || null
+        invoicedSlipId: slipId
       })})));
     }
     await loadInventory();
@@ -5570,21 +5559,16 @@ async function cancelConsignInvoiceSlip(slipId) {
     .map(m => (stockMoves || []).find(x => x._key === m.sourceConsignKey))
     .filter(Boolean);
 
-  // まとめて1件になっていた売上記録を削除し、対象だった精算記録それぞれについて、
-  // 精算時点と同じ内容の売上記録を個別に作り直す。この機能を実装する前に作成された古い
-  // 納品書（対象商品がそれぞれ別々の売上記録を持ったまま）を取り消す場合にも、記録の
-  // 取りこぼし・重複が起きないよう、関連する売上記録をすべて（重複を除いて）削除してから
-  // 個別の記録を作り直す。
+  // 要望：「業務の一覧の売上に、預かり精算を自動で反映しないでほしい」への対応で、
+  // 精算・納品書作成のどちらでも新たに売上記録を自動作成しなくなったため、ここでも
+  // 個別の売上記録を作り直す処理はやめた。ただし、この変更より前に作られた古い納品書
+  // （まとめた売上記録＝salesKeyを持ったまま）を取り消す場合は、その古い売上記録が
+  // 宙に浮いたまま残ってしまわないよう、削除だけは行う（新しい記録は作らない）。
   const salesKeysToDelete = [...new Set(sourceRecords.map(m => m.salesKey).filter(Boolean))];
   await Promise.all(salesKeysToDelete.map(key => fetch(authedUrl('/sales/' + key + '.json'), { method: 'DELETE' })));
-  await Promise.all(sourceRecords.map(async m => {
-    const salesKey = await window._fbPushSales({
-      type: 'sales', date: todayStr(), salesType: '国内（請求書）', client: m.client, amount: m.amount || 0, due: '',
-      note: `預かり精算（${m.productName || ''}／${m.qty}個）より自動登録`,
-      payStatus: '未入金', submittedAt: new Date().toLocaleDateString('ja-JP')
-    });
-    await fetch(authedUrl('/stockMoves/' + m._key + '.json'), { method: 'PATCH', body: JSON.stringify({ invoicedSlipId: null, salesKey: salesKey || null }) });
-  }));
+  await Promise.all(sourceRecords.map(m =>
+    fetch(authedUrl('/stockMoves/' + m._key + '.json'), { method: 'PATCH', body: JSON.stringify({ invoicedSlipId: null, salesKey: null }) })
+  ));
 
   await Promise.all(moves.map(m => fetch(authedUrl('/stockMoves/' + m._key + '.json'), { method: 'DELETE' })));
   stockMoves = stockMoves.filter(m => !(m.slipId === slipId && m.type === 'out' && m.channel === CONSIGN_INVOICE_CHANNEL));
@@ -6267,10 +6251,6 @@ async function confirmSettleConsign() {
   const amount = unitPrice * settleQty;
   const approvalPending = _consignApprovalPending;
   try {
-    // 精算の取り消し（confirmUndoSettleConsign）が、この精算に紐づく売上記録だけを正確に1件削除
-    // できるよう、実際に「精算済み」となるレコードのキー（全数精算ならkey自身、一部精算なら
-    // 新規作成したレコード）を先に特定しておき、あとで売上記録のキー（salesKey）を書き戻す
-    let settledKey = key;
     if (settleQty === m.qty) {
       // 全数量を精算
       await fetch(authedUrl('/stockMoves/' + key + '.json'), { method: 'PATCH', body: JSON.stringify({
@@ -6283,14 +6263,13 @@ async function confirmSettleConsign() {
         type: 'consign', status: 'settled', client: m.client, qty: settleQty, unitPrice, amount,
         date: m.date, memo: m.memo || '', createdAt: Date.now(), settledAt: Date.now()
       })});
-      const newMoveData = await newMoveResp.json();
-      settledKey = newMoveData.name;
       await fetch(authedUrl('/stockMoves/' + key + '.json'), { method: 'PATCH', body: JSON.stringify({ qty: m.qty - settleQty }) });
     }
-    const salesKey = await window._fbPushSales({ type: 'sales', date: todayStr(), salesType: '国内（請求書）', client: m.client, amount, due: '', note: `預かり精算（${m.productName || ''}／${settleQty}個）より自動登録`, payStatus: '未入金', submittedAt: new Date().toLocaleDateString('ja-JP') });
-    if (salesKey) {
-      await fetch(authedUrl('/stockMoves/' + settledKey + '.json'), { method: 'PATCH', body: JSON.stringify({ salesKey }) });
-    }
+    // 要望：「業務の一覧の売上に、預かり精算を自動で反映しないでほしい」への対応。
+    // 以前はここで精算金額を業務の売上（sales）に自動登録していたが、これをやめ、通常の
+    // 卸売納品書と同じく、業務→売上画面で必要な分だけ手入力してもらう運用に統一した。
+    // 取り消し・削除時（confirmUndoSettleConsign／完全に削除）にsalesKeyの有無で売上記録を
+    // 削除する処理は、この変更より前に自動登録された古い記録のためにそのまま残してある。
     // 取引先ポータルからのリクエストを承認する形で開いた場合は、精算が確定した時点でそのリクエストも消去する
     if (approvalPending) { await clearConsignRequest(approvalPending.portalId, approvalPending.requestId); }
     closeSettleConsign();
