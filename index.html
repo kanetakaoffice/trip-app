@@ -3186,10 +3186,12 @@ async function submitWhQuickRegister() {
 // スキャンのたびに「その商品・通常単価」の行へ数量を積み増していく。
 // ただし単価を変更した行（傷や潰れなどで値引きした行）には合流させず、通常単価の行を別に作る。
 // これにより、傷物などで単価を下げた分だけ後から個別に管理できる。
+//
+// 単価は常に0円（未入力）から始める。以前は「その取引先・その商品で前回使った単価」を
+// suggestUnitPrice()で自動反映していたが、同じ取引先・同じ商品でも都度金額が変わることが多く、
+// 前回の金額を毎回消す手間になっていたため廃止した（要望：前回の金額を再度反映させないでほしい）。
 function addWhItemRow(prod) {
-  const client = document.getElementById('wh-deliv-client').value.trim();
-  const suggested = suggestUnitPrice(client, prod._key);
-  const defaultPrice = suggested != null ? suggested : 0;
+  const defaultPrice = 0;
   // 委託の印が付いた行には合流させない（一部だけ委託にする機能により、同じ商品・同じ単価の
   // 行が「通常」「委託」で並んで存在しうるようになったため。委託行が先に来るよう並べ替えられた
   // 場合でも、誤って委託済みの数量に上乗せしてしまわないようにする）
