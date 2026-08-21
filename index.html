@@ -3767,9 +3767,11 @@ const DS_STYLE = `
       /* 納品書番号は「納品日」のすぐ下に、右揃えで表示する（要望：前回の金額同様、番号があると
          同じ取引先・同じ日に複数枚発行した場合などに問い合わせ・照合がしやすくなるため追加） */
       .ds-date-block { grid-column:3; display:flex; flex-direction:column; align-items:flex-end; gap:3px; }
-      .ds-date { font-size:10px; color:#555; }
-      .ds-slipno { font-size:10px; color:#555; }
-      .ds-slipno .ds-slipno-label { color:#888; }
+      /* 要望：「納品日が小さくて見えにくい」への対応。位置は変えず、文字を大きく・太くした
+         （14px・太字）。件名の有無で位置がぶれる心配がなく、納品書番号との並びもそのまま保てる案。 */
+      .ds-date { font-size:14px; font-weight:700; color:#1a1a1a; }
+      .ds-slipno { font-size:10.5px; color:#666; margin-top:1px; }
+      .ds-slipno .ds-slipno-label { color:#999; }
       .ds-head-box { padding:12px 0; margin-bottom:16px; }
       .ds-head-row { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
       .ds-client-block { min-width:0; }
