@@ -3666,13 +3666,16 @@ async function submitWhDeliverySlip() {
   }
 
   const slipId = editingSlipId || ('slip_' + Date.now());
-  // 納品書番号：編集・同一納品書への追記（マージ）の場合は、既存の納品書に振られている番号を
-  // そのまま引き継ぐ（番号は「その文書」を指すものなので、内容を直しても変わらないようにする）。
-  // 新規発行の場合だけ、納品日を基準に新しい番号を割り当てる。
+  // 納品書番号：編集・同一納品書への追記（マージ）の場合、納品日が変わっていなければ既存の
+  // 番号をそのまま引き継ぐ。ただし要望により、編集で納品日を変更した場合は、新しい納品日を
+  // 基準に番号を振り直す（同じ日付を基準にした番号のまま日付だけ変わってしまい、番号と
+  // 表示されている納品日が食い違って見えることのないようにするため）。
+  // マージ（findMergeTargetSlipIdによる自動追記）の場合は、そもそも同じ納品日の納品書にしか
+  // マージしないため、この条件では必ず「納品日が変わっていない」側に該当し、番号は維持される。
   let slipNo = null;
   if (editingSlipId) {
     const existingNumberedMove = stockMoves.find(m => m.slipId === editingSlipId && m.slipNo);
-    if (existingNumberedMove) slipNo = existingNumberedMove.slipNo;
+    if (existingNumberedMove && existingNumberedMove.date === date) slipNo = existingNumberedMove.slipNo;
   }
   if (!slipNo) slipNo = formatSlipNo(date, slipNoMaxSeqForDate(date) + 1);
   // 委託の印が付いた行は単価が未確定のため、合計金額（発行後のトースト表示用）には含めない
