@@ -1749,6 +1749,17 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     <div id="ds-preview-scale-wrap" class="ds-preview-scale-wrap" style="flex:0 1 auto;min-height:0;max-height:70vh;overflow-y:auto">
       <div id="ds-preview-page" class="ds-preview-page"></div>
     </div>
+    <!-- 要望：「納品書に記入した型番の商品がちゃんと積まれているかのチェックができる項目が欲しい」
+         への対応。あくまで店舗側の確認用であり、印刷・PDF・Excel出力には一切含めないよう、
+         納品書そのもの（#ds-preview-page、印刷・PDF・Excel出力のもとになっている部分）とは
+         別のセクションとしてここに置く。 -->
+    <div id="ds-load-check-section" style="display:none;margin-top:10px;flex-shrink:0;border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;max-height:160px;overflow-y:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:8px">
+        <div style="font-size:12.5px;font-weight:700;color:var(--text)">📦 積み込みチェック<span id="ds-load-check-progress" style="font-weight:500;margin-left:4px"></span></div>
+        <button onclick="resetDeliverySlipLoadChecks()" style="flex-shrink:0;background:none;border:none;padding:4px 2px;font-size:11px;color:var(--text-muted);cursor:pointer;text-decoration:underline">最初からやり直す</button>
+      </div>
+      <div id="ds-load-check-list"></div>
+    </div>
     <div id="wh-deliv-preview-status" style="display:none;font-size:12px;padding:8px 10px;border-radius:8px;margin-top:10px;flex-shrink:0"></div>
     <div style="display:flex;gap:10px;margin-top:14px;flex-shrink:0">
       <button onclick="closeDeliverySlipPreview()" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">閉じる</button>
@@ -4084,7 +4095,12 @@ function buildDeliverySlipDataFromSlipId(slipId) {
     qty: m.qty, unitPrice: m.unitPrice, amount: m.amount,
     // 傷・つぶれの詳細（テキスト）のみ納品書に載せる。写真（damagePhoto）はここで一切扱わない
     damageDetail: m.damageDetail || '',
-    isConsignNote: m.type === 'consign'
+    isConsignNote: m.type === 'consign',
+    // 要望：「納品書に記入した型番の商品がちゃんと積まれているかのチェックができる項目が欲しい」
+    // への対応。プレビュー画面の積み込みチェックリストで、明細のどの行に対応するかを
+    // 特定するための出庫記録のキー。チェック状態（loadChecked）自体もこのキーの記録に保存する
+    _key: m._key,
+    loadChecked: !!m.loadChecked
   }));
   return { client: moves[0].client, date: moves[0].date, subject: moves[0].subject || '', slipNo: moves[0].slipNo || '', items };
 }
@@ -4128,7 +4144,13 @@ function exportDeliverySlipExcel() {
   XLSX.utils.book_append_sheet(wb, ws, '納品書');
   const fileName = `納品書_${client}_${date}`.replace(/[\\/:*?"<>|]/g, '_');
   XLSX.writeFile(wb, fileName + '.xlsx');
-  showToast('納品書のExcelを出力しました');
+  // 要望：「全商品にチェックが付いていない状態でエクセル出力をしようとした場合」への対応
+  // （出力自体はブロックせず、未チェックが残っている場合だけ一言添える）。出力完了のトースト
+  // 表示自体は1つにまとめる（別々に出すと、後から出す方が先の警告をすぐ上書きしてしまうため）。
+  const uncheckedCount = (_dsPreviewChannel === CONSIGN_INVOICE_CHANNEL) ? 0 : items.filter(it => !it.loadChecked).length;
+  showToast(uncheckedCount > 0
+    ? `納品書のExcelを出力しました（⚠️積み込み未チェックが${uncheckedCount}件あります）`
+    : '納品書のExcelを出力しました');
 }
 
 // 発行済みの納品書をブラウザの印刷機能で開く（紙のプリンターに直接送りたい場合や、
@@ -4198,6 +4220,90 @@ function showDeliverySlipPreview(slipId) {
     renderDeliverySlipColumns(pageEl, data.items);
   }
   fitDeliverySlipPreviewScale();
+  // 要望：「納品書に記入した型番の商品がちゃんと積まれているかのチェックができる項目が欲しい」
+  // への対応。預かり精算分の請求用納品書（CONSIGN_INVOICE_CHANNEL）は、すでに精算済みの商品を
+  // 後から請求のためにまとめただけの書類で、これから改めて積み込む商品ではないため、
+  // チェックリスト自体を表示しない（編集ボタンを隠しているのと同じ考え方）。
+  const loadCheckSection = document.getElementById('ds-load-check-section');
+  if (loadCheckSection) {
+    loadCheckSection.style.display = (_dsPreviewChannel === CONSIGN_INVOICE_CHANNEL) ? 'none' : 'block';
+  }
+  renderDeliverySlipLoadChecklist(data.items);
+}
+
+// プレビュー中の納品書明細を、実際に積み込みながら1つずつ確認できるチェックリストとして描画する。
+// チェック状態はstockMoves側（各明細＝出庫記録）にloadCheckedとして保存されるため、
+// プレビューを一度閉じて後で開き直しても、途中まで付けたチェックはそのまま残る。
+function renderDeliverySlipLoadChecklist(items) {
+  const listEl = document.getElementById('ds-load-check-list');
+  if (!listEl) return;
+  listEl.innerHTML = (items || []).map(it => `
+    <label style="display:flex;align-items:center;gap:8px;padding:5px 2px;font-size:12.5px;color:var(--text);cursor:pointer">
+      <input type="checkbox" ${it.loadChecked ? 'checked' : ''} onchange="toggleDeliverySlipLoadCheck('${it._key}', this.checked)" style="width:17px;height:17px;flex-shrink:0;accent-color:var(--success)">
+      <span style="flex:1;min-width:0;overflow-wrap:break-word;word-break:break-all;${it.loadChecked ? 'text-decoration:line-through;color:var(--text-muted)' : ''}">${escapeHtmlMain(it.model || '商品')}（${it.qty}個）</span>
+    </label>
+  `).join('');
+  updateDsLoadCheckProgress(items || []);
+}
+
+// チェックリスト見出し横の「(n/N)」表示。全件チェック済みなら控えめな色に、未チェックが
+// 残っている間は目に留まりやすい色にしておく（あくまで注意喚起のためで、後述の通り
+// 共有・Excel出力自体をブロックすることはしない）。
+function updateDsLoadCheckProgress(items) {
+  const progressEl = document.getElementById('ds-load-check-progress');
+  if (!progressEl) return;
+  const total = items.length;
+  const checked = items.filter(it => it.loadChecked).length;
+  progressEl.textContent = total ? `（${checked}/${total}）` : '';
+  progressEl.style.color = (total && checked < total) ? '#b8860b' : 'var(--text-muted)';
+}
+
+async function toggleDeliverySlipLoadCheck(key, checked) {
+  const move = (stockMoves || []).find(m => m._key === key);
+  if (move) move.loadChecked = checked;
+  try {
+    await fetch(authedUrl('/stockMoves/' + key + '/loadChecked.json'), { method: 'PUT', body: JSON.stringify(checked) });
+  } catch (e) {
+    console.error('toggleDeliverySlipLoadCheck failed:', e);
+  }
+  if (!_dsPreviewSlipId) return;
+  const data = buildDeliverySlipDataFromSlipId(_dsPreviewSlipId);
+  if (data) renderDeliverySlipLoadChecklist(data.items);
+}
+
+// 要望：「（チェック状態は）保存できるようにして欲しいですが、後から最初からやり直すこともできる
+// ようにして欲しい」への対応。積み込み前に押し間違えた場合や、積み直しになった場合などに、
+// このボタンで対象の納品書のチェックをすべて未チェックの状態に戻せるようにする。
+function resetDeliverySlipLoadChecks() {
+  if (!_dsPreviewSlipId) return;
+  const data = buildDeliverySlipDataFromSlipId(_dsPreviewSlipId);
+  if (!data || !data.items.length) return;
+  showConfirm('積み込みチェックをすべて未チェックの状態に戻しますか？').then(async ok => {
+    if (!ok) return;
+    await Promise.all(data.items.map(it => {
+      const move = (stockMoves || []).find(m => m._key === it._key);
+      if (move) move.loadChecked = false;
+      return fetch(authedUrl('/stockMoves/' + it._key + '/loadChecked.json'), { method: 'PUT', body: JSON.stringify(false) });
+    }));
+    if (_dsPreviewSlipId) {
+      const refreshed = buildDeliverySlipDataFromSlipId(_dsPreviewSlipId);
+      if (refreshed) renderDeliverySlipLoadChecklist(refreshed.items);
+    }
+    showToast('積み込みチェックをリセットしました');
+  });
+}
+
+// 要望：「全商品にチェックが付いていない状態で共有やエクセル出力をしようとした場合、どうしますか？」
+// →「今は注意を表示するだけでブロックはしない」という回答への対応。共有・Excel出力そのものは
+// 止めず、未チェックの商品が残っている場合だけ一言添えるだけにとどめる。
+function warnIfDeliverySlipLoadChecksIncomplete() {
+  if (!_dsPreviewSlipId || _dsPreviewChannel === CONSIGN_INVOICE_CHANNEL) return;
+  const data = buildDeliverySlipDataFromSlipId(_dsPreviewSlipId);
+  if (!data) return;
+  const uncheckedCount = data.items.filter(it => !it.loadChecked).length;
+  if (uncheckedCount > 0) {
+    showToast(`⚠️ 積み込み未チェックの商品が${uncheckedCount}件あります`);
+  }
 }
 
 // プレビュー右上の「編集する」「取り消す」ボタン（共有ボタンと同じアイコン形式）の表示・非表示を、
@@ -4272,6 +4378,8 @@ function closeDeliverySlipPreview() {
   unlockBodyScrollForPreview();
   const pageEl = document.getElementById('ds-preview-page');
   if (pageEl) pageEl.innerHTML = '';
+  const loadCheckListEl = document.getElementById('ds-load-check-list');
+  if (loadCheckListEl) loadCheckListEl.innerHTML = '';
   _dsPreviewSlipId = null;
   _dsPreviewChannel = '';
 }
@@ -4690,6 +4798,7 @@ function printFromDeliverySlipPreview() {
 // 印刷機能）に自動的に切り替える。
 async function shareDeliverySlipPdfDirect() {
   if (!_dsPreviewSlipId) return;
+  warnIfDeliverySlipLoadChecksIncomplete();
   const data = buildDeliverySlipDataFromSlipId(_dsPreviewSlipId);
   const pageEl = document.getElementById('ds-preview-page');
   if (!data || !pageEl || !pageEl.innerHTML) { showToast('印刷対象が見つかりません'); return; }
@@ -12837,7 +12946,13 @@ function updatePortalGrandTotal() {
 // 必要な数だけ割り当て、レコードごとに個別のconsignRequestとして送信する。同じ商品を複数回に
 // 分けて預けていた場合（ポータル上はまとめて1行に表示されている）でも、店舗側は今まで通り
 // レコード単位で内容を確認・精算できる。
-async function postConsignRequestsForItem(it, qty, type, unitPrice, memo) {
+// batchId：「まとめて精算」で複数商品を一度に送信した際、通知メールを1通に集約したいという
+// 要望への対応。submitBatchSettle()が生成した共通のIDをここで各レコードに書き込んでおくことで、
+// メール送信側（Cloud Functions）が「同じbatchIdを持つリクエストをまとめて1通にする」判断に使える。
+// 1件ずつ送るsendPortalRequest()からは渡されない（undefinedのまま）ため、単発送信は今まで通り
+// 即座に1通のメールが届く。データ構造・店舗側の承認フロー（renderConsignRequestsPanel等）には
+// 手を加えていない（あくまで追加の任意フィールドとして持たせるだけ）。
+async function postConsignRequestsForItem(it, qty, type, unitPrice, memo, batchId) {
   const slices = splitQtyAcrossMoveKeys(it.moveKeys, qty);
   if (!slices.length) throw new Error('割り当てできる預け入れ記録が見つかりませんでした');
   for (const slice of slices) {
@@ -12849,6 +12964,7 @@ async function postConsignRequestsForItem(it, qty, type, unitPrice, memo) {
     // 要望：「取引先の委託リスト画面の各型番の売値の下に備考欄を作成してください」への対応。
     // 取引先が任意で書き添えた連絡事項を、店舗側が確認できるようリクエストに含めて送る。
     if (memo) body.memo = memo;
+    if (batchId) body.batchId = batchId;
     await fetch(authedUrl('/consignRequests/' + window._portalId + '.json'), {
       method: 'POST',
       body: JSON.stringify(body)
@@ -13025,6 +13141,9 @@ async function submitBatchSettle() {
   let succeeded = 0;
   let grandTotal = 0;
   const failedModels = [];
+  // このバッチ内の全リクエストに共通で持たせるID。通知メールを1通に集約するための目印
+  // （詳しくはpostConsignRequestsForItemの説明コメントを参照）。
+  const batchId = 'b' + Date.now();
   for (const c of candidates) {
     const itemStatusEl = document.getElementById('portal-item-status-' + c.idx);
     const setItemStatus = (msg, isError) => {
@@ -13034,7 +13153,7 @@ async function submitBatchSettle() {
       itemStatusEl.style.display = msg ? 'block' : 'none';
     };
     try {
-      await postConsignRequestsForItem(c.it, c.qty, 'settle', c.price, c.memo);
+      await postConsignRequestsForItem(c.it, c.qty, 'settle', c.price, c.memo, batchId);
       succeeded++;
       grandTotal += c.qty * c.price;
       setItemStatus(`✓ ${c.qty}個（売値¥${c.price.toLocaleString('ja-JP')}／合計¥${(c.qty * c.price).toLocaleString('ja-JP')}）の精算のご連絡を送信しました。店舗からの確認をお待ちください。`, false);
