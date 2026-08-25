@@ -1671,6 +1671,25 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
   </div>
 </div>
 
+<!-- 要望：「取引先から精算連絡が届いてこちらが金額確定した後に、金額変更することができない
+     のでできるようにしてほしい」への対応。精算済みの確定金額だけを、預け中に戻すことなく
+     その場で修正するための専用モーダル -->
+<div id="wh-settle-amount-edit-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom)) 16px">
+  <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:340px;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">精算金額を編集</div>
+    <div id="wh-settle-amount-edit-desc" style="font-size:12px;color:var(--text-muted);margin-bottom:14px"></div>
+    <div class="field">
+      <div class="field-label">確定価格（円） <span class="req">*</span></div>
+      <input type="number" id="wh-settle-amount-edit-price" placeholder="0" min="0">
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">取引先からの精算連絡の後で金額を間違えていた場合など、確定後の金額をこちらで修正できます</div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button onclick="confirmEditSettleAmount()" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8d8d8,#a8a8a8);color:#1a1a1a;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">保存する</button>
+      <button onclick="closeEditSettleAmount()" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">キャンセル</button>
+    </div>
+  </div>
+</div>
+
 <!-- 預かり商品の編集モーダル（数量の変更に加えて、納品書作成と同じ感覚で別の商品もその場で追加できる） -->
 <div id="wh-consign-edit-modal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom)) 16px">
   <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:400px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
@@ -5563,6 +5582,11 @@ function renderWhConsignHistorySection() {
   // ものだけは、先にその納品書を取り消してもらう必要があるため、取り消すリンクを出さず
   // 「請求済み」バッジのみ表示する（confirmUndoSettleConsign側でも二重にガードしている）
   const undoLinkHtml = (m) => `<span onclick="event.stopPropagation(); ${m.status === 'settled' ? `confirmUndoSettleConsign('${m._key}')` : `confirmUndoReturnConsign('${m._key}')`}" style="flex-shrink:0;font-size:11px;color:var(--text-muted);text-decoration:underline;cursor:pointer">取り消す</span>`;
+  // 要望：「取引先から精算連絡が届いてこちらが金額確定した後に、金額変更することができない
+  // のでできるようにしてほしい」への対応。「取り消す」（预け中に戻して精算をやり直す）より
+  // 手早く、確定済みの金額だけをその場で修正できるようにする。請求済み（invoicedSlipId）の
+  // ものは取り消し・削除と同様の理由で編集できないため、そもそもこのリンク自体を出さない。
+  const editAmountLinkHtml = (m) => `<span onclick="event.stopPropagation(); openEditSettleAmount('${m._key}')" style="flex-shrink:0;font-size:11px;color:var(--gold-dark);text-decoration:underline;cursor:pointer">金額を編集</span>`;
   // テストとして行った精算・返却の記録などを、跡形もなく消したい場合のための「完全に削除する」
   // リンク。「取り消す」（预け中に戻すだけ）とは異なり元に戻せない破壊的操作なので、確認
   // ダイアログの文言でもその旨を明示し、色も警告色にして誤操作しにくくしている。すでに
@@ -5584,6 +5608,7 @@ function renderWhConsignHistorySection() {
       return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;display:flex;align-items:center;gap:6px">
         <input type="checkbox" class="consign-invoice-checkbox" data-key="${m._key}" style="flex-shrink:0;width:16px;height:16px">
         <span style="flex:1">${rowText}</span>
+        ${editAmountLinkHtml(m)}
         ${undoLinkHtml(m)}
         ${deleteLinkHtml(m)}
       </div>`;
@@ -6532,6 +6557,66 @@ async function confirmSettleConsign() {
     renderWhConsignList();
     showToast('精算しました（¥' + amount.toLocaleString('ja-JP') + '）');
   } catch(e) { showToast('処理に失敗しました'); console.error(e); }
+}
+
+// 要望：「取引先から精算連絡が届いてこちらが金額確定した後に、金額変更することができない
+// のでできるようにしてほしい」への対応。以前は「取り消す」で一旦预け中に戻し、精算し直す
+// しかなかったが、それだと数量入力や重複警告などの確認フローをもう一度すべてやり直すことに
+// なり手間が大きい。確定済みの金額（unitPrice・amount）だけをその場で直接修正できるように
+// する。すでに精算分の納品書を発行済み（invoicedSlipId）のものは、発行済みの書類と食い違って
+// しまうため「取り消す」「完全に削除」と同様に編集を許可しない（リンク自体を出さないうえ、
+// 直接呼び出された場合に備えてここでも二重にガードする）。
+let _settleAmountEditKey = null;
+
+function openEditSettleAmount(key) {
+  const m = (stockMoves || []).find(x => x._key === key);
+  if (!m) { showToast('対象の記録が見つかりません'); return; }
+  if (m.invoicedSlipId) {
+    showToast('すでに精算分の納品書を発行済みのため編集できません。先に「精算分の納品書」からその納品書を取り消してください');
+    return;
+  }
+  _settleAmountEditKey = key;
+  const descEl = document.getElementById('wh-settle-amount-edit-desc');
+  if (descEl) descEl.textContent = `${m.client || ''}／${consignItemModel(m)}／${m.qty}個`;
+  const priceInput = document.getElementById('wh-settle-amount-edit-price');
+  if (priceInput) priceInput.value = m.unitPrice != null ? m.unitPrice : '';
+  const modal = document.getElementById('wh-settle-amount-edit-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeEditSettleAmount() {
+  _settleAmountEditKey = null;
+  const modal = document.getElementById('wh-settle-amount-edit-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function confirmEditSettleAmount() {
+  const key = _settleAmountEditKey;
+  if (!key) return;
+  const m = (stockMoves || []).find(x => x._key === key);
+  if (!m) { closeEditSettleAmount(); return; }
+  if (m.invoicedSlipId) {
+    showToast('すでに精算分の納品書を発行済みのため編集できません');
+    closeEditSettleAmount();
+    return;
+  }
+  const priceInput = document.getElementById('wh-settle-amount-edit-price');
+  const unitPrice = priceInput ? parseInt(priceInput.value, 10) : NaN;
+  if (isNaN(unitPrice) || unitPrice < 0) { showToast('確定価格を正しく入力してください'); return; }
+  const amount = unitPrice * m.qty;
+  try {
+    await fetch(authedUrl('/stockMoves/' + key + '.json'), { method: 'PATCH', body: JSON.stringify({ unitPrice, amount }) });
+    // 以前は精算の確定時に自動で売上（sales）記録も作成していたため、その頃に登録された
+    // 古い記録がsalesKeyとして残っている場合がある。金額が食い違わないよう、そちらの金額も
+    // 合わせて更新しておく（新しい記録にはsalesKeyが付かないため、通常はここは通らない）
+    if (m.salesKey) {
+      await fetch(authedUrl('/sales/' + m.salesKey + '.json'), { method: 'PATCH', body: JSON.stringify({ amount }) });
+    }
+    closeEditSettleAmount();
+    await loadInventory();
+    renderWhConsignList();
+    showToast('精算金額を編集しました（¥' + amount.toLocaleString('ja-JP') + '）');
+  } catch(e) { showToast('編集に失敗しました'); console.error(e); }
 }
 
 // 誤って精算・返却してしまった場合などに、確定済みの精算・返却を取り消して「预け中」に戻す機能。
