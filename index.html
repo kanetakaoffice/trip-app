@@ -280,6 +280,21 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 }
 </style>
 <div id="portal-screen" style="display:none;position:fixed;inset:0;z-index:550;background:var(--bg,#f6f5f2);overflow-y:auto;padding:max(24px,env(safe-area-inset-top)) 16px max(40px,env(safe-area-inset-bottom))" onscroll="updatePortalHistoryNavLabel()">
+  <!-- 要望：「何を預けているか瞬時に分からないと言われた。一覧を表示させたい」への対応。
+       常に表示すると縦スクロールが増えてしまう（要望：「スクロールが増えてしまうので」）ため、
+       画面には常設せず、左端に付けたタブをタップした時だけ、型番・数量・備考をまとめた
+       一覧をオーバーレイのパネルとして表示する。パネル自体が独自にスクロールするので、
+       ページ全体の縦の長さには影響しない。 -->
+  <button type="button" id="portal-summary-tab-btn" onclick="togglePortalSummaryPanel()" aria-label="預かり一覧を開く" style="display:none;position:fixed;left:0;top:50%;transform:translateY(-50%);z-index:600;background:var(--gold-dark);color:#fff;border:none;border-radius:0 10px 10px 0;padding:14px 6px;font-size:12px;font-weight:700;line-height:1.5;letter-spacing:1px;writing-mode:vertical-rl;box-shadow:2px 2px 8px rgba(0,0,0,0.18);cursor:pointer">📋 一覧</button>
+  <div id="portal-summary-backdrop" onclick="closePortalSummaryPanel()" style="display:none;position:fixed;inset:0;z-index:601;background:rgba(0,0,0,0.35)"></div>
+  <div id="portal-summary-panel" style="position:fixed;top:0;left:0;bottom:0;width:min(84vw,320px);z-index:602;background:var(--white);box-shadow:4px 0 18px rgba(0,0,0,0.22);transform:translateX(-100%);transition:transform .22s ease;display:flex;flex-direction:column;padding:max(20px,env(safe-area-inset-top)) 14px 16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;flex-shrink:0">
+      <div style="font-size:15px;font-weight:800;color:var(--text)">📋 お預かり一覧</div>
+      <button type="button" onclick="closePortalSummaryPanel()" aria-label="閉じる" style="background:none;border:none;font-size:22px;color:var(--text-muted);cursor:pointer;padding:2px 6px;line-height:1">✕</button>
+    </div>
+    <div id="portal-summary-panel-count" style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px;flex-shrink:0"></div>
+    <div id="portal-summary-panel-body" style="flex:1;min-height:0;overflow-y:auto"></div>
+  </div>
   <div id="portal-history-nav">
     <button type="button" onclick="portalHistoryNavClick()">📋 過去の履歴を見る</button>
   </div>
@@ -12725,6 +12740,7 @@ function renderPortalItems(items) {
   const searchWrap = document.getElementById('portal-search-wrap');
   const itemsRoot = document.getElementById('portal-items');
   const summaryEl = document.getElementById('portal-items-summary');
+  const summaryTabBtn = document.getElementById('portal-summary-tab-btn');
   if (!items.length) {
     // 検索で絞り込んだ結果0件になったのではなく、そもそも現在預けている商品が無い状態なので、
     // 「該当する型番が見つかりませんでした」ではなく専用の空状態メッセージを出す
@@ -12732,9 +12748,13 @@ function renderPortalItems(items) {
     if (emptyEl) emptyEl.style.display = 'block';
     if (searchWrap) searchWrap.style.display = 'none';
     if (summaryEl) summaryEl.style.display = 'none';
+    if (summaryTabBtn) summaryTabBtn.style.display = 'none';
+    closePortalSummaryPanel();
     return;
   }
   if (emptyEl) emptyEl.style.display = 'none';
+  // 何も預けていない・1件だけの場合は一覧を開く意味が薄いので、検索欄と同じ基準で表示する
+  if (summaryTabBtn) summaryTabBtn.style.display = items.length > 1 ? 'block' : 'none';
   // 取引先が今どれだけ預けているか一目で分かるよう、商品種類数と合計個数をまとめて表示する
   if (summaryEl) {
     const totalQty = items.reduce((sum, it) => sum + (it.qty || 0), 0);
@@ -12749,6 +12769,62 @@ function renderPortalItems(items) {
   if (countEl) countEl.textContent = '';
   togglePortalSearchClearBtn();
   renderPortalItemsList(items.map((it, idx) => ({ it, idx })));
+}
+
+// 要望：「何を預けているか瞬時に分からないと言われた。一覧を表示させたい」→
+// 「スクロールが増えてしまうので、左側に設置して、タップしたら開くような仕組みにできますか」
+// への対応。左端のタブ（#portal-summary-tab-btn）をタップすると、型番・数量・備考だけを
+// まとめた一覧を左からスライドするパネルとして開く。パネルは独自にスクロールするので、
+// 開いていない間はページの縦の長さに一切影響しない。
+function togglePortalSummaryPanel() {
+  const panel = document.getElementById('portal-summary-panel');
+  if (!panel) return;
+  const isOpen = panel.style.transform === 'translateX(0px)';
+  if (isOpen) closePortalSummaryPanel(); else openPortalSummaryPanel();
+}
+
+function openPortalSummaryPanel() {
+  renderPortalSummaryPanelBody();
+  const panel = document.getElementById('portal-summary-panel');
+  const backdrop = document.getElementById('portal-summary-backdrop');
+  if (backdrop) backdrop.style.display = 'block';
+  if (panel) panel.style.transform = 'translateX(0)';
+}
+
+function closePortalSummaryPanel() {
+  const panel = document.getElementById('portal-summary-panel');
+  const backdrop = document.getElementById('portal-summary-backdrop');
+  if (panel) panel.style.transform = 'translateX(-100%)';
+  if (backdrop) backdrop.style.display = 'none';
+}
+
+// 一覧パネルの中身。検索で絞り込む前の全件（window._portalItems）を対象にして、
+// 「今預けている物すべて」が一目で分かるようにする（下の入力カード側の検索絞り込みとは
+// 独立している）。
+function renderPortalSummaryPanelBody() {
+  const bodyEl = document.getElementById('portal-summary-panel-body');
+  const countEl = document.getElementById('portal-summary-panel-count');
+  if (!bodyEl) return;
+  const items = window._portalItems || [];
+  if (countEl) {
+    const totalQty = items.reduce((sum, it) => sum + (it.qty || 0), 0);
+    countEl.textContent = `${items.length}件／合計${totalQty}個`;
+  }
+  const rows = items.map(it => `
+    <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 2px;border-bottom:1px solid var(--border);font-size:12.5px">
+      <div style="flex:1.2;min-width:0;font-weight:700;color:var(--text);overflow-wrap:break-word">${escapeHtmlMain(it.model || '商品')}</div>
+      <div style="flex:0 0 auto;color:var(--text);white-space:nowrap">${it.qty}個</div>
+      <div style="flex:1.3;min-width:0;color:var(--text-muted);overflow-wrap:break-word">${it.memo ? escapeHtmlMain(it.memo) : ''}</div>
+    </div>
+  `).join('');
+  bodyEl.innerHTML = `
+    <div style="display:flex;gap:8px;padding:0 2px 6px;font-size:11px;font-weight:700;color:var(--text-muted);border-bottom:1.5px solid var(--border)">
+      <div style="flex:1.2">型番</div>
+      <div style="flex:0 0 auto;white-space:nowrap">数量</div>
+      <div style="flex:1.3">備考</div>
+    </div>
+    ${rows}
+  `;
 }
 
 // 取引先ポータルの「過去の履歴」セクション。精算・返却どちらも読み取り専用で表示するだけで、
@@ -12960,31 +13036,43 @@ function renderPortalItemsList(pairs) {
     // 消えないよう保存・復元する。
     const memoVal = saved && saved.memo != null ? saved.memo : '';
     const pendingBadge = getPortalPendingBadgeHtml(it.model);
+    // 要望：「常に全て表示させていなくても対象の型番のものをタップして開く形の方が全体が
+    // 見やすくなるのではないか」への対応。型番・数量・備考だけの1行（見出し）をタップすると、
+    // 数量・売値・備考の入力欄と返却ボタンが開く。既存の「過去の履歴」等と同じ
+    // toggleAccordion()の仕組み（.accordion-arrow／.accordion-body）をそのまま流用している。
     return `
-    <div style="border:1.2px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:var(--white)">
-      <div style="font-size:14px;font-weight:700;color:var(--text)">${escapeHtmlMain(it.model || '商品')}</div>
-      <div style="font-size:12.5px;color:var(--text-muted);margin-top:2px">${fmtDateJP(it.date)}／預けている数量：${it.qty}個${it.memo ? '／' + escapeHtmlMain(it.memo) : ''}</div>
-      ${pendingBadge ? `<div>${pendingBadge}</div>` : ''}
-      <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
-        <label for="portal-qty-${idx}" style="font-size:12px;color:var(--text-muted)">対象の数量</label>
-        <input type="number" id="portal-qty-${idx}" min="1" max="${it.qty}" value="${qtyVal}" oninput="updatePortalItemTotal(${idx})" style="width:64px;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
-        <span style="font-size:12px;color:var(--text-muted)">個（${it.qty}個のうち一部だけの場合は数を変えてください）</span>
+    <div style="border:1.2px solid var(--border);border-radius:12px;margin-bottom:10px;background:var(--white);overflow:hidden">
+      <div onclick="toggleAccordion('portal-item-${idx}')" style="display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer">
+        <span class="accordion-arrow" id="acc-arrow-portal-item-${idx}" style="flex-shrink:0;font-size:11px">▼</span>
+        <div style="flex:1.3;min-width:0;font-size:14px;font-weight:700;color:var(--text);overflow-wrap:break-word">${escapeHtmlMain(it.model || '商品')}</div>
+        <div style="flex:0 0 auto;font-size:12.5px;color:var(--text-muted);white-space:nowrap">${it.qty}個</div>
+        <div style="flex:1.1;min-width:0;font-size:11.5px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${it.memo ? escapeHtmlMain(it.memo) : ''}</div>
+        ${pendingBadge ? '<span style="flex-shrink:0;font-size:13px" title="確認待ちのご連絡があります">⏳</span>' : ''}
       </div>
-      <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
-        <label for="portal-price-${idx}" style="font-size:12px;color:var(--text-muted)">売値（円）</label>
-        <input type="number" id="portal-price-${idx}" min="0" placeholder="任意" value="${priceVal}" oninput="updatePortalItemTotal(${idx})" style="width:88px;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
-        <span style="font-size:12px;color:var(--text-muted)">精算する場合はこちらに入力してください</span>
+      <div class="accordion-body" id="acc-body-portal-item-${idx}" style="padding:0 14px 14px">
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:8px">${fmtDateJP(it.date)}／預けている数量：${it.qty}個${it.memo ? '／' + escapeHtmlMain(it.memo) : ''}</div>
+        ${pendingBadge ? `<div style="margin-bottom:8px">${pendingBadge}</div>` : ''}
+        <div style="display:flex;align-items:center;gap:8px">
+          <label for="portal-qty-${idx}" style="font-size:12px;color:var(--text-muted)">対象の数量</label>
+          <input type="number" id="portal-qty-${idx}" min="1" max="${it.qty}" value="${qtyVal}" oninput="updatePortalItemTotal(${idx})" style="width:64px;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
+          <span style="font-size:12px;color:var(--text-muted)">個（${it.qty}個のうち一部だけの場合は数を変えてください）</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+          <label for="portal-price-${idx}" style="font-size:12px;color:var(--text-muted)">売値（円）</label>
+          <input type="number" id="portal-price-${idx}" min="0" placeholder="任意" value="${priceVal}" oninput="updatePortalItemTotal(${idx})" style="width:88px;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
+          <span style="font-size:12px;color:var(--text-muted)">精算する場合はこちらに入力してください</span>
+        </div>
+        <div style="margin-top:8px">
+          <label for="portal-memo-${idx}" style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">備考</label>
+          <textarea id="portal-memo-${idx}" placeholder="任意（店舗への連絡事項があればご記入ください）" oninput="updatePortalItemTotal(${idx})" rows="2" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical">${escapeHtmlMain(memoVal)}</textarea>
+        </div>
+        <div id="portal-total-${idx}" style="display:none;font-size:12.5px;font-weight:700;color:var(--text);margin-top:6px;text-align:right"></div>
+        <div style="margin-top:10px">
+          <button onclick="sendPortalRequest(${idx}, 'return')" style="width:100%;padding:9px 0;border-radius:8px;border:1.2px solid var(--border);background:var(--white);color:var(--text);font-size:13px;font-weight:700;cursor:pointer">返却します</button>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:6px">精算する場合は、上の「売値」を入力すると画面上部の「まとめて精算」ボタンから送信できます</div>
+        <div id="portal-item-status-${idx}" style="display:none;margin-top:8px;font-size:12px"></div>
       </div>
-      <div style="margin-top:8px">
-        <label for="portal-memo-${idx}" style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">備考</label>
-        <textarea id="portal-memo-${idx}" placeholder="任意（店舗への連絡事項があればご記入ください）" oninput="updatePortalItemTotal(${idx})" rows="2" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical">${escapeHtmlMain(memoVal)}</textarea>
-      </div>
-      <div id="portal-total-${idx}" style="display:none;font-size:12.5px;font-weight:700;color:var(--text);margin-top:6px;text-align:right"></div>
-      <div style="margin-top:10px">
-        <button onclick="sendPortalRequest(${idx}, 'return')" style="width:100%;padding:9px 0;border-radius:8px;border:1.2px solid var(--border);background:var(--white);color:var(--text);font-size:13px;font-weight:700;cursor:pointer">返却します</button>
-      </div>
-      <div style="font-size:11px;color:var(--text-muted);margin-top:6px">精算する場合は、上の「売値」を入力すると画面上部の「まとめて精算」ボタンから送信できます</div>
-      <div id="portal-item-status-${idx}" style="display:none;margin-top:8px;font-size:12px"></div>
     </div>
   `;
   }).join('');
