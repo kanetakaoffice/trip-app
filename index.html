@@ -12801,22 +12801,48 @@ function closePortalSummaryPanel() {
 // 一覧パネルの中身。検索で絞り込む前の全件（window._portalItems）を対象にして、
 // 「今預けている物すべて」が一目で分かるようにする（下の入力カード側の検索絞り込みとは
 // 独立している）。
+// 要望：「左側タブのお預かり一覧で、新たに委託に追加したものを分かりやすくしたい」への対応。
+// 最初は「直近7日以内」のローリングウィンドウにしていたが、「月曜日になったら新しいリストに
+// 更新したい。月曜日の時点で、先週の火曜日以降のものが残っていないようにしてほしい」との
+// 追加要望を受けて、固定の暦週（月曜始まり）に変更した。今週の月曜0時を起点にして、それ以降に
+// 預けたものだけを新着扱いにする。月曜日を迎えると起点そのものが今日の0時に進むため、
+// 先週分（先週火曜〜日曜、および先週月曜）は自動的にすべて対象外になる。
+function getCurrentWeekMondayStart() {
+  const now = new Date();
+  const day = now.getDay(); // 0=日, 1=月, ..., 6=土
+  const diffToMonday = (day === 0) ? 6 : day - 1; // 直近の月曜日までさかのぼる日数
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMonday);
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+}
+
+function isPortalItemNew(d) {
+  if (!d) return false;
+  const dt = typeof d === 'number' ? new Date(d) : new Date(d + 'T00:00:00');
+  if (isNaN(dt.getTime())) return false;
+  return dt.getTime() >= getCurrentWeekMondayStart().getTime();
+}
+
 function renderPortalSummaryPanelBody() {
   const bodyEl = document.getElementById('portal-summary-panel-body');
   const countEl = document.getElementById('portal-summary-panel-count');
   if (!bodyEl) return;
   const items = window._portalItems || [];
+  const newCount = items.filter(it => isPortalItemNew(it.date)).length;
   if (countEl) {
     const totalQty = items.reduce((sum, it) => sum + (it.qty || 0), 0);
-    countEl.textContent = `${items.length}件／合計${totalQty}個`;
+    countEl.textContent = `${items.length}件／合計${totalQty}個` + (newCount ? `／🆕新着${newCount}件` : '');
   }
-  const rows = items.map(it => `
-    <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 2px;border-bottom:1px solid var(--border);font-size:12.5px">
-      <div style="flex:1.2;min-width:0;font-weight:700;color:var(--text);overflow-wrap:break-word">${escapeHtmlMain(it.model || '商品')}</div>
+  const rows = items.map(it => {
+    const isNew = isPortalItemNew(it.date);
+    return `
+    <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 2px;border-bottom:1px solid var(--border);font-size:12.5px;${isNew ? 'background:#fff8e1' : ''}">
+      <div style="flex:1.2;min-width:0;font-weight:700;color:var(--text);overflow-wrap:break-word">${isNew ? '<span style="display:inline-block;margin-right:4px;padding:1px 5px;border-radius:999px;background:var(--gold-dark);color:#fff;font-size:10px;font-weight:700;vertical-align:1px">🆕NEW</span>' : ''}${escapeHtmlMain(it.model || '商品')}</div>
       <div style="flex:0 0 auto;color:var(--text);white-space:nowrap">${it.qty}個</div>
       <div style="flex:1.3;min-width:0;color:var(--text-muted);overflow-wrap:break-word">${it.memo ? escapeHtmlMain(it.memo) : ''}</div>
     </div>
-  `).join('');
+  `;
+  }).join('');
   bodyEl.innerHTML = `
     <div style="display:flex;gap:8px;padding:0 2px 6px;font-size:11px;font-weight:700;color:var(--text-muted);border-bottom:1.5px solid var(--border)">
       <div style="flex:1.2">型番</div>
@@ -12824,6 +12850,7 @@ function renderPortalSummaryPanelBody() {
       <div style="flex:1.3">備考</div>
     </div>
     ${rows}
+    ${newCount ? '<div style="font-size:10.5px;color:var(--text-muted);margin-top:8px">🆕は、今週（月曜日〜）新しく預かった商品です</div>' : ''}
   `;
 }
 
