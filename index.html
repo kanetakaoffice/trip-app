@@ -1372,7 +1372,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 <!-- 卸売管理（納品書作成・委託リスト） -->
 <div id="screen-inv-wholesale" class="screen" style="display:none;padding-top:8px">
   <div class="tab-switch" style="margin-bottom:12px">
-    <button class="tab-switch-btn active" id="wh-tab-deliv" onclick="switchWhTab('deliv')">📝 納品書作成</button>
+    <button class="tab-switch-btn active" id="wh-tab-deliv" onclick="switchWhTab('deliv')">🤝 商談リスト</button>
     <button class="tab-switch-btn" id="wh-tab-consign" onclick="switchWhTab('consign')">📦 委託リスト</button>
   </div>
 
@@ -1391,7 +1391,14 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
   <div class="wh-desktop-layout">
   <div class="wh-desktop-main">
     <div class="card">
-      <div class="card-title">納品書を作成</div>
+      <div class="card-title">商談の内容を入力</div>
+      <!-- 要望：「納品書作成のところを商談リストに変更したい。取引先によってやり方（金額・委託の
+           振り分け）が違うので、一旦全て商談リストとして作成し、金額や委託を入力する場合はそこで
+           入力し、納品書は別で作成できる仕組みにしたい」への対応。ここでの登録は在庫にはまだ
+           一切影響せず、「商談リストに記録する」で保存した内容は下の「商談中の一覧」に並ぶ。
+           実際に在庫を減らして納品書を確定させるのは、その一覧から「納品書を発行する」を
+           押した時点（issueWhDeal）。 -->
+      <div style="padding:0 16px 14px;font-size:11.5px;color:var(--text-muted);line-height:1.6">ここで登録した内容はまだ在庫に反映されません。金額や委託の振り分けが決まったら「商談リストに記録する」を押し、実際の納品書は下の「商談中の一覧」から発行してください。</div>
       <div class="field">
         <div class="field-label">取引先 <span class="req">*</span></div>
         <select id="wh-deliv-client-select" onchange="handleClientSelectChange('wh-deliv')"></select>
@@ -1413,7 +1420,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
           <option value="ダイソン"></option>
           <option value="Starlink"></option>
         </datalist>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">同じ日付・取引先・件名の分は、都度分かれず1枚の納品書にまとめられます</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">同じ日付・取引先・件名の分は、都度分かれず1件の商談としてまとめられます</div>
       </div>
     </div>
     <div class="card">
@@ -1476,16 +1483,36 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       </div>
     </div>
     <div id="wh-deliv-edit-banner" style="display:none;background:#fff4e0;border:1px solid #f0c674;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#7a5a00;align-items:center;justify-content:space-between">
-      <span>編集中の納品書があります</span>
-      <button onclick="cancelEditDeliverySlip()" style="background:none;border:none;color:#7a5a00;text-decoration:underline;font-size:12px;cursor:pointer">編集をやめる</button>
+      <span id="wh-deliv-edit-banner-text">編集中の納品書があります</span>
+      <!-- 発行済み納品書の編集中（_editingSlipId）・商談の編集中（_editingDealKey）のどちらでも
+           共通で使う「編集をやめる」（cancelEditWhDelivFormが状況に応じて振り分ける） -->
+      <button onclick="cancelEditWhDelivForm()" style="background:none;border:none;color:#7a5a00;text-decoration:underline;font-size:12px;cursor:pointer">編集をやめる</button>
     </div>
     <div class="card">
-      <div class="card-title">納品明細</div>
+      <div class="card-title">商談する商品</div>
       <div id="wh-deliv-items" style="margin-bottom:8px"></div>
       <div id="wh-deliv-empty" style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">まだ商品が追加されていません</div>
       <div id="wh-deliv-total" style="display:none;justify-content:space-between;align-items:center;padding-top:10px;border-top:1px solid var(--border);font-size:14px;font-weight:700;color:var(--text)"></div>
       <div style="margin-top:14px">
-        <button class="btn btn-gold" id="wh-deliv-submit-btn" style="width:100%" onclick="submitWhDeliverySlip()">発行する</button>
+        <button class="btn btn-gold" id="wh-deliv-submit-btn" style="width:100%" onclick="handleWhDelivFormSubmit()">🤝 商談リストに記録する</button>
+      </div>
+    </div>
+    <div style="margin-top:16px;background:var(--surface);border-radius:10px;padding:10px 12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAccordion('wh-deals')">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:13px;font-weight:700;color:var(--text)">商談中（未発行）の一覧</span>
+          <span id="wh-deals-badge" style="display:none;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;background:var(--gold);color:#fff;font-size:11px;font-weight:700;border-radius:10px"></span>
+        </div>
+        <span class="accordion-arrow" id="acc-arrow-wh-deals" style="font-size:10px;color:var(--text-muted)">▼</span>
+      </div>
+      <div class="accordion-body" id="acc-body-wh-deals" style="margin-top:8px">
+        <!-- 要望：「商談リストとして一旦記録し、納品書は別で作成できるようにしてほしい」への対応。
+             ここに並ぶのは、金額・委託の振り分けまで決めて「商談リストに記録する」で保存した
+             ものの、まだ「納品書を発行する」を押していない（＝在庫にはまだ一切影響していない）
+             商談。取引先ごとにやり方が違っても、ここで何を委託にしたかがそのまま残るため、
+             作り直すたびに委託の印を見失う心配がない。 -->
+        <div id="wh-deals-list"></div>
+        <div id="wh-deals-empty" style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">現在、商談中の内容はありません</div>
       </div>
     </div>
     <div style="margin-top:16px;background:var(--surface);border-radius:10px;padding:10px 12px">
@@ -2831,14 +2858,17 @@ function showInvScreen(name) {
 
 async function loadInventory() {
   try {
-    const [p, m, c, oc, cs, cr, fig] = await Promise.all([
+    const [p, m, c, oc, cs, cr, fig, wd] = await Promise.all([
       fetch(authedUrl('/products.json')).then(r => r.json()),
       fetch(authedUrl('/stockMoves.json')).then(r => r.json()),
       fetch(authedUrl('/wholesaleClients.json')).then(r => r.json()),
       fetch(authedUrl('/overseasClients.json')).then(r => r.json()),
       fetch(authedUrl('/customSubcats.json')).then(r => r.json()),
       fetch(authedUrl('/consignRequests.json')).then(r => r.json()).catch(() => null),
-      fetch(authedUrl('/freeeInvoiceGroups.json')).then(r => r.json()).catch(() => null)
+      fetch(authedUrl('/freeeInvoiceGroups.json')).then(r => r.json()).catch(() => null),
+      // 要望：「納品書作成のところを商談リストに変更したい」への対応。まだ納品書として発行して
+      // いない（＝在庫に一切影響していない）商談の内容を、wholesaleDealsとして保持する
+      fetch(authedUrl('/wholesaleDeals.json')).then(r => r.json()).catch(() => null)
     ]);
     products   = objToArr(p);
     stockMoves = objToArr(m);
@@ -2847,6 +2877,7 @@ async function loadInventory() {
     customSubcats = cs || {};
     consignRequests = flattenConsignRequests(cr);
     freeeInvoiceGroups = objToArr(fig);
+    wholesaleDeals = objToArr(wd);
     applyCustomSubcats();
     refreshOpenSubcatSelects();
     renderWhClientDatalist();
@@ -2855,7 +2886,7 @@ async function loadInventory() {
       if (document.getElementById('inv-cal-modal')?.style.display === 'flex') { renderInvCalendar(); renderInvTrendChart(); }
     }
     if (document.getElementById('screen-inv-add')?.classList.contains('active')) renderInvAddList();
-    if (document.getElementById('screen-inv-wholesale')?.classList.contains('active')) { renderWhConsignList(); renderWhDelivHistory(); }
+    if (document.getElementById('screen-inv-wholesale')?.classList.contains('active')) { renderWhConsignList(); renderWhDelivHistory(); renderWhDealsList(); }
 
   } catch(e) { console.error('inventory load error', e); }
 }
@@ -2994,9 +3025,16 @@ async function ensureOverseasClient(name) {
   } catch(e) { console.error('overseas client add error', e); }
 }
 
-// ── 卸売管理（納品書作成・委託リスト） ──
+// ── 卸売管理（商談リスト・納品書・委託リスト） ──
 let _whDelivItems = [];
 let _editingSlipId = null; // 発行済みの納品書を編集中の場合、そのslipIdが入る（新規作成時はnull）
+// 要望：「納品書作成のところを商談リストに変更したい。取引先によってやり方（金額・委託の
+// 振り分け）が違うので、一旦全て商談リストとして作成し、納品書は別で作成できるようにしたい」
+// への対応。wholesaleDealsは、金額・委託の振り分けまで決めて「商談リストに記録する」で保存
+// したものの、まだ「納品書を発行する」を押していない＝在庫にはまだ一切影響していない商談の
+// 一覧（{_key, client, date, subject, items, createdAt, updatedAt}）。
+let wholesaleDeals = [];
+let _editingDealKey = null; // 商談中の一覧から「編集する」で読み込み中の場合、そのキーが入る
 let _whDelivItemUidSeq = 1; // 明細行を一意に識別するID（配列の並びが変わっても「傷・潰れ分割」の元行を追跡できるようにする）
 const WH_DELIV_DRAFT_KEY = 'kanetaka_wh_deliv_draft';
 
@@ -3022,6 +3060,7 @@ function switchWhTab(tab) {
     loadWhDelivDraft();
     renderWhDelivLivePreview();
     renderWhDelivHistory();
+    renderWhDealsList();
   }
 }
 
@@ -3041,7 +3080,7 @@ function suggestUnitPrice(client, productKey) {
 // 表示が壊れるわけではなく、単に-100のように桁が増えるだけ）。
 // 同じ納品日の納品書がすでにいくつ発行されているかをstockMovesに保存済みのslipNoから
 // 数え、その最大の枝番を返す（まだ1枚もなければ0）。呼び出し側はこれに+1して次の番号を作る。
-// 通常の卸売納品書（submitWhDeliverySlip）・預かり精算分の請求用納品書
+// 通常の卸売納品書（commitDeliverySlipRecord）・預かり精算分の請求用納品書
 // （createConsignInvoiceSlipFromSelection）のどちらも同じ「納品書」というタイトルで
 // 印刷・プレビューされる（dsSlipBodyHtml）ため、番号の採番もこの共通関数でまかなう。
 function slipNoDateKey(dateStr) {
@@ -3376,8 +3415,9 @@ function removeWhDelivItem(idx) {
 // 「納品書の明細から消さず、その行に『委託』の印を付けて残したい（実際に発行・印刷される
 // 納品書にもそのまま反映してほしい）」という要望を受け、押しても明細からは消さず、その行に
 // _consignMarkedの印だけを付ける（在庫やサーバーへの登録はまだ行わない）方式に変更した。
-// 実際の委託登録・在庫減算は、他の商品と同じく納品書を発行する（submitWhDeliverySlip）タイミングで
-// まとめて行う。もう一度押すと印を解除できる（トグル式）。
+// 実際の委託登録・在庫減算は、他の商品と同じく実際に納品書を発行する（issueWhDeal）タイミングで
+// まとめて行う。それまでは商談リストの内容（wholesaleDeals）として在庫に触れずに保持される。
+// もう一度押すと印を解除できる（トグル式）。
 // ※「委託リスト」という名称・「委託」の表記は、要望「委託リストの名前を委託リストに変更してほしい／
 // 単価の欄の『委託』は委託にしてほしい」への対応で統一した（内部の変数名・関数名
 // （_consignMarked・moveWhDelivItemToConsignなど）は変更していない）。
@@ -3528,10 +3568,11 @@ function updateWhDelivTotalDisplay() {
 // 別物として扱い、下書きの保存・復元は行わない
 let _whDelivDraftSaveTimer = null;
 function saveWhDelivDraft() {
-  // 取引先・日付・件名は右側プレビュー欄にもそのまま反映する。発行済み納品書を編集中
-  // （_editingSlipId）の場合も、ここで下書き保存自体は行わないがプレビューだけは更新する
+  // 取引先・日付・件名は右側プレビュー欄にもそのまま反映する。発行済み納品書の編集中
+  // （_editingSlipId）・商談の編集中（_editingDealKey）の場合も、ここで下書き保存自体は
+  // 行わないがプレビューだけは更新する
   renderWhDelivLivePreview();
-  if (_editingSlipId) return;
+  if (_editingSlipId || _editingDealKey) return;
   try {
     const client = document.getElementById('wh-deliv-client')?.value || '';
     const date = document.getElementById('wh-deliv-date')?.value || '';
@@ -3546,7 +3587,7 @@ function saveWhDelivDraftDebounced() {
   _whDelivDraftSaveTimer = setTimeout(saveWhDelivDraft, 400);
 }
 function loadWhDelivDraft() {
-  if (_editingSlipId || _whDelivItems.length) return;
+  if (_editingSlipId || _editingDealKey || _whDelivItems.length) return;
   try {
     const raw = localStorage.getItem(WH_DELIV_DRAFT_KEY);
     if (!raw) return;
@@ -3569,7 +3610,7 @@ function loadWhDelivDraft() {
     renderClientSelectUI('wh-deliv');
     renderWhDelivItems();
     updateWhDelivSubmitButtonLabel();
-    if (_whDelivItems.length) showToast('入力中だった納品書のデータを復元しました');
+    if (_whDelivItems.length) showToast('入力中だった商談のデータを復元しました');
   } catch(e) {}
 }
 
@@ -3751,7 +3792,7 @@ function clearWhItemDamagePhoto(idx) {
 // もう下書きとして編集し直せる状態ではなくなった（他の操作で確定済みの実績になった）と考え、
 // 対象から除外する（＝編集画面には出てこないが、発行済み納品書の印刷内容にはそのまま残り続ける。
 // buildDeliverySlipDataFromSlipIdはstatusを問わずslipId一致で拾うため、印刷側には影響しない）。
-// editDeliverySlip（編集モードで読み込む）と、submitWhDeliverySlipの自動マージ（同じ取引先・
+// editDeliverySlip（編集モードで読み込む）と、commitDeliverySlipRecordの自動マージ（同じ取引先・
 // 日付・件名の納品書に追記する場合）の両方から使う。
 function deliverySlipMovesToItems(slipId) {
   const outMoves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'out');
@@ -3780,28 +3821,35 @@ function findMergeTargetSlipId(client, date, subject) {
   return existing ? existing.slipId : null;
 }
 
-async function submitWhDeliverySlip() {
-  const client = document.getElementById('wh-deliv-client').value.trim();
-  const date = document.getElementById('wh-deliv-date').value;
-  const subject = (document.getElementById('wh-deliv-subject')?.value || '').trim();
-  if (!client) { showToast('取引先を入力してください'); return; }
-  if (!date) { showToast('日付を入力してください'); return; }
-  if (!_whDelivItems.length) { showToast('商品を1つ以上追加してください'); return; }
-  for (const it of _whDelivItems) {
-    if (!it.qty || it.qty < 1) { showToast(`${it.name}の数量を確認してください`); return; }
+// 要望：「納品書作成のところを商談リストに変更したい。取引先によってやり方（金額・委託の
+// 振り分け）が違うので、一旦全て商談リストとして作成し、金額や委託を入力する場合はそこで
+// 入力し、納品書は別で作成できる仕組みにしたい」への対応。
+// 実際に在庫を減らしstockMovesを作って納品書を確定させる処理を、下の2つの呼び出し元
+// （①発行済みの納品書を編集して保存し直す＝saveEditedDeliverySlip、②商談リストから
+// 初めて納品書として発行する＝issueWhDeal）で共通して使えるよう、ここに切り出した。
+// editingSlipIdを渡した場合は既存の納品書を一度取り消してから新しい内容で作り直す
+// （＝実質的な「編集」）。editingSlipIdを渡さない場合、同じ日付・取引先・件名の納品書が
+// すでにあれば、新規に分けずその納品書に今回の明細を追記する。
+// 前提チェック（取引先・日付・数量）に問題があれば、トーストを出してnullを返す。
+async function commitDeliverySlipRecord(client, date, subject, itemsInput, editingSlipId) {
+  if (!client) { showToast('取引先を入力してください'); return null; }
+  if (!date) { showToast('日付を入力してください'); return null; }
+  if (!itemsInput.length) { showToast('商品を1つ以上追加してください'); return null; }
+  for (const it of itemsInput) {
+    if (!it.qty || it.qty < 1) { showToast(`${it.name}の数量を確認してください`); return null; }
   }
 
-  const wasExplicitEdit = !!_editingSlipId;
-  let editingSlipId = _editingSlipId;
+  const wasExplicitEdit = !!editingSlipId;
+  let items = itemsInput;
   let mergedFromExisting = false;
-  // 「編集する」から来たのではない通常の発行操作のときだけ、同じ日付・取引先・件名の納品書が
-  // 既にあれば新規に分けず、その納品書に今回の明細を追記する（都度バラバラの納品書になるのを防ぐ）。
+  // 明示的な編集（発行済みの納品書を編集）から来たのではないときだけ、同じ日付・取引先・件名の
+  // 納品書がすでにあれば新規に分けず、その納品書に今回の明細を追記する（都度バラバラの納品書になるのを防ぐ）。
   if (!editingSlipId) {
     const mergeTargetSlipId = findMergeTargetSlipId(client, date, subject);
     if (mergeTargetSlipId) {
       editingSlipId = mergeTargetSlipId;
       mergedFromExisting = true;
-      _whDelivItems = [...deliverySlipMovesToItems(mergeTargetSlipId), ..._whDelivItems];
+      items = [...deliverySlipMovesToItems(mergeTargetSlipId), ...itemsInput];
     }
   }
   // 編集中（＝既存の納品書を作り直す）場合、元の納品書がすでに減らしている分は「まだ在庫にある」ものとして在庫チェックする
@@ -3816,7 +3864,7 @@ async function submitWhDeliverySlip() {
   // 同じ商品が複数行（傷などで単価が違う行）に分かれていることがあるため、商品ごとの合計数量で在庫チェック・在庫減算する
   // （行ごとにバラバラに減算すると、2行目が古い在庫数を元に計算してしまい片方の減算が消えてしまうため）
   const newQtyByProduct = {};
-  _whDelivItems.forEach(it => { newQtyByProduct[it.productKey] = (newQtyByProduct[it.productKey] || 0) + it.qty; });
+  items.forEach(it => { newQtyByProduct[it.productKey] = (newQtyByProduct[it.productKey] || 0) + it.qty; });
   // 入荷してすぐに卸す（在庫（入庫）の記録より先に納品書を作る）ことも多いため、登録済みの在庫数を
   // 超える数量でも納品書の発行自体はブロックしない。超えた分は在庫がマイナスとして記録され、
   // 後から入庫を記録すれば正しい数値に戻る（発行後のトースト・在庫一覧の「在庫切れ」表示で気づけるようにする）
@@ -3843,7 +3891,7 @@ async function submitWhDeliverySlip() {
   }
   if (!slipNo) slipNo = formatSlipNo(date, slipNoMaxSeqForDate(date) + 1);
   // 委託の印が付いた行は単価が未確定のため、合計金額（発行後のトースト表示用）には含めない
-  const total = _whDelivItems.reduce((s,it) => s + (it._consignMarked ? 0 : it.amount), 0);
+  const total = items.reduce((s,it) => s + (it._consignMarked ? 0 : it.amount), 0);
   try {
     await ensureWholesaleClient(client);
 
@@ -3863,7 +3911,7 @@ async function submitWhDeliverySlip() {
     // 送信した順（＝登録時の並び順）と一致するとは限らない。以前はcreatedAt（Date.now()、
     // ミリ秒単位）だけで並び替えていたが、同じミリ秒内に複数件POSTされると同着になり、
     // その場合の並び順が到達順（＝入れ替わりうる）に左右されてしまい、「登録した時と発行した時で
-    // 商品の順番が変わってしまう」不具合の原因になっていた。登録時の並び順（_whDelivItemsの
+    // 商品の順番が変わってしまう」不具合の原因になっていた。登録時の並び順（itemsの
     // 配列順）をitemSeqとして明細ごとに明示的に埋め込み、発行・編集時はこちらを優先して
     // 並び替えることで、常に登録した順を保つようにする。
     // 委託の印が付いた行は、通常の出庫（type:'out'／卸売）としてではなく、
@@ -3872,7 +3920,7 @@ async function submitWhDeliverySlip() {
     // 二重計上を避けられる）。ただし同じslipId・itemSeqを埋め込んでおくことで、
     // buildDeliverySlipDataFromSlipIdがこの行も納品書の明細として拾い、明細から消さずに
     // 「委託」の印付きでそのまま印刷できるようにする。
-    await Promise.all(_whDelivItems.map((it, idx) => fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify(
+    await Promise.all(items.map((it, idx) => fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify(
       it._consignMarked ? {
         productKey: it.productKey, productName: it.name, jan: it.jan, model: it.model || '',
         type: 'consign', status: 'holding', client, qty: it.qty, date, memo: '',
@@ -3891,9 +3939,93 @@ async function submitWhDeliverySlip() {
     // 納品書は金額未確定の商談段階で使うものであり、正式な請求金額が決まった請求書とは別物のため、
     // ここでは業務の売り上げには自動反映しない（在庫の増減記録・納品書自体の発行のみ行う）。
 
+    await loadInventory();
+    return { slipId, slipNo, total, insufficientStockNames, wasExplicitEdit, mergedFromExisting };
+  } catch(e) {
+    showToast(wasExplicitEdit ? '更新に失敗しました' : '発行に失敗しました');
+    console.error(e);
+    return null;
+  }
+}
+
+// 「発行済みの納品書」を編集モード（_editingSlipId）で読み込んでいるときに、内容を修正して
+// 保存する。これは商談リストとは無関係に、既存の納品書自体を作り直す従来通りの操作。
+async function saveEditedDeliverySlip() {
+  const client = document.getElementById('wh-deliv-client').value.trim();
+  const date = document.getElementById('wh-deliv-date').value;
+  const subject = (document.getElementById('wh-deliv-subject')?.value || '').trim();
+  const result = await commitDeliverySlipRecord(client, date, subject, _whDelivItems, _editingSlipId);
+  if (!result) return;
+  _whDelivItems = [];
+  _editingSlipId = null;
+  // 直前の入力で仕込まれた保存タイマーが後から発火して空の下書きを復活させてしまわないよう、ここで確実に止めておく
+  if (_whDelivDraftSaveTimer) { clearTimeout(_whDelivDraftSaveTimer); _whDelivDraftSaveTimer = null; }
+  try { localStorage.removeItem(WH_DELIV_DRAFT_KEY); } catch(e) {}
+  renderWhDelivItems();
+  updateWhDelivSubmitButtonLabel();
+  const banner = document.getElementById('wh-deliv-edit-banner');
+  if (banner) banner.style.display = 'none';
+  document.getElementById('wh-deliv-client').value = '';
+  document.getElementById('wh-deliv-subject').value = '';
+  renderClientSelectUI('wh-deliv');
+  renderWhDelivHistory();
+  // 発行・編集と印刷を分けているため、ここでは自動で印刷ウィンドウを開かず、
+  // 代わりに「発行済みの納品書」の履歴を開いて、そこから好きなタイミングで印刷できるようにする
+  openWhDelivHistoryAccordion();
+  const stockNote = result.insufficientStockNames.length
+    ? `／${result.insufficientStockNames.join('・')}は登録在庫を超えて出庫したため在庫がマイナスになっています。入庫の記録をお忘れなく`
+    : '';
+  showToast('納品書を更新しました（合計 ¥' + result.total.toLocaleString('ja-JP') + '）。印刷は下の履歴からできます' + stockNote);
+}
+
+// 要望：「一旦全て商談リストとして作成し、金額や委託を入力する場合はそこで入力し、
+// 納品書は別で作成できる仕組みにしたい」への対応。ここでは在庫・stockMovesには一切触れず、
+// 内容（取引先・日付・件名・明細＝金額や委託の振り分け）をwholesaleDealsとして保存するだけに
+// とどめる。同じ日付・取引先・件名の商談がすでにあれば、新規に分けずそこに追記する
+// （findMergeTargetSlipIdと同じ考え方）。実際に在庫を減らして納品書を確定させるのは、
+// 別操作の「商談中の一覧」→「納品書を発行する」（issueWhDeal）の時点。
+async function saveWhDeal() {
+  const client = document.getElementById('wh-deliv-client').value.trim();
+  const date = document.getElementById('wh-deliv-date').value;
+  const subject = (document.getElementById('wh-deliv-subject')?.value || '').trim();
+  if (!client) { showToast('取引先を入力してください'); return; }
+  if (!date) { showToast('日付を入力してください'); return; }
+  if (!_whDelivItems.length) { showToast('商品を1つ以上追加してください'); return; }
+  for (const it of _whDelivItems) {
+    if (!it.qty || it.qty < 1) { showToast(`${it.name}の数量を確認してください`); return; }
+  }
+
+  const wasEditing = !!_editingDealKey;
+  let dealKey = _editingDealKey;
+  let mergedFromExisting = false;
+  let items = _whDelivItems;
+  if (!dealKey) {
+    const mergeTarget = (wholesaleDeals || []).find(d => d.client === client && d.date === date && (d.subject || '') === subject);
+    if (mergeTarget) {
+      dealKey = mergeTarget._key;
+      mergedFromExisting = true;
+      items = [...(mergeTarget.items || []), ..._whDelivItems];
+    }
+  }
+  const payload = { client, date, subject, items, updatedAt: Date.now() };
+  try {
+    await ensureWholesaleClient(client);
+    if (dealKey) {
+      await fetch(authedUrl('/wholesaleDeals/' + dealKey + '.json'), { method: 'PATCH', body: JSON.stringify(payload) });
+    } else {
+      // 新規のキーはslipIdと同じ考え方でクライアント側で採番する（POST + レスポンスのnameを
+      // 待つ方式にすると、そのラウンドトリップが失敗・遅延した場合に画面側の状態と
+      // ズレる余地が生まれるため、他の採番と同様に確実な方式にしている）
+      dealKey = 'deal_' + Date.now();
+      payload.createdAt = Date.now();
+      await fetch(authedUrl('/wholesaleDeals/' + dealKey + '.json'), { method: 'PUT', body: JSON.stringify(payload) });
+    }
+    const record = { ...payload, _key: dealKey };
+    const idx = (wholesaleDeals || []).findIndex(d => d._key === dealKey);
+    if (idx >= 0) wholesaleDeals[idx] = record; else wholesaleDeals.push(record);
+
     _whDelivItems = [];
-    _editingSlipId = null;
-    // 直前の入力で仕込まれた保存タイマーが後から発火して空の下書きを復活させてしまわないよう、ここで確実に止めておく
+    _editingDealKey = null;
     if (_whDelivDraftSaveTimer) { clearTimeout(_whDelivDraftSaveTimer); _whDelivDraftSaveTimer = null; }
     try { localStorage.removeItem(WH_DELIV_DRAFT_KEY); } catch(e) {}
     renderWhDelivItems();
@@ -3902,17 +4034,146 @@ async function submitWhDeliverySlip() {
     if (banner) banner.style.display = 'none';
     document.getElementById('wh-deliv-client').value = '';
     document.getElementById('wh-deliv-subject').value = '';
-    await loadInventory();
-    renderWhDelivHistory();
-    // 発行・編集と印刷を分けているため、ここでは自動で印刷ウィンドウを開かず、
-    // 代わりに「発行済みの納品書」の履歴を開いて、そこから好きなタイミングで印刷できるようにする
-    openWhDelivHistoryAccordion();
-    const actionLabel = wasExplicitEdit ? '納品書を更新しました' : (mergedFromExisting ? '同じ納品書にまとめました' : '納品書を発行しました');
-    const stockNote = insufficientStockNames.length
-      ? `／${insufficientStockNames.join('・')}は登録在庫を超えて出庫したため在庫がマイナスになっています。入庫の記録をお忘れなく`
-      : '';
-    showToast(actionLabel + '（合計 ¥' + total.toLocaleString('ja-JP') + '）。印刷は下の履歴からできます' + stockNote);
-  } catch(e) { showToast(wasExplicitEdit ? '更新に失敗しました' : '発行に失敗しました'); console.error(e); }
+    renderClientSelectUI('wh-deliv');
+    renderWhDealsList();
+    openWhDealsAccordion();
+    showToast((wasEditing ? '商談の内容を更新しました' : (mergedFromExisting ? '同じ商談にまとめました' : '商談リストに記録しました')) + '。納品書は下の一覧から発行できます');
+  } catch(e) { showToast('記録に失敗しました'); console.error(e); }
+}
+
+// 商談リストの入力欄・「記録する」ボタンは、発行済み納品書の編集中（_editingSlipId）かどうかで
+// 保存先が変わる（前者はsaveEditedDeliverySlip、それ以外は商談として保存するsaveWhDeal）
+function handleWhDelivFormSubmit() {
+  if (_editingSlipId) { saveEditedDeliverySlip(); } else { saveWhDeal(); }
+}
+
+// 商談リストから、実際の納品書（在庫を減らし、印刷できる書類）を発行する
+async function issueWhDeal(key) {
+  const deal = (wholesaleDeals || []).find(d => d._key === key);
+  if (!deal) { showToast('対象の商談が見つかりません'); return; }
+  const items = (deal.items || []).map(it => ({ ...it }));
+  const result = await commitDeliverySlipRecord(deal.client, deal.date, deal.subject || '', items, null);
+  if (!result) return;
+  try {
+    await fetch(authedUrl('/wholesaleDeals/' + key + '.json'), { method: 'DELETE' });
+  } catch(e) { console.error('deleting issued deal failed:', e); }
+  wholesaleDeals = (wholesaleDeals || []).filter(d => d._key !== key);
+  if (_editingDealKey === key) cancelEditWhDeal();
+  renderWhDealsList();
+  renderWhDelivHistory();
+  openWhDelivHistoryAccordion();
+  const stockNote = result.insufficientStockNames.length
+    ? `／${result.insufficientStockNames.join('・')}は登録在庫を超えて出庫したため在庫がマイナスになっています。入庫の記録をお忘れなく`
+    : '';
+  showToast((result.mergedFromExisting ? '同じ納品書にまとめました' : '納品書を発行しました') + '（合計 ¥' + result.total.toLocaleString('ja-JP') + '）。印刷は下の履歴からできます' + stockNote);
+}
+
+// 商談中（未発行）の一覧を、更新が新しい順に並べる。金額・委託の振り分けまで確定済みだが、
+// まだ「納品書を発行する」を押していない＝在庫には一切影響していない商談だけがここに並ぶ
+function renderWhDealsList() {
+  const listEl = document.getElementById('wh-deals-list');
+  const emptyEl = document.getElementById('wh-deals-empty');
+  const badgeEl = document.getElementById('wh-deals-badge');
+  if (!listEl) return;
+  const deals = (wholesaleDeals || []).slice().sort((a,b) => (b.updatedAt||b.createdAt||0) - (a.updatedAt||a.createdAt||0));
+  if (badgeEl) {
+    if (deals.length) { badgeEl.textContent = String(deals.length); badgeEl.style.display = 'inline-flex'; }
+    else { badgeEl.style.display = 'none'; }
+  }
+  if (!deals.length) {
+    listEl.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'block';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+  listEl.innerHTML = deals.map(deal => {
+    const items = deal.items || [];
+    const totalQty = items.reduce((s, it) => s + (it.qty || 0), 0);
+    const consignCount = items.filter(it => it._consignMarked).length;
+    const total = items.reduce((s, it) => s + (it._consignMarked ? 0 : (it.amount || 0)), 0);
+    return `
+      <div style="border:1.2px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px">
+        <div style="font-size:13.5px;font-weight:700;color:var(--text)">${escapeHtmlMain(deal.client || '')}</div>
+        <div style="font-size:11.5px;color:var(--text-muted);margin-top:2px">${fmtDateJP(deal.date)}${deal.subject ? '／' + escapeHtmlMain(deal.subject) : ''}／${items.length}品目・合計${totalQty}個${consignCount ? `／うち委託${consignCount}品目` : ''}</div>
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-top:4px">¥${total.toLocaleString('ja-JP')}${consignCount ? '（委託分を除く）' : ''}</div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button onclick="editWhDeal('${deal._key}')" style="flex:1;padding:7px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">編集する</button>
+          <button onclick="issueWhDeal('${deal._key}')" style="flex:1.3;padding:7px;font-size:12px;font-weight:700;border:none;border-radius:8px;background:var(--gold);color:#fff;cursor:pointer">📄 納品書を発行する</button>
+          <button onclick="deleteWhDeal('${deal._key}')" style="flex-shrink:0;padding:7px 10px;font-size:12px;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--danger);cursor:pointer">削除</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function openWhDealsAccordion() {
+  const body = document.getElementById('acc-body-wh-deals');
+  const arrow = document.getElementById('acc-arrow-wh-deals');
+  if (body) body.classList.add('open');
+  if (arrow) arrow.classList.add('open');
+  const section = document.getElementById('wh-deals-list');
+  if (section) section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// 商談中（未発行）の一覧から「編集する」で読み込む。発行済みの納品書の編集中だった場合は
+// そちらを先にやめてから切り替える（同じ入力欄を共有しているため、両方同時には編集できない）
+function editWhDeal(key) {
+  const deal = (wholesaleDeals || []).find(d => d._key === key);
+  if (!deal) { showToast('対象の商談が見つかりません'); return; }
+  if (_editingSlipId) cancelEditDeliverySlip();
+  _whDelivItems = (deal.items || []).map(it => ({ ...it }));
+  _whDelivItems.forEach(it => { if (it._uid == null) it._uid = _whDelivItemUidSeq++; });
+  const maxUid = _whDelivItems.reduce((m, it) => Math.max(m, it._uid || 0), 0);
+  if (maxUid >= _whDelivItemUidSeq) _whDelivItemUidSeq = maxUid + 1;
+  document.getElementById('wh-deliv-client').value = deal.client || '';
+  renderClientSelectUI('wh-deliv');
+  document.getElementById('wh-deliv-date').value = deal.date || '';
+  document.getElementById('wh-deliv-subject').value = deal.subject || '';
+  _editingDealKey = key;
+  renderWhDelivItems();
+  updateWhDelivSubmitButtonLabel();
+  const banner = document.getElementById('wh-deliv-edit-banner');
+  const bannerText = document.getElementById('wh-deliv-edit-banner-text');
+  if (bannerText) bannerText.textContent = '編集中の商談があります';
+  if (banner) banner.style.display = 'flex';
+  showToast('商談の編集モードにしました。内容を修正して保存してください');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// 商談の編集モードをやめて、明細を空の状態に戻す（在庫・stockMovesには何も影響しない＝
+// もともと商談リストの保存自体が在庫に影響しないため）
+function cancelEditWhDeal() {
+  _editingDealKey = null;
+  _whDelivItems = [];
+  document.getElementById('wh-deliv-client').value = '';
+  document.getElementById('wh-deliv-subject').value = '';
+  renderClientSelectUI('wh-deliv');
+  // 編集を始める前に新規の商談を入力中だった場合は、その下書きをここで復元する
+  loadWhDelivDraft();
+  renderWhDelivItems();
+  updateWhDelivSubmitButtonLabel();
+  const banner = document.getElementById('wh-deliv-edit-banner');
+  if (banner) banner.style.display = 'none';
+  showToast('編集をやめました');
+}
+
+// 編集バナーの「編集をやめる」は、発行済み納品書の編集中・商談の編集中のどちらでも共通で使う
+function cancelEditWhDelivForm() {
+  if (_editingSlipId) cancelEditDeliverySlip();
+  else if (_editingDealKey) cancelEditWhDeal();
+}
+
+async function deleteWhDeal(key) {
+  const deal = (wholesaleDeals || []).find(d => d._key === key);
+  if (!deal) return;
+  const ok = await showConfirm(`${deal.client || ''}の商談を削除しますか？（在庫にはまだ影響していないため、削除しても在庫・納品書には影響しません）`);
+  if (!ok) return;
+  try {
+    await fetch(authedUrl('/wholesaleDeals/' + key + '.json'), { method: 'DELETE' });
+    wholesaleDeals = (wholesaleDeals || []).filter(d => d._key !== key);
+    if (_editingDealKey === key) cancelEditWhDeal();
+    renderWhDealsList();
+    showToast('商談を削除しました');
+  } catch(e) { showToast('削除に失敗しました'); console.error(e); }
 }
 
 function openWhDelivHistoryAccordion() {
@@ -4701,6 +4962,8 @@ function editDeliverySlip(slipId) {
   const headerMoves = (stockMoves || []).filter(m => m.slipId === slipId && (m.type === 'out' || (m.type === 'consign' && m.status === 'holding')))
     .sort(compareDeliverySlipItemOrder);
   if (!headerMoves.length) { showToast('対象の納品書が見つかりません'); return; }
+  // 商談の編集中だった場合はそちらを先にやめてから切り替える（同じ入力欄を共有しているため）
+  if (_editingDealKey) cancelEditWhDeal();
   _whDelivItems = deliverySlipMovesToItems(slipId);
   document.getElementById('wh-deliv-client').value = headerMoves[0].client || '';
   renderClientSelectUI('wh-deliv');
@@ -4710,6 +4973,8 @@ function editDeliverySlip(slipId) {
   renderWhDelivItems();
   updateWhDelivSubmitButtonLabel();
   const banner = document.getElementById('wh-deliv-edit-banner');
+  const bannerText = document.getElementById('wh-deliv-edit-banner-text');
+  if (bannerText) bannerText.textContent = '編集中の納品書があります';
   if (banner) banner.style.display = 'flex';
   showToast('編集モードにしました。内容を修正して保存してください');
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -4722,7 +4987,7 @@ function cancelEditDeliverySlip() {
   document.getElementById('wh-deliv-client').value = '';
   document.getElementById('wh-deliv-subject').value = '';
   renderClientSelectUI('wh-deliv');
-  // 編集を始める前に新規の納品書を作成中だった場合は、その下書きをここで復元する
+  // 編集を始める前に新規の商談を入力中だった場合は、その下書きをここで復元する
   loadWhDelivDraft();
   renderWhDelivItems();
   updateWhDelivSubmitButtonLabel();
@@ -4734,7 +4999,7 @@ function cancelEditDeliverySlip() {
 function updateWhDelivSubmitButtonLabel() {
   const btn = document.getElementById('wh-deliv-submit-btn');
   if (!btn) return;
-  btn.textContent = _editingSlipId ? '💾 変更を保存する' : '発行する';
+  btn.textContent = _editingSlipId ? '💾 変更を保存する' : (_editingDealKey ? '💾 商談の内容を更新する' : '🤝 商談リストに記録する');
 }
 
 // ===== 請求書（freee）作成済みトラッキング =====
