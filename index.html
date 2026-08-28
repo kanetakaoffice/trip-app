@@ -73,6 +73,16 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Hira
   /* PC幅では従来通りボタンを表示する（マウス操作では下に引っ張るジェスチャーができないため） */
   .manual-refresh-btn { display: flex; }
 }
+/* 要望：「パソコンで納品書や委託リストを作成している時に、右側に作成中のプレビューがあると
+   やりやすいので、パソコンの仕様だけ変更できますか」への対応。スマホ幅では従来通り1カラムの
+   ままにしておき、画面幅1024px以上のときだけ右側にプレビュー欄を追加した2カラム表示に切り替える
+   （.manual-refresh-btnと同じ考え方：既定では隠しておき、PC幅のメディアクエリだけで見せる）。 */
+.wh-desktop-preview-col { display: none; }
+@media (min-width: 1024px) {
+  .wh-desktop-layout { display: flex; align-items: flex-start; gap: 20px; }
+  .wh-desktop-layout > .wh-desktop-main { flex: 1 1 0; min-width: 0; }
+  .wh-desktop-preview-col { display: block; flex: 0 0 380px; position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
+}
 .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 100; background: linear-gradient(135deg, #b0b0b0, #a0a0a0); border-top: 2px solid #c8c8c8; display: flex; padding-bottom: env(safe-area-inset-bottom, 0); box-shadow: 0 -2px 12px rgba(0,0,0,0.12); }
 .nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 8px 0 6px; background: none; border: none; cursor: pointer; color: #4a4a4a; font-size: 9px; font-weight: 500; -webkit-tap-highlight-color: transparent; }
 .nav-btn.active { color: #f0f0f0; }
@@ -1378,6 +1388,8 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
   </div>
 
   <div id="wh-body-deliv">
+  <div class="wh-desktop-layout">
+  <div class="wh-desktop-main">
     <div class="card">
       <div class="card-title">納品書を作成</div>
       <div class="field">
@@ -1489,8 +1501,11 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
              日にちの期間指定の機能を追加して、該当の型番のある納品書を抽出できるようにして
              ほしい」への対応。委託の履歴検索（wh-consign-history）と同じ考え方で、型番
              （部分一致・表記ゆれを吸収）と期間（開始〜終了、片方だけの指定も可）で絞り込める
-             ようにした -->
+             ようにした。
+             追加要望：「型番や期間での検索はできるが、取引先の検索ができないので、取引先毎で
+             見れるようにしてほしい」への対応で、取引先名（部分一致）の検索欄も追加した -->
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+          <input type="text" id="wh-deliv-history-client-search" placeholder="🔍 取引先で検索" oninput="filterWhDelivHistory()" style="flex:1;min-width:130px;padding:7px 9px;border:1.2px solid var(--border);border-radius:8px;font-size:12.5px;box-sizing:border-box">
           <input type="text" id="wh-deliv-history-search" placeholder="🔍 型番で検索" oninput="filterWhDelivHistory()" style="flex:1;min-width:130px;padding:7px 9px;border:1.2px solid var(--border);border-radius:8px;font-size:12.5px;box-sizing:border-box">
           <label style="display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text-muted);white-space:nowrap">期間
             <input type="date" id="wh-deliv-history-date-start" onchange="filterWhDelivHistory()" aria-label="期間の開始日" style="padding:7px 9px;border:1.2px solid var(--border);border-radius:8px;font-size:12.5px">
@@ -1503,8 +1518,26 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       </div>
     </div>
   </div>
+  <!-- 要望：「パソコンで納品書を作成している時に、右側に作成中のプレビューがあるとやりやすい」
+       への対応。#wh-deliv-live-preview-pageは、発行済み納品書のプレビュー（#ds-preview-page）と
+       全く同じ.ds-preview-page/dsSlipBodyHtml/renderDeliverySlipColumnsの仕組みを使い、
+       まだ発行していない入力中の内容（_whDelivItems・取引先・日付・件名）から都度組み立て直す。
+       画面幅1024px未満（スマホなど）では.wh-desktop-preview-colごとCSSで非表示になる -->
+  <div class="wh-desktop-preview-col" id="wh-deliv-preview-col">
+    <div class="card">
+      <div class="card-title">プレビュー（作成中の納品書）</div>
+      <div id="wh-deliv-live-preview-empty" style="text-align:center;padding:20px 12px 24px;color:var(--text-muted);font-size:12.5px">商品を追加すると、ここに納品書のプレビューが表示されます</div>
+      <div id="wh-deliv-live-preview-scale-wrap" style="display:none;overflow:hidden;background:var(--surface);padding:8px;margin:0 16px 16px;border-radius:8px">
+        <div id="wh-deliv-live-preview-page" class="ds-preview-page" style="width:794px;transform-origin:top left"></div>
+      </div>
+    </div>
+  </div>
+  </div>
+  </div>
 
   <div id="wh-body-consign" style="display:none">
+  <div class="wh-desktop-layout">
+  <div class="wh-desktop-main">
     <div class="card">
       <div class="card-title">預け商品を記録</div>
       <div class="field">
@@ -1516,12 +1549,12 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       <div class="field-divider"></div>
       <div class="field" style="padding-top:16px">
         <div class="field-label">日付 <span class="req">*</span></div>
-        <input type="date" id="wh-consign-date">
+        <input type="date" id="wh-consign-date" oninput="renderWhConsignLivePreview()">
       </div>
       <div class="field-divider"></div>
       <div class="field" style="padding-top:16px">
         <div class="field-label">メモ</div>
-        <input type="text" id="wh-consign-memo" placeholder="自由にメモを入力（任意）">
+        <input type="text" id="wh-consign-memo" placeholder="自由にメモを入力（任意）" oninput="renderWhConsignLivePreview()">
       </div>
     </div>
     <div class="card">
@@ -1607,6 +1640,25 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
         <div id="wh-consign-invoices-list"></div>
       </div>
     </div>
+  </div>
+  <!-- 要望：「パソコンで委託リストを作成している時に、右側に作成中のプレビューがあるとやりやすい」
+       への対応。「委託リストのプレビューとは？」の確認で「両方」（＝①これから追加する商品の
+       内容の確認プレビューと、②現在预けている一覧の両方を出しておいてほしい）と回答があったため、
+       2枚のカードに分けて両方を常に表示する。①はまだ記録前の_whConsignItems＋取引先・日付・メモ、
+       ②は既存の「現在预けている商品」（stockMoves側のholdingレコード）を、取引先ごとにまとめた
+       簡易な一覧として表示する（操作ボタンは持たせず、あくまで参照用）。
+       画面幅1024px未満（スマホなど）では.wh-desktop-preview-colごとCSSで非表示になる -->
+  <div class="wh-desktop-preview-col" id="wh-consign-preview-col">
+    <div class="card">
+      <div class="card-title">プレビュー（追加予定の商品）</div>
+      <div id="wh-consign-new-preview-body" style="padding:0 16px 16px"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">現在预けている一覧</div>
+      <div id="wh-consign-holding-mirror-body" style="padding:0 16px 16px"></div>
+    </div>
+  </div>
+  </div>
   </div>
 </div>
 
@@ -2848,6 +2900,7 @@ function handleClientSelectChange(prefix) {
     if (otherInput) { otherInput.style.display = 'none'; otherInput.value = ''; }
   }
   if (prefix === 'wh-deliv') saveWhDelivDraftDebounced();
+  if (prefix === 'wh-consign') renderWhConsignLivePreview();
 }
 function handleClientOtherInput(prefix) {
   const hidden = document.getElementById(prefix + '-client');
@@ -2855,6 +2908,7 @@ function handleClientOtherInput(prefix) {
   if (!hidden) return;
   hidden.value = otherInput ? otherInput.value : '';
   if (prefix === 'wh-deliv') saveWhDelivDraftDebounced();
+  if (prefix === 'wh-consign') renderWhConsignLivePreview();
 }
 // 卸売管理（納品書作成・委託リスト）両方の取引先選択UIをまとめて更新する
 function renderWhClientDatalist() {
@@ -2958,6 +3012,7 @@ function switchWhTab(tab) {
     const dateEl = document.getElementById('wh-consign-date');
     if (dateEl && !dateEl.value) dateEl.value = todayStr();
     renderWhConsignList();
+    renderWhConsignLivePreview();
     markConsignRequestsSeen();
     updateConsignNotifyPromptVisibility();
   }
@@ -2965,6 +3020,7 @@ function switchWhTab(tab) {
     const dateEl = document.getElementById('wh-deliv-date');
     if (dateEl && !dateEl.value) dateEl.value = todayStr();
     loadWhDelivDraft();
+    renderWhDelivLivePreview();
     renderWhDelivHistory();
   }
 }
@@ -3472,6 +3528,9 @@ function updateWhDelivTotalDisplay() {
 // 別物として扱い、下書きの保存・復元は行わない
 let _whDelivDraftSaveTimer = null;
 function saveWhDelivDraft() {
+  // 取引先・日付・件名は右側プレビュー欄にもそのまま反映する。発行済み納品書を編集中
+  // （_editingSlipId）の場合も、ここで下書き保存自体は行わないがプレビューだけは更新する
+  renderWhDelivLivePreview();
   if (_editingSlipId) return;
   try {
     const client = document.getElementById('wh-deliv-client')?.value || '';
@@ -3575,6 +3634,54 @@ function renderWhDelivItems() {
       ${(!it._consignMarked && it._splitFrom != null) ? whItemDamageSectionHtml(it, idx) : ''}
     </div>`).join('');
   updateWhDelivTotalDisplay();
+  renderWhDelivLivePreview();
+}
+
+// 要望：「パソコンで納品書を作成している時に、右側に作成中のプレビューがあるとやりやすい」
+// への対応。発行済み納品書のプレビュー（showDeliverySlipPreview／#ds-preview-page）と全く
+// 同じdsSlipBodyHtml・renderDeliverySlipColumnsの組み立て方を使い、まだ発行していない
+// 入力中の内容（_whDelivItems・取引先・日付・件名）から都度組み立て直す。
+// 右側プレビュー欄はパソコン幅（1024px以上）専用でDOMごと用意していないスマホ表示等では
+// 対象の要素が無いため、その場合は何もしない（コストのかかる測定処理も走らせない）。
+function renderWhDelivLivePreview() {
+  const pageEl = document.getElementById('wh-deliv-live-preview-page');
+  const wrapEl = document.getElementById('wh-deliv-live-preview-scale-wrap');
+  const emptyEl = document.getElementById('wh-deliv-live-preview-empty');
+  if (!pageEl || !wrapEl) return;
+  if (!_whDelivItems.length) {
+    wrapEl.style.display = 'none';
+    pageEl.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'block';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+  wrapEl.style.display = 'block';
+  pageEl.style.transform = 'none';
+  const client = document.getElementById('wh-deliv-client')?.value || '（取引先未入力）';
+  const date = document.getElementById('wh-deliv-date')?.value || todayStr();
+  const subject = document.getElementById('wh-deliv-subject')?.value || '';
+  pageEl.innerHTML = dsSlipBodyHtml(client, date, subject, '');
+  const items = _whDelivItems.map(it => ({
+    model: it.model, qty: it.qty, unitPrice: it.unitPrice,
+    isConsignNote: !!it._consignMarked, damageDetail: it.damageDetail || ''
+  }));
+  renderDeliverySlipColumns(pageEl, items);
+  fitWhDelivLivePreviewScale();
+}
+
+// A4想定（794px幅）で組んだプレビューを、右側プレビュー欄の実際の幅に収まるよう縮小表示する
+// （発行済み納品書プレビューのfitDeliverySlipPreviewScaleと同じロジック）
+function fitWhDelivLivePreviewScale() {
+  const wrap = document.getElementById('wh-deliv-live-preview-scale-wrap');
+  const page = document.getElementById('wh-deliv-live-preview-page');
+  if (!wrap || !page) return;
+  requestAnimationFrame(() => {
+    const availW = wrap.clientWidth - 16;
+    const scale = Math.min(1, Math.max(0.1, availW / 794));
+    page.style.transform = 'scale(' + scale + ')';
+    const h = page.getBoundingClientRect().height / scale;
+    wrap.style.height = Math.round(h * scale + 16) + 'px';
+  });
 }
 
 // 傷・潰れ分の行（splitWhDelivItemで切り分けた行）にだけ表示する、写真 or 詳細を選んで記録するUI。
@@ -4803,7 +4910,7 @@ async function removeSlipFromFreeeInvoiceGroups(slipId) {
 
 // 発行済みの納品書の絞り込み状態（型番検索・期間）。renderWhDelivHistory()が呼ばれる
 // たびにこの内容で絞り込む
-let _whDelivHistoryFilter = { q: '', dateStart: '', dateEnd: '' };
+let _whDelivHistoryFilter = { q: '', client: '', dateStart: '', dateEnd: '' };
 
 // 発行済みの納品書一覧（slipIdごとにまとめて表示。編集・取消ができる）
 // 要望：「ある型番をいつどこに卸したか検索をかけて引っ掛かるようにしたい。型番検索と
@@ -4857,6 +4964,13 @@ function renderWhDelivHistory() {
       return true;
     });
   }
+  // 要望：「型番や期間での検索はできるが、取引先の検索ができないので、取引先毎で見れるように
+  // してほしい」への対応。型番のような表記ゆれ吸収（normalizeModelStr）は不要なため、
+  // 単純に小文字化したうえでの部分一致にしている
+  const clientNorm = (f.client || '').trim().toLowerCase();
+  if (clientNorm) {
+    slips = slips.filter(s => (s.client || '').toLowerCase().includes(clientNorm));
+  }
   if (f.dateStart || f.dateEnd) {
     slips = slips.filter(s => {
       const k = s.date || '';
@@ -4866,7 +4980,7 @@ function renderWhDelivHistory() {
       return true;
     });
   }
-  const filterActive = !!(f.q || f.dateStart || f.dateEnd);
+  const filterActive = !!(f.q || f.client || f.dateStart || f.dateEnd);
 
   if (!slips.length) {
     listEl.innerHTML = `<div style="font-size:12px;color:var(--text-muted)">${filterActive ? '条件に一致する納品書が見つかりませんでした' : 'まだ発行した納品書はありません'}</div>`;
@@ -4897,10 +5011,12 @@ function renderWhDelivHistory() {
 // 型番検索・期間（開始／終了）いずれかの入力欄が変わるたびに呼ばれ、フィルター条件を読み取って再描画する
 function filterWhDelivHistory() {
   const qInput = document.getElementById('wh-deliv-history-search');
+  const clientInput = document.getElementById('wh-deliv-history-client-search');
   const dateStartInput = document.getElementById('wh-deliv-history-date-start');
   const dateEndInput = document.getElementById('wh-deliv-history-date-end');
   _whDelivHistoryFilter = {
     q: qInput ? qInput.value.trim() : '',
+    client: clientInput ? clientInput.value.trim() : '',
     dateStart: dateStartInput ? dateStartInput.value : '',
     dateEnd: dateEndInput ? dateEndInput.value : ''
   };
@@ -4912,18 +5028,20 @@ function updateWhDelivHistoryFilterClearBtn() {
   const btn = document.getElementById('wh-deliv-history-filter-clear');
   if (!btn) return;
   const f = _whDelivHistoryFilter;
-  btn.style.display = (f.q || f.dateStart || f.dateEnd) ? 'inline-block' : 'none';
+  btn.style.display = (f.q || f.client || f.dateStart || f.dateEnd) ? 'inline-block' : 'none';
 }
 
 // 「✕ 条件をクリア」から呼ばれる。すべての入力欄と絞り込み状態を空に戻し、全件表示に戻す
 function clearWhDelivHistoryFilter() {
   const qInput = document.getElementById('wh-deliv-history-search');
+  const clientInput = document.getElementById('wh-deliv-history-client-search');
   const dateStartInput = document.getElementById('wh-deliv-history-date-start');
   const dateEndInput = document.getElementById('wh-deliv-history-date-end');
   if (qInput) qInput.value = '';
+  if (clientInput) clientInput.value = '';
   if (dateStartInput) dateStartInput.value = '';
   if (dateEndInput) dateEndInput.value = '';
-  _whDelivHistoryFilter = { q: '', dateStart: '', dateEnd: '' };
+  _whDelivHistoryFilter = { q: '', client: '', dateStart: '', dateEnd: '' };
   updateWhDelivHistoryFilterClearBtn();
   renderWhDelivHistory();
 }
@@ -5151,13 +5269,14 @@ function updateWhConsignQty(idx, value) {
   if (!it) return;
   const num = parseInt(value);
   it.qty = isNaN(num) ? 0 : num;
+  renderWhConsignLivePreview();
 }
 
 function renderWhConsignItems() {
   const container = document.getElementById('wh-consign-items');
   const empty = document.getElementById('wh-consign-items-empty');
   if (!container || !empty) return;
-  if (!_whConsignItems.length) { container.innerHTML = ''; empty.style.display = 'block'; return; }
+  if (!_whConsignItems.length) { container.innerHTML = ''; empty.style.display = 'block'; renderWhConsignLivePreview(); return; }
   empty.style.display = 'none';
   container.innerHTML = _whConsignItems.map((it, idx) => `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
@@ -5168,6 +5287,78 @@ function renderWhConsignItems() {
         <button onclick="removeWhConsignItem(${idx})" style="background:none;border:none;color:var(--danger);font-size:16px;cursor:pointer;padding:0 4px">✕</button>
       </div>
     </div>`).join('');
+  renderWhConsignLivePreview();
+}
+
+// 要望：「パソコンで委託リストを作成している時に、右側に作成中のプレビューがあるとやりやすい」
+// への対応。「委託リストのプレビューとは？」の確認で「両方」（＝これから追加する商品の内容の
+// 確認プレビューと、現在预けている一覧の両方）と回答があったため、2つの表示をまとめて
+// 更新するラッパー関数として用意した。右側プレビュー欄はパソコン幅（1024px以上）専用で
+// DOMごと用意していないスマホ表示等では対象の要素が無いため、それぞれの関数内でその場合は
+// 何もしない
+function renderWhConsignLivePreview() {
+  renderWhConsignNewItemsPreview();
+  renderWhConsignHoldingMirror();
+}
+
+// これから記録する（まだ保存していない）_whConsignItems＋取引先・日付・メモの内容を、
+// そのままの見た目で右側に確認用として表示する
+function renderWhConsignNewItemsPreview() {
+  const bodyEl = document.getElementById('wh-consign-new-preview-body');
+  if (!bodyEl) return;
+  const client = document.getElementById('wh-consign-client')?.value || '';
+  const date = document.getElementById('wh-consign-date')?.value || '';
+  const memo = document.getElementById('wh-consign-memo')?.value || '';
+  if (!_whConsignItems.length) {
+    bodyEl.innerHTML = `<div style="text-align:center;padding:16px 2px;color:var(--text-muted);font-size:12.5px">商品を追加すると、ここに内容が表示されます</div>`;
+    return;
+  }
+  const totalQty = _whConsignItems.reduce((s, it) => s + (it.qty || 0), 0);
+  const rows = _whConsignItems.map(it => `
+    <div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12.5px">
+      <div style="min-width:0;color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtmlMain(it.name || '')}${it.model ? '（' + escapeHtmlMain(it.model) + '）' : ''}</div>
+      <div style="flex-shrink:0;color:var(--text-muted)">${it.qty}個</div>
+    </div>`).join('');
+  bodyEl.innerHTML = `
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">${client ? escapeHtmlMain(client) : '（取引先未入力）'}／${date ? fmtDateJP(date) : '（日付未入力）'}${memo ? '<br>' + escapeHtmlMain(memo) : ''}</div>
+    ${rows}
+    <div style="display:flex;justify-content:space-between;padding-top:8px;font-size:12.5px;font-weight:700;color:var(--text)"><span>合計</span><span>${totalQty}個</span></div>
+  `;
+}
+
+// 既存の「現在预けている商品」（stockMoves側のholdingレコード）を、取引先ごとにまとめた
+// 簡易な一覧として表示する。操作ボタン（精算・返却・数量編集など）は持たせず、あくまで
+// 新しく追加する際に「何が既にあるか」を確認するための参照用の表示
+function renderWhConsignHoldingMirror() {
+  const bodyEl = document.getElementById('wh-consign-holding-mirror-body');
+  if (!bodyEl) return;
+  const holding = (stockMoves || []).filter(m => m.type === 'consign' && m.status === 'holding');
+  if (!holding.length) {
+    bodyEl.innerHTML = `<div style="text-align:center;padding:16px 2px;color:var(--text-muted);font-size:12.5px">現在预けている商品はありません</div>`;
+    return;
+  }
+  const groups = {};
+  const order = [];
+  holding.forEach(m => {
+    const key = m.client || '（取引先未設定）';
+    if (!groups[key]) { groups[key] = []; order.push(key); }
+    groups[key].push(m);
+  });
+  order.sort((a,b) => (groups[b][0].createdAt||0) - (groups[a][0].createdAt||0));
+  bodyEl.innerHTML = order.map(client => {
+    const items = groups[client];
+    const totalQty = items.reduce((s, m) => s + (m.qty || 0), 0);
+    const rows = items.map(m => `
+      <div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;font-size:12px;color:var(--text)">
+        <div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtmlMain(consignItemModel(m))}</div>
+        <div style="flex-shrink:0;color:var(--text-muted)">${m.qty}個</div>
+      </div>`).join('');
+    return `
+      <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+        <div style="font-size:12.5px;font-weight:700;color:var(--text);margin-bottom:4px">${escapeHtmlMain(client)}<span style="font-weight:400;color:var(--text-muted)">　合計${totalQty}個</span></div>
+        ${rows}
+      </div>`;
+  }).join('');
 }
 
 // 預け（委託）をまとめて記録：通常の出庫と同様に在庫は減らすが、type='consign' として通常の出庫（販売）とは区別する
@@ -5379,6 +5570,9 @@ function renderWhConsignList() {
     .sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
 
   if (summaryEl) summaryEl.textContent = holding.length ? `${holding.length}件` : '';
+  // 右側プレビュー欄（パソコン幅専用）の「現在预けている一覧」も、holdingの内容が変わる
+  // たびに（精算・返却・数量編集・新規の預けの記録など）合わせて更新しておく
+  renderWhConsignHoldingMirror();
 
   // 取引先ポータル（?portal=...）が参照するスナップショットを、この画面を開くたびに
   // 最新の内容へ更新しておく（バックグラウンドで実行。失敗しても画面表示はブロックしない）。
