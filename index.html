@@ -1372,7 +1372,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
 <!-- 卸売管理（納品書作成・委託リスト） -->
 <div id="screen-inv-wholesale" class="screen" style="display:none;padding-top:8px">
   <div class="tab-switch" style="margin-bottom:12px">
-    <button class="tab-switch-btn active" id="wh-tab-deliv" onclick="switchWhTab('deliv')">🤝 商談リスト</button>
+    <button class="tab-switch-btn active" id="wh-tab-deliv" onclick="switchWhTab('deliv')">📝 納品書作成</button>
     <button class="tab-switch-btn" id="wh-tab-consign" onclick="switchWhTab('consign')">📦 委託リスト</button>
   </div>
 
@@ -1391,14 +1391,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
   <div class="wh-desktop-layout">
   <div class="wh-desktop-main">
     <div class="card">
-      <div class="card-title">商談の内容を入力</div>
-      <!-- 要望：「納品書作成のところを商談リストに変更したい。取引先によってやり方（金額・委託の
-           振り分け）が違うので、一旦全て商談リストとして作成し、金額や委託を入力する場合はそこで
-           入力し、納品書は別で作成できる仕組みにしたい」への対応。ここでの登録は在庫にはまだ
-           一切影響せず、「商談リストに記録する」で保存した内容は下の「商談中の一覧」に並ぶ。
-           実際に在庫を減らして納品書を確定させるのは、その一覧から「納品書を発行する」を
-           押した時点（issueWhDeal）。 -->
-      <div style="padding:0 16px 14px;font-size:11.5px;color:var(--text-muted);line-height:1.6">ここで登録した内容はまだ在庫に反映されません。金額や委託の振り分けが決まったら「商談リストに記録する」を押し、実際の納品書は下の「商談中の一覧」から発行してください。</div>
+      <div class="card-title">納品書を作成</div>
       <div class="field">
         <div class="field-label">取引先 <span class="req">*</span></div>
         <select id="wh-deliv-client-select" onchange="handleClientSelectChange('wh-deliv')"></select>
@@ -1420,7 +1413,7 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
           <option value="ダイソン"></option>
           <option value="Starlink"></option>
         </datalist>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">同じ日付・取引先・件名の分は、都度分かれず1件の商談としてまとめられます</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">同じ日付・取引先・件名の分は、都度分かれず1枚の納品書にまとめられます</div>
       </div>
     </div>
     <div class="card">
@@ -1484,35 +1477,15 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     </div>
     <div id="wh-deliv-edit-banner" style="display:none;background:#fff4e0;border:1px solid #f0c674;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#7a5a00;align-items:center;justify-content:space-between">
       <span id="wh-deliv-edit-banner-text">編集中の納品書があります</span>
-      <!-- 発行済み納品書の編集中（_editingSlipId）・商談の編集中（_editingDealKey）のどちらでも
-           共通で使う「編集をやめる」（cancelEditWhDelivFormが状況に応じて振り分ける） -->
-      <button onclick="cancelEditWhDelivForm()" style="background:none;border:none;color:#7a5a00;text-decoration:underline;font-size:12px;cursor:pointer">編集をやめる</button>
+      <button onclick="cancelEditDeliverySlip()" style="background:none;border:none;color:#7a5a00;text-decoration:underline;font-size:12px;cursor:pointer">編集をやめる</button>
     </div>
     <div class="card">
-      <div class="card-title">商談する商品</div>
+      <div class="card-title">納品明細</div>
       <div id="wh-deliv-items" style="margin-bottom:8px"></div>
       <div id="wh-deliv-empty" style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">まだ商品が追加されていません</div>
       <div id="wh-deliv-total" style="display:none;justify-content:space-between;align-items:center;padding-top:10px;border-top:1px solid var(--border);font-size:14px;font-weight:700;color:var(--text)"></div>
       <div style="margin-top:14px">
-        <button class="btn btn-gold" id="wh-deliv-submit-btn" style="width:100%" onclick="handleWhDelivFormSubmit()">🤝 商談リストに記録する</button>
-      </div>
-    </div>
-    <div style="margin-top:16px;background:var(--surface);border-radius:10px;padding:10px 12px">
-      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAccordion('wh-deals')">
-        <div style="display:flex;align-items:center;gap:6px">
-          <span style="font-size:13px;font-weight:700;color:var(--text)">商談中（未発行）の一覧</span>
-          <span id="wh-deals-badge" style="display:none;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;background:var(--gold);color:#fff;font-size:11px;font-weight:700;border-radius:10px"></span>
-        </div>
-        <span class="accordion-arrow" id="acc-arrow-wh-deals" style="font-size:10px;color:var(--text-muted)">▼</span>
-      </div>
-      <div class="accordion-body" id="acc-body-wh-deals" style="margin-top:8px">
-        <!-- 要望：「商談リストとして一旦記録し、納品書は別で作成できるようにしてほしい」への対応。
-             ここに並ぶのは、金額・委託の振り分けまで決めて「商談リストに記録する」で保存した
-             ものの、まだ「納品書を発行する」を押していない（＝在庫にはまだ一切影響していない）
-             商談。取引先ごとにやり方が違っても、ここで何を委託にしたかがそのまま残るため、
-             作り直すたびに委託の印を見失う心配がない。 -->
-        <div id="wh-deals-list"></div>
-        <div id="wh-deals-empty" style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">現在、商談中の内容はありません</div>
+        <button class="btn btn-gold" id="wh-deliv-submit-btn" style="width:100%" onclick="submitWhDeliverySlip()">発行する</button>
       </div>
     </div>
     <div style="margin-top:16px;background:var(--surface);border-radius:10px;padding:10px 12px">
@@ -1732,6 +1705,11 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
       <div class="field-label">精算する数量 <span class="req">*</span></div>
       <input type="number" id="wh-settle-qty" placeholder="0" min="1">
       <div id="wh-settle-qty-hint" style="font-size:11px;color:var(--text-muted);margin-top:4px">傷・潰れなどで一部だけ販売価格が違う場合は、数量を減らして精算し、残りは後からもう一度精算してください</div>
+    </div>
+    <div class="field" style="padding-top:16px">
+      <div class="field-label">売れた日 <span class="req">*</span></div>
+      <input type="date" id="wh-settle-date">
+      <div id="wh-settle-date-hint" style="font-size:11px;color:var(--text-muted);margin-top:4px">取引先から連絡があった日ではなく、実際に売れた日を入力してください</div>
     </div>
     <div class="field" style="padding-top:16px">
       <div class="field-label"><span id="wh-settle-price-label">売値</span> <span class="req">*</span></div>
@@ -2858,17 +2836,14 @@ function showInvScreen(name) {
 
 async function loadInventory() {
   try {
-    const [p, m, c, oc, cs, cr, fig, wd] = await Promise.all([
+    const [p, m, c, oc, cs, cr, fig] = await Promise.all([
       fetch(authedUrl('/products.json')).then(r => r.json()),
       fetch(authedUrl('/stockMoves.json')).then(r => r.json()),
       fetch(authedUrl('/wholesaleClients.json')).then(r => r.json()),
       fetch(authedUrl('/overseasClients.json')).then(r => r.json()),
       fetch(authedUrl('/customSubcats.json')).then(r => r.json()),
       fetch(authedUrl('/consignRequests.json')).then(r => r.json()).catch(() => null),
-      fetch(authedUrl('/freeeInvoiceGroups.json')).then(r => r.json()).catch(() => null),
-      // 要望：「納品書作成のところを商談リストに変更したい」への対応。まだ納品書として発行して
-      // いない（＝在庫に一切影響していない）商談の内容を、wholesaleDealsとして保持する
-      fetch(authedUrl('/wholesaleDeals.json')).then(r => r.json()).catch(() => null)
+      fetch(authedUrl('/freeeInvoiceGroups.json')).then(r => r.json()).catch(() => null)
     ]);
     products   = objToArr(p);
     stockMoves = objToArr(m);
@@ -2877,7 +2852,6 @@ async function loadInventory() {
     customSubcats = cs || {};
     consignRequests = flattenConsignRequests(cr);
     freeeInvoiceGroups = objToArr(fig);
-    wholesaleDeals = objToArr(wd);
     applyCustomSubcats();
     refreshOpenSubcatSelects();
     renderWhClientDatalist();
@@ -2886,7 +2860,7 @@ async function loadInventory() {
       if (document.getElementById('inv-cal-modal')?.style.display === 'flex') { renderInvCalendar(); renderInvTrendChart(); }
     }
     if (document.getElementById('screen-inv-add')?.classList.contains('active')) renderInvAddList();
-    if (document.getElementById('screen-inv-wholesale')?.classList.contains('active')) { renderWhConsignList(); renderWhDelivHistory(); renderWhDealsList(); }
+    if (document.getElementById('screen-inv-wholesale')?.classList.contains('active')) { renderWhConsignList(); renderWhDelivHistory(); }
 
   } catch(e) { console.error('inventory load error', e); }
 }
@@ -3025,16 +2999,9 @@ async function ensureOverseasClient(name) {
   } catch(e) { console.error('overseas client add error', e); }
 }
 
-// ── 卸売管理（商談リスト・納品書・委託リスト） ──
+// ── 卸売管理（納品書作成・委託リスト） ──
 let _whDelivItems = [];
 let _editingSlipId = null; // 発行済みの納品書を編集中の場合、そのslipIdが入る（新規作成時はnull）
-// 要望：「納品書作成のところを商談リストに変更したい。取引先によってやり方（金額・委託の
-// 振り分け）が違うので、一旦全て商談リストとして作成し、納品書は別で作成できるようにしたい」
-// への対応。wholesaleDealsは、金額・委託の振り分けまで決めて「商談リストに記録する」で保存
-// したものの、まだ「納品書を発行する」を押していない＝在庫にはまだ一切影響していない商談の
-// 一覧（{_key, client, date, subject, items, createdAt, updatedAt}）。
-let wholesaleDeals = [];
-let _editingDealKey = null; // 商談中の一覧から「編集する」で読み込み中の場合、そのキーが入る
 let _whDelivItemUidSeq = 1; // 明細行を一意に識別するID（配列の並びが変わっても「傷・潰れ分割」の元行を追跡できるようにする）
 const WH_DELIV_DRAFT_KEY = 'kanetaka_wh_deliv_draft';
 
@@ -3060,7 +3027,6 @@ function switchWhTab(tab) {
     loadWhDelivDraft();
     renderWhDelivLivePreview();
     renderWhDelivHistory();
-    renderWhDealsList();
   }
 }
 
@@ -3080,7 +3046,7 @@ function suggestUnitPrice(client, productKey) {
 // 表示が壊れるわけではなく、単に-100のように桁が増えるだけ）。
 // 同じ納品日の納品書がすでにいくつ発行されているかをstockMovesに保存済みのslipNoから
 // 数え、その最大の枝番を返す（まだ1枚もなければ0）。呼び出し側はこれに+1して次の番号を作る。
-// 通常の卸売納品書（commitDeliverySlipRecord）・預かり精算分の請求用納品書
+// 通常の卸売納品書（submitWhDeliverySlip）・預かり精算分の請求用納品書
 // （createConsignInvoiceSlipFromSelection）のどちらも同じ「納品書」というタイトルで
 // 印刷・プレビューされる（dsSlipBodyHtml）ため、番号の採番もこの共通関数でまかなう。
 function slipNoDateKey(dateStr) {
@@ -3415,9 +3381,8 @@ function removeWhDelivItem(idx) {
 // 「納品書の明細から消さず、その行に『委託』の印を付けて残したい（実際に発行・印刷される
 // 納品書にもそのまま反映してほしい）」という要望を受け、押しても明細からは消さず、その行に
 // _consignMarkedの印だけを付ける（在庫やサーバーへの登録はまだ行わない）方式に変更した。
-// 実際の委託登録・在庫減算は、他の商品と同じく実際に納品書を発行する（issueWhDeal）タイミングで
-// まとめて行う。それまでは商談リストの内容（wholesaleDeals）として在庫に触れずに保持される。
-// もう一度押すと印を解除できる（トグル式）。
+// 実際の委託登録・在庫減算は、他の商品と同じく実際に納品書を発行する（submitWhDeliverySlip）
+// タイミングでまとめて行う。もう一度押すと印を解除できる（トグル式）。
 // ※「委託リスト」という名称・「委託」の表記は、要望「委託リストの名前を委託リストに変更してほしい／
 // 単価の欄の『委託』は委託にしてほしい」への対応で統一した（内部の変数名・関数名
 // （_consignMarked・moveWhDelivItemToConsignなど）は変更していない）。
@@ -3569,10 +3534,9 @@ function updateWhDelivTotalDisplay() {
 let _whDelivDraftSaveTimer = null;
 function saveWhDelivDraft() {
   // 取引先・日付・件名は右側プレビュー欄にもそのまま反映する。発行済み納品書の編集中
-  // （_editingSlipId）・商談の編集中（_editingDealKey）の場合も、ここで下書き保存自体は
-  // 行わないがプレビューだけは更新する
+  // （_editingSlipId）の場合も、ここで下書き保存自体は行わないがプレビューだけは更新する
   renderWhDelivLivePreview();
-  if (_editingSlipId || _editingDealKey) return;
+  if (_editingSlipId) return;
   try {
     const client = document.getElementById('wh-deliv-client')?.value || '';
     const date = document.getElementById('wh-deliv-date')?.value || '';
@@ -3587,7 +3551,7 @@ function saveWhDelivDraftDebounced() {
   _whDelivDraftSaveTimer = setTimeout(saveWhDelivDraft, 400);
 }
 function loadWhDelivDraft() {
-  if (_editingSlipId || _editingDealKey || _whDelivItems.length) return;
+  if (_editingSlipId || _whDelivItems.length) return;
   try {
     const raw = localStorage.getItem(WH_DELIV_DRAFT_KEY);
     if (!raw) return;
@@ -3610,7 +3574,7 @@ function loadWhDelivDraft() {
     renderClientSelectUI('wh-deliv');
     renderWhDelivItems();
     updateWhDelivSubmitButtonLabel();
-    if (_whDelivItems.length) showToast('入力中だった商談のデータを復元しました');
+    if (_whDelivItems.length) showToast('入力中だった納品書のデータを復元しました');
   } catch(e) {}
 }
 
@@ -3792,7 +3756,7 @@ function clearWhItemDamagePhoto(idx) {
 // もう下書きとして編集し直せる状態ではなくなった（他の操作で確定済みの実績になった）と考え、
 // 対象から除外する（＝編集画面には出てこないが、発行済み納品書の印刷内容にはそのまま残り続ける。
 // buildDeliverySlipDataFromSlipIdはstatusを問わずslipId一致で拾うため、印刷側には影響しない）。
-// editDeliverySlip（編集モードで読み込む）と、commitDeliverySlipRecordの自動マージ（同じ取引先・
+// editDeliverySlip（編集モードで読み込む）と、submitWhDeliverySlipの自動マージ（同じ取引先・
 // 日付・件名の納品書に追記する場合）の両方から使う。
 function deliverySlipMovesToItems(slipId) {
   const outMoves = (stockMoves || []).filter(m => m.slipId === slipId && m.type === 'out');
@@ -3821,35 +3785,32 @@ function findMergeTargetSlipId(client, date, subject) {
   return existing ? existing.slipId : null;
 }
 
-// 要望：「納品書作成のところを商談リストに変更したい。取引先によってやり方（金額・委託の
-// 振り分け）が違うので、一旦全て商談リストとして作成し、金額や委託を入力する場合はそこで
-// 入力し、納品書は別で作成できる仕組みにしたい」への対応。
-// 実際に在庫を減らしstockMovesを作って納品書を確定させる処理を、下の2つの呼び出し元
-// （①発行済みの納品書を編集して保存し直す＝saveEditedDeliverySlip、②商談リストから
-// 初めて納品書として発行する＝issueWhDeal）で共通して使えるよう、ここに切り出した。
-// editingSlipIdを渡した場合は既存の納品書を一度取り消してから新しい内容で作り直す
-// （＝実質的な「編集」）。editingSlipIdを渡さない場合、同じ日付・取引先・件名の納品書が
-// すでにあれば、新規に分けずその納品書に今回の明細を追記する。
-// 前提チェック（取引先・日付・数量）に問題があれば、トーストを出してnullを返す。
-async function commitDeliverySlipRecord(client, date, subject, itemsInput, editingSlipId) {
-  if (!client) { showToast('取引先を入力してください'); return null; }
-  if (!date) { showToast('日付を入力してください'); return null; }
-  if (!itemsInput.length) { showToast('商品を1つ以上追加してください'); return null; }
-  for (const it of itemsInput) {
-    if (!it.qty || it.qty < 1) { showToast(`${it.name}の数量を確認してください`); return null; }
+// 納品書を発行：明細ごとに出庫記録＋在庫減算、まとめて売上（未入金）を1件登録し、印刷用の納品書を開く
+// （_editingSlipIdが設定されている場合は、既存の納品書を一度取り消してから新しい内容で作り直す＝実質的な「編集」）
+// 明示的に「編集する」から呼ばれたのではない通常の発行時、同じ日付・取引先・件名の納品書が
+// すでにあれば、そのslipIdに今回の明細を追記する（都度バラバラの納品書になるのを防ぐ）。
+async function submitWhDeliverySlip() {
+  const client = document.getElementById('wh-deliv-client').value.trim();
+  const date = document.getElementById('wh-deliv-date').value;
+  const subject = (document.getElementById('wh-deliv-subject')?.value || '').trim();
+  if (!client) { showToast('取引先を入力してください'); return; }
+  if (!date) { showToast('日付を入力してください'); return; }
+  if (!_whDelivItems.length) { showToast('商品を1つ以上追加してください'); return; }
+  for (const it of _whDelivItems) {
+    if (!it.qty || it.qty < 1) { showToast(`${it.name}の数量を確認してください`); return; }
   }
 
-  const wasExplicitEdit = !!editingSlipId;
-  let items = itemsInput;
+  const wasExplicitEdit = !!_editingSlipId;
+  let editingSlipId = _editingSlipId;
   let mergedFromExisting = false;
-  // 明示的な編集（発行済みの納品書を編集）から来たのではないときだけ、同じ日付・取引先・件名の
-  // 納品書がすでにあれば新規に分けず、その納品書に今回の明細を追記する（都度バラバラの納品書になるのを防ぐ）。
+  // 「編集する」から来たのではない通常の発行操作のときだけ、同じ日付・取引先・件名の納品書が
+  // 既にあれば新規に分けず、その納品書に今回の明細を追記する（都度バラバラの納品書になるのを防ぐ）。
   if (!editingSlipId) {
     const mergeTargetSlipId = findMergeTargetSlipId(client, date, subject);
     if (mergeTargetSlipId) {
       editingSlipId = mergeTargetSlipId;
       mergedFromExisting = true;
-      items = [...deliverySlipMovesToItems(mergeTargetSlipId), ...itemsInput];
+      _whDelivItems = [...deliverySlipMovesToItems(mergeTargetSlipId), ..._whDelivItems];
     }
   }
   // 編集中（＝既存の納品書を作り直す）場合、元の納品書がすでに減らしている分は「まだ在庫にある」ものとして在庫チェックする
@@ -3864,7 +3825,7 @@ async function commitDeliverySlipRecord(client, date, subject, itemsInput, editi
   // 同じ商品が複数行（傷などで単価が違う行）に分かれていることがあるため、商品ごとの合計数量で在庫チェック・在庫減算する
   // （行ごとにバラバラに減算すると、2行目が古い在庫数を元に計算してしまい片方の減算が消えてしまうため）
   const newQtyByProduct = {};
-  items.forEach(it => { newQtyByProduct[it.productKey] = (newQtyByProduct[it.productKey] || 0) + it.qty; });
+  _whDelivItems.forEach(it => { newQtyByProduct[it.productKey] = (newQtyByProduct[it.productKey] || 0) + it.qty; });
   // 入荷してすぐに卸す（在庫（入庫）の記録より先に納品書を作る）ことも多いため、登録済みの在庫数を
   // 超える数量でも納品書の発行自体はブロックしない。超えた分は在庫がマイナスとして記録され、
   // 後から入庫を記録すれば正しい数値に戻る（発行後のトースト・在庫一覧の「在庫切れ」表示で気づけるようにする）
@@ -3891,7 +3852,7 @@ async function commitDeliverySlipRecord(client, date, subject, itemsInput, editi
   }
   if (!slipNo) slipNo = formatSlipNo(date, slipNoMaxSeqForDate(date) + 1);
   // 委託の印が付いた行は単価が未確定のため、合計金額（発行後のトースト表示用）には含めない
-  const total = items.reduce((s,it) => s + (it._consignMarked ? 0 : it.amount), 0);
+  const total = _whDelivItems.reduce((s,it) => s + (it._consignMarked ? 0 : it.amount), 0);
   try {
     await ensureWholesaleClient(client);
 
@@ -3911,7 +3872,7 @@ async function commitDeliverySlipRecord(client, date, subject, itemsInput, editi
     // 送信した順（＝登録時の並び順）と一致するとは限らない。以前はcreatedAt（Date.now()、
     // ミリ秒単位）だけで並び替えていたが、同じミリ秒内に複数件POSTされると同着になり、
     // その場合の並び順が到達順（＝入れ替わりうる）に左右されてしまい、「登録した時と発行した時で
-    // 商品の順番が変わってしまう」不具合の原因になっていた。登録時の並び順（itemsの
+    // 商品の順番が変わってしまう」不具合の原因になっていた。登録時の並び順（_whDelivItemsの
     // 配列順）をitemSeqとして明細ごとに明示的に埋め込み、発行・編集時はこちらを優先して
     // 並び替えることで、常に登録した順を保つようにする。
     // 委託の印が付いた行は、通常の出庫（type:'out'／卸売）としてではなく、
@@ -3920,7 +3881,7 @@ async function commitDeliverySlipRecord(client, date, subject, itemsInput, editi
     // 二重計上を避けられる）。ただし同じslipId・itemSeqを埋め込んでおくことで、
     // buildDeliverySlipDataFromSlipIdがこの行も納品書の明細として拾い、明細から消さずに
     // 「委託」の印付きでそのまま印刷できるようにする。
-    await Promise.all(items.map((it, idx) => fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify(
+    await Promise.all(_whDelivItems.map((it, idx) => fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify(
       it._consignMarked ? {
         productKey: it.productKey, productName: it.name, jan: it.jan, model: it.model || '',
         type: 'consign', status: 'holding', client, qty: it.qty, date, memo: '',
@@ -3939,93 +3900,9 @@ async function commitDeliverySlipRecord(client, date, subject, itemsInput, editi
     // 納品書は金額未確定の商談段階で使うものであり、正式な請求金額が決まった請求書とは別物のため、
     // ここでは業務の売り上げには自動反映しない（在庫の増減記録・納品書自体の発行のみ行う）。
 
-    await loadInventory();
-    return { slipId, slipNo, total, insufficientStockNames, wasExplicitEdit, mergedFromExisting };
-  } catch(e) {
-    showToast(wasExplicitEdit ? '更新に失敗しました' : '発行に失敗しました');
-    console.error(e);
-    return null;
-  }
-}
-
-// 「発行済みの納品書」を編集モード（_editingSlipId）で読み込んでいるときに、内容を修正して
-// 保存する。これは商談リストとは無関係に、既存の納品書自体を作り直す従来通りの操作。
-async function saveEditedDeliverySlip() {
-  const client = document.getElementById('wh-deliv-client').value.trim();
-  const date = document.getElementById('wh-deliv-date').value;
-  const subject = (document.getElementById('wh-deliv-subject')?.value || '').trim();
-  const result = await commitDeliverySlipRecord(client, date, subject, _whDelivItems, _editingSlipId);
-  if (!result) return;
-  _whDelivItems = [];
-  _editingSlipId = null;
-  // 直前の入力で仕込まれた保存タイマーが後から発火して空の下書きを復活させてしまわないよう、ここで確実に止めておく
-  if (_whDelivDraftSaveTimer) { clearTimeout(_whDelivDraftSaveTimer); _whDelivDraftSaveTimer = null; }
-  try { localStorage.removeItem(WH_DELIV_DRAFT_KEY); } catch(e) {}
-  renderWhDelivItems();
-  updateWhDelivSubmitButtonLabel();
-  const banner = document.getElementById('wh-deliv-edit-banner');
-  if (banner) banner.style.display = 'none';
-  document.getElementById('wh-deliv-client').value = '';
-  document.getElementById('wh-deliv-subject').value = '';
-  renderClientSelectUI('wh-deliv');
-  renderWhDelivHistory();
-  // 発行・編集と印刷を分けているため、ここでは自動で印刷ウィンドウを開かず、
-  // 代わりに「発行済みの納品書」の履歴を開いて、そこから好きなタイミングで印刷できるようにする
-  openWhDelivHistoryAccordion();
-  const stockNote = result.insufficientStockNames.length
-    ? `／${result.insufficientStockNames.join('・')}は登録在庫を超えて出庫したため在庫がマイナスになっています。入庫の記録をお忘れなく`
-    : '';
-  showToast('納品書を更新しました（合計 ¥' + result.total.toLocaleString('ja-JP') + '）。印刷は下の履歴からできます' + stockNote);
-}
-
-// 要望：「一旦全て商談リストとして作成し、金額や委託を入力する場合はそこで入力し、
-// 納品書は別で作成できる仕組みにしたい」への対応。ここでは在庫・stockMovesには一切触れず、
-// 内容（取引先・日付・件名・明細＝金額や委託の振り分け）をwholesaleDealsとして保存するだけに
-// とどめる。同じ日付・取引先・件名の商談がすでにあれば、新規に分けずそこに追記する
-// （findMergeTargetSlipIdと同じ考え方）。実際に在庫を減らして納品書を確定させるのは、
-// 別操作の「商談中の一覧」→「納品書を発行する」（issueWhDeal）の時点。
-async function saveWhDeal() {
-  const client = document.getElementById('wh-deliv-client').value.trim();
-  const date = document.getElementById('wh-deliv-date').value;
-  const subject = (document.getElementById('wh-deliv-subject')?.value || '').trim();
-  if (!client) { showToast('取引先を入力してください'); return; }
-  if (!date) { showToast('日付を入力してください'); return; }
-  if (!_whDelivItems.length) { showToast('商品を1つ以上追加してください'); return; }
-  for (const it of _whDelivItems) {
-    if (!it.qty || it.qty < 1) { showToast(`${it.name}の数量を確認してください`); return; }
-  }
-
-  const wasEditing = !!_editingDealKey;
-  let dealKey = _editingDealKey;
-  let mergedFromExisting = false;
-  let items = _whDelivItems;
-  if (!dealKey) {
-    const mergeTarget = (wholesaleDeals || []).find(d => d.client === client && d.date === date && (d.subject || '') === subject);
-    if (mergeTarget) {
-      dealKey = mergeTarget._key;
-      mergedFromExisting = true;
-      items = [...(mergeTarget.items || []), ..._whDelivItems];
-    }
-  }
-  const payload = { client, date, subject, items, updatedAt: Date.now() };
-  try {
-    await ensureWholesaleClient(client);
-    if (dealKey) {
-      await fetch(authedUrl('/wholesaleDeals/' + dealKey + '.json'), { method: 'PATCH', body: JSON.stringify(payload) });
-    } else {
-      // 新規のキーはslipIdと同じ考え方でクライアント側で採番する（POST + レスポンスのnameを
-      // 待つ方式にすると、そのラウンドトリップが失敗・遅延した場合に画面側の状態と
-      // ズレる余地が生まれるため、他の採番と同様に確実な方式にしている）
-      dealKey = 'deal_' + Date.now();
-      payload.createdAt = Date.now();
-      await fetch(authedUrl('/wholesaleDeals/' + dealKey + '.json'), { method: 'PUT', body: JSON.stringify(payload) });
-    }
-    const record = { ...payload, _key: dealKey };
-    const idx = (wholesaleDeals || []).findIndex(d => d._key === dealKey);
-    if (idx >= 0) wholesaleDeals[idx] = record; else wholesaleDeals.push(record);
-
     _whDelivItems = [];
-    _editingDealKey = null;
+    _editingSlipId = null;
+    // 直前の入力で仕込まれた保存タイマーが後から発火して空の下書きを復活させてしまわないよう、ここで確実に止めておく
     if (_whDelivDraftSaveTimer) { clearTimeout(_whDelivDraftSaveTimer); _whDelivDraftSaveTimer = null; }
     try { localStorage.removeItem(WH_DELIV_DRAFT_KEY); } catch(e) {}
     renderWhDelivItems();
@@ -4035,145 +3912,17 @@ async function saveWhDeal() {
     document.getElementById('wh-deliv-client').value = '';
     document.getElementById('wh-deliv-subject').value = '';
     renderClientSelectUI('wh-deliv');
-    renderWhDealsList();
-    openWhDealsAccordion();
-    showToast((wasEditing ? '商談の内容を更新しました' : (mergedFromExisting ? '同じ商談にまとめました' : '商談リストに記録しました')) + '。納品書は下の一覧から発行できます');
-  } catch(e) { showToast('記録に失敗しました'); console.error(e); }
-}
-
-// 商談リストの入力欄・「記録する」ボタンは、発行済み納品書の編集中（_editingSlipId）かどうかで
-// 保存先が変わる（前者はsaveEditedDeliverySlip、それ以外は商談として保存するsaveWhDeal）
-function handleWhDelivFormSubmit() {
-  if (_editingSlipId) { saveEditedDeliverySlip(); } else { saveWhDeal(); }
-}
-
-// 商談リストから、実際の納品書（在庫を減らし、印刷できる書類）を発行する
-async function issueWhDeal(key) {
-  const deal = (wholesaleDeals || []).find(d => d._key === key);
-  if (!deal) { showToast('対象の商談が見つかりません'); return; }
-  const items = (deal.items || []).map(it => ({ ...it }));
-  const result = await commitDeliverySlipRecord(deal.client, deal.date, deal.subject || '', items, null);
-  if (!result) return;
-  try {
-    await fetch(authedUrl('/wholesaleDeals/' + key + '.json'), { method: 'DELETE' });
-  } catch(e) { console.error('deleting issued deal failed:', e); }
-  wholesaleDeals = (wholesaleDeals || []).filter(d => d._key !== key);
-  if (_editingDealKey === key) cancelEditWhDeal();
-  renderWhDealsList();
-  renderWhDelivHistory();
-  openWhDelivHistoryAccordion();
-  const stockNote = result.insufficientStockNames.length
-    ? `／${result.insufficientStockNames.join('・')}は登録在庫を超えて出庫したため在庫がマイナスになっています。入庫の記録をお忘れなく`
-    : '';
-  showToast((result.mergedFromExisting ? '同じ納品書にまとめました' : '納品書を発行しました') + '（合計 ¥' + result.total.toLocaleString('ja-JP') + '）。印刷は下の履歴からできます' + stockNote);
-}
-
-// 商談中（未発行）の一覧を、更新が新しい順に並べる。金額・委託の振り分けまで確定済みだが、
-// まだ「納品書を発行する」を押していない＝在庫には一切影響していない商談だけがここに並ぶ
-function renderWhDealsList() {
-  const listEl = document.getElementById('wh-deals-list');
-  const emptyEl = document.getElementById('wh-deals-empty');
-  const badgeEl = document.getElementById('wh-deals-badge');
-  if (!listEl) return;
-  const deals = (wholesaleDeals || []).slice().sort((a,b) => (b.updatedAt||b.createdAt||0) - (a.updatedAt||a.createdAt||0));
-  if (badgeEl) {
-    if (deals.length) { badgeEl.textContent = String(deals.length); badgeEl.style.display = 'inline-flex'; }
-    else { badgeEl.style.display = 'none'; }
-  }
-  if (!deals.length) {
-    listEl.innerHTML = '';
-    if (emptyEl) emptyEl.style.display = 'block';
-    return;
-  }
-  if (emptyEl) emptyEl.style.display = 'none';
-  listEl.innerHTML = deals.map(deal => {
-    const items = deal.items || [];
-    const totalQty = items.reduce((s, it) => s + (it.qty || 0), 0);
-    const consignCount = items.filter(it => it._consignMarked).length;
-    const total = items.reduce((s, it) => s + (it._consignMarked ? 0 : (it.amount || 0)), 0);
-    return `
-      <div style="border:1.2px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px">
-        <div style="font-size:13.5px;font-weight:700;color:var(--text)">${escapeHtmlMain(deal.client || '')}</div>
-        <div style="font-size:11.5px;color:var(--text-muted);margin-top:2px">${fmtDateJP(deal.date)}${deal.subject ? '／' + escapeHtmlMain(deal.subject) : ''}／${items.length}品目・合計${totalQty}個${consignCount ? `／うち委託${consignCount}品目` : ''}</div>
-        <div style="font-size:13px;font-weight:700;color:var(--text);margin-top:4px">¥${total.toLocaleString('ja-JP')}${consignCount ? '（委託分を除く）' : ''}</div>
-        <div style="display:flex;gap:8px;margin-top:8px">
-          <button onclick="editWhDeal('${deal._key}')" style="flex:1;padding:7px;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer">編集する</button>
-          <button onclick="issueWhDeal('${deal._key}')" style="flex:1.3;padding:7px;font-size:12px;font-weight:700;border:none;border-radius:8px;background:var(--gold);color:#fff;cursor:pointer">📄 納品書を発行する</button>
-          <button onclick="deleteWhDeal('${deal._key}')" style="flex-shrink:0;padding:7px 10px;font-size:12px;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--danger);cursor:pointer">削除</button>
-        </div>
-      </div>`;
-  }).join('');
-}
-
-function openWhDealsAccordion() {
-  const body = document.getElementById('acc-body-wh-deals');
-  const arrow = document.getElementById('acc-arrow-wh-deals');
-  if (body) body.classList.add('open');
-  if (arrow) arrow.classList.add('open');
-  const section = document.getElementById('wh-deals-list');
-  if (section) section.scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
-
-// 商談中（未発行）の一覧から「編集する」で読み込む。発行済みの納品書の編集中だった場合は
-// そちらを先にやめてから切り替える（同じ入力欄を共有しているため、両方同時には編集できない）
-function editWhDeal(key) {
-  const deal = (wholesaleDeals || []).find(d => d._key === key);
-  if (!deal) { showToast('対象の商談が見つかりません'); return; }
-  if (_editingSlipId) cancelEditDeliverySlip();
-  _whDelivItems = (deal.items || []).map(it => ({ ...it }));
-  _whDelivItems.forEach(it => { if (it._uid == null) it._uid = _whDelivItemUidSeq++; });
-  const maxUid = _whDelivItems.reduce((m, it) => Math.max(m, it._uid || 0), 0);
-  if (maxUid >= _whDelivItemUidSeq) _whDelivItemUidSeq = maxUid + 1;
-  document.getElementById('wh-deliv-client').value = deal.client || '';
-  renderClientSelectUI('wh-deliv');
-  document.getElementById('wh-deliv-date').value = deal.date || '';
-  document.getElementById('wh-deliv-subject').value = deal.subject || '';
-  _editingDealKey = key;
-  renderWhDelivItems();
-  updateWhDelivSubmitButtonLabel();
-  const banner = document.getElementById('wh-deliv-edit-banner');
-  const bannerText = document.getElementById('wh-deliv-edit-banner-text');
-  if (bannerText) bannerText.textContent = '編集中の商談があります';
-  if (banner) banner.style.display = 'flex';
-  showToast('商談の編集モードにしました。内容を修正して保存してください');
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-// 商談の編集モードをやめて、明細を空の状態に戻す（在庫・stockMovesには何も影響しない＝
-// もともと商談リストの保存自体が在庫に影響しないため）
-function cancelEditWhDeal() {
-  _editingDealKey = null;
-  _whDelivItems = [];
-  document.getElementById('wh-deliv-client').value = '';
-  document.getElementById('wh-deliv-subject').value = '';
-  renderClientSelectUI('wh-deliv');
-  // 編集を始める前に新規の商談を入力中だった場合は、その下書きをここで復元する
-  loadWhDelivDraft();
-  renderWhDelivItems();
-  updateWhDelivSubmitButtonLabel();
-  const banner = document.getElementById('wh-deliv-edit-banner');
-  if (banner) banner.style.display = 'none';
-  showToast('編集をやめました');
-}
-
-// 編集バナーの「編集をやめる」は、発行済み納品書の編集中・商談の編集中のどちらでも共通で使う
-function cancelEditWhDelivForm() {
-  if (_editingSlipId) cancelEditDeliverySlip();
-  else if (_editingDealKey) cancelEditWhDeal();
-}
-
-async function deleteWhDeal(key) {
-  const deal = (wholesaleDeals || []).find(d => d._key === key);
-  if (!deal) return;
-  const ok = await showConfirm(`${deal.client || ''}の商談を削除しますか？（在庫にはまだ影響していないため、削除しても在庫・納品書には影響しません）`);
-  if (!ok) return;
-  try {
-    await fetch(authedUrl('/wholesaleDeals/' + key + '.json'), { method: 'DELETE' });
-    wholesaleDeals = (wholesaleDeals || []).filter(d => d._key !== key);
-    if (_editingDealKey === key) cancelEditWhDeal();
-    renderWhDealsList();
-    showToast('商談を削除しました');
-  } catch(e) { showToast('削除に失敗しました'); console.error(e); }
+    await loadInventory();
+    renderWhDelivHistory();
+    // 発行・編集と印刷を分けているため、ここでは自動で印刷ウィンドウを開かず、
+    // 代わりに「発行済みの納品書」の履歴を開いて、そこから好きなタイミングで印刷できるようにする
+    openWhDelivHistoryAccordion();
+    const actionLabel = wasExplicitEdit ? '納品書を更新しました' : (mergedFromExisting ? '同じ納品書にまとめました' : '納品書を発行しました');
+    const stockNote = insufficientStockNames.length
+      ? `／${insufficientStockNames.join('・')}は登録在庫を超えて出庫したため在庫がマイナスになっています。入庫の記録をお忘れなく`
+      : '';
+    showToast(actionLabel + '（合計 ¥' + total.toLocaleString('ja-JP') + '）。印刷は下の履歴からできます' + stockNote);
+  } catch(e) { showToast(wasExplicitEdit ? '更新に失敗しました' : '発行に失敗しました'); console.error(e); }
 }
 
 function openWhDelivHistoryAccordion() {
@@ -4962,8 +4711,6 @@ function editDeliverySlip(slipId) {
   const headerMoves = (stockMoves || []).filter(m => m.slipId === slipId && (m.type === 'out' || (m.type === 'consign' && m.status === 'holding')))
     .sort(compareDeliverySlipItemOrder);
   if (!headerMoves.length) { showToast('対象の納品書が見つかりません'); return; }
-  // 商談の編集中だった場合はそちらを先にやめてから切り替える（同じ入力欄を共有しているため）
-  if (_editingDealKey) cancelEditWhDeal();
   _whDelivItems = deliverySlipMovesToItems(slipId);
   document.getElementById('wh-deliv-client').value = headerMoves[0].client || '';
   renderClientSelectUI('wh-deliv');
@@ -4987,7 +4734,7 @@ function cancelEditDeliverySlip() {
   document.getElementById('wh-deliv-client').value = '';
   document.getElementById('wh-deliv-subject').value = '';
   renderClientSelectUI('wh-deliv');
-  // 編集を始める前に新規の商談を入力中だった場合は、その下書きをここで復元する
+  // 編集を始める前に新規の納品書を作成中だった場合は、その下書きをここで復元する
   loadWhDelivDraft();
   renderWhDelivItems();
   updateWhDelivSubmitButtonLabel();
@@ -4999,7 +4746,7 @@ function cancelEditDeliverySlip() {
 function updateWhDelivSubmitButtonLabel() {
   const btn = document.getElementById('wh-deliv-submit-btn');
   if (!btn) return;
-  btn.textContent = _editingSlipId ? '💾 変更を保存する' : (_editingDealKey ? '💾 商談の内容を更新する' : '🤝 商談リストに記録する');
+  btn.textContent = _editingSlipId ? '💾 変更を保存する' : '発行する';
 }
 
 // ===== 請求書（freee）作成済みトラッキング =====
@@ -5866,9 +5613,15 @@ function renderWhConsignList() {
         unitPrice: (m.status === 'settled' && m.unitPrice != null) ? m.unitPrice : null
       })).sort((a,b) => (b.date||0) - (a.date||0));
       // 取引先ポータルは/consignRequests/{portalId}を読めない（書き込み専用）ため、確認待ち
-      // リクエストの状況は、店舗側が読み書きできるこのスナップショットに含めて渡す
+      // リクエストの状況は、店舗側が読み書きできるこのスナップショットに含めて渡す。
+      // _key・soldDateは、要望「取引先が自分で取消せるようにしてほしい」「売れた日を
+      // 指定できるようにしてほしい」への対応。_keyがあることで、取引先ポータルが自分で
+      // 送信したページを閉じて開き直した後でも、cancelPortalOwnRequestで取り消す対象を
+      // 特定できる（新規送信時はpostConsignRequestsForItemがその場で_keyを持ち帰るため、
+      // このスナップショットの再同期を待たずに取り消しボタンが出せる）。
       const snapshotPendingRequests = (pendingByClient[client] || []).map(r => ({
-        model: r.model, qty: r.qty, type: r.type, unitPrice: r.unitPrice || null, requestedAt: r.requestedAt || null
+        _key: r._key, model: r.model, qty: r.qty, type: r.type, unitPrice: r.unitPrice || null,
+        requestedAt: r.requestedAt || null, soldDate: r.soldDate || null
       })).sort((a,b) => (b.requestedAt||0) - (a.requestedAt||0));
       fetch(authedUrl('/consignPortal/' + portalIdForClient(client) + '.json'), {
         method: 'PUT', body: JSON.stringify({ client, items: snapshotItems, historyItems: snapshotHistoryItems, pendingRequests: snapshotPendingRequests, updatedAt: Date.now() })
@@ -6347,13 +6100,18 @@ function renderConsignRequestsPanel() {
     const priceDisp = (r.type === 'settle' && r.unitPrice != null)
       ? `／取引先申告の販売価格：¥${Number(r.unitPrice).toLocaleString('ja-JP')}／合計：¥${(Number(r.unitPrice) * (r.qty || 0)).toLocaleString('ja-JP')}`
       : '';
+    // 要望：「取引先が売れたその日に連絡できないことがある。売れた日を指定できるように
+    // してほしい」への対応。連絡日（requestedAt）とは別に、取引先が申告した「売れた日」が
+    // あれば承認前にここで見えるようにする（承認時にはapproveConsignRequestが精算日の
+    // 初期値としてそのまま反映する）
+    const soldDateDisp = (r.type === 'settle' && r.soldDate) ? `／売れた日：${fmtDateJP(r.soldDate)}` : '';
     // 要望：「取引先の委託リスト画面の各型番の売値の下に備考欄を作成してください」への対応。
     // 取引先が書き添えた備考があれば、精算・返却の確認前にここで見えるようにする
     const memoDisp = r.memo ? `<div style="color:var(--text);font-size:11.5px;margin-top:3px;background:var(--surface);border-radius:6px;padding:5px 7px">備考：${escapeHtmlMain(r.memo)}</div>` : '';
     return `
       <div style="padding:8px 0;border-bottom:1px solid rgba(0,0,0,0.08);font-size:12.5px">
         <div style="color:var(--text)"><b>${escapeHtmlMain(r.client || '')}</b>／${escapeHtmlMain(r.model || '')}／${r.qty || ''}個${priceDisp}</div>
-        <div style="color:var(--text-muted);font-size:11px;margin-top:2px">${kindLabel}（${dateDisp}）</div>
+        <div style="color:var(--text-muted);font-size:11px;margin-top:2px">${kindLabel}（連絡日：${dateDisp}）${soldDateDisp}</div>
         ${memoDisp}
         <div style="display:flex;gap:8px;margin-top:6px">
           <button onclick="approveConsignRequest('${r._portalId}','${r._key}')" style="flex:1;padding:6px;font-size:12px;font-weight:600;border:1.5px solid var(--gold-dark);border-radius:8px;background:var(--white);color:var(--gold-dark);cursor:pointer">${r.type === 'settle' ? '確認して精算する' : '確認して返却する'}</button>
@@ -6429,6 +6187,12 @@ async function approveConsignRequest(portalId, requestId) {
     // 実際と違えば店舗側で数量を修正してから確定してもよい）
     const qtyInput = document.getElementById('wh-settle-qty');
     if (qtyInput) qtyInput.value = requestedQty;
+    // 取引先ポータルで「売れた日」を指定して連絡してきた場合は、それを精算日の初期値として
+    // 反映する（そのまま確定してもよいし、実際と違えば店舗側で修正してから確定してもよい）
+    if (req.soldDate) {
+      const dateInput = document.getElementById('wh-settle-date');
+      if (dateInput) dateInput.value = req.soldDate;
+    }
     // 取引先が売値も申告してきた場合は、店舗側の自動提案（前回の価格）よりもそれを優先して
     // 「売値」欄（参考情報）に反映する。ただし確定価格欄は、取引先の申告額をそのまま鵜呑みに
     // せず、店舗側が内容を確認したうえで自分で入力できるよう、あえて空欄のままにしておく
@@ -6815,12 +6579,16 @@ function openSettleConsign(key) {
   _settleFinalPriceManuallyEdited = false;
   const desc = document.getElementById('wh-settle-desc');
   const qtyInput = document.getElementById('wh-settle-qty');
+  const dateInput = document.getElementById('wh-settle-date');
   const priceInput = document.getElementById('wh-settle-price');
   const priceLabel = document.getElementById('wh-settle-price-label');
   const hint = document.getElementById('wh-settle-hint');
   const finalInput = document.getElementById('wh-settle-final-price');
   if (desc) desc.textContent = `${m.productName || ''}／${m.client || ''}／預けている数量: ${m.qty}個`;
   if (qtyInput) { qtyInput.max = m.qty; qtyInput.value = m.qty; }
+  // 取引先ポータルからのリクエストを承認する場合はapproveConsignRequestが実際に売れた日
+  // （req.soldDate）で上書きするため、ここではひとまず今日の日付を初期値にしておく
+  if (dateInput) dateInput.value = todayStr();
   if (priceLabel) priceLabel.textContent = m.client ? `${m.client}の売値` : '売値';
   const suggested = suggestUnitPrice(m.client, m.productKey);
   if (priceInput) priceInput.value = suggested != null ? suggested : '';
@@ -6984,23 +6752,30 @@ async function confirmSettleConsign() {
   if (!m) { closeSettleConsign(); return; }
   const settleQty = parseInt(document.getElementById('wh-settle-qty').value);
   const unitPrice = parseInt(document.getElementById('wh-settle-final-price').value);
+  const settleDateStr = document.getElementById('wh-settle-date')?.value || '';
   if (!settleQty || settleQty < 1) { showToast('精算する数量を入力してください'); return; }
   if (settleQty > m.qty) { showToast('預けている数量（' + m.qty + '個）を超えています'); return; }
+  if (!settleDateStr) { showToast('売れた日を入力してください'); return; }
   if (isNaN(unitPrice)) { showToast('確定価格を入力してください'); return; }
   const amount = unitPrice * settleQty;
+  // 「取引先が売れたその日に連絡できないことがある。1日でまとめて後から報告したい」という
+  // 要望への対応。settledAtには常に「今、店舗側が確定操作をした日時」ではなく、ここで
+  // 指定された「実際に売れた日」を反映する（取引先からの申告日をそのまま鵜呑みにせず、
+  // 店舗側がここで確認・修正できる）。
+  const settledAt = new Date(settleDateStr + 'T00:00:00').getTime();
   const approvalPending = _consignApprovalPending;
   try {
     if (settleQty === m.qty) {
       // 全数量を精算
       await fetch(authedUrl('/stockMoves/' + key + '.json'), { method: 'PATCH', body: JSON.stringify({
-        status: 'settled', unitPrice, amount, settledAt: Date.now()
+        status: 'settled', unitPrice, amount, settledAt
       })});
     } else {
       // 一部だけ精算：残りは引き続き「預け中」として数量を減らして残す
       const newMoveResp = await fetch(authedUrl('/stockMoves.json'), { method: 'POST', body: JSON.stringify({
         productKey: m.productKey, productName: m.productName, jan: m.jan,
         type: 'consign', status: 'settled', client: m.client, qty: settleQty, unitPrice, amount,
-        date: m.date, memo: m.memo || '', createdAt: Date.now(), settledAt: Date.now()
+        date: m.date, memo: m.memo || '', createdAt: Date.now(), settledAt
       })});
       await fetch(authedUrl('/stockMoves/' + key + '.json'), { method: 'PATCH', body: JSON.stringify({ qty: m.qty - settleQty }) });
     }
@@ -13252,15 +13027,48 @@ function renderPortalPendingRequests(pendingRequests) {
   listEl.innerHTML = list.map(r => {
     const kindLabel = r.type === 'settle' ? '精算のご連絡' : '返却のご連絡';
     const dateDisp = r.requestedAt ? fmtDateJP(r.requestedAt) : '';
+    const soldDateDisp = (r.type === 'settle' && r.soldDate) ? `／売れた日：${fmtDateJP(r.soldDate)}` : '';
     const priceDisp = (r.type === 'settle' && r.unitPrice != null)
       ? `／販売価格：¥${Number(r.unitPrice).toLocaleString('ja-JP')}`
+      : '';
+    // 要望：「取引先が間違えて送ってしまった精算・返却の連絡を、自分で取り消せるようにして
+    // ほしい」への対応。店舗がまだ承認・却下していない（＝在庫にも履歴にもまだ反映されて
+    // いない）間はいつでも取り消せる。_keyはpostConsignRequestsForItemが送信直後にその場で
+    // 持ち帰ったもの、またはconsignPortalスナップショット（店舗側がrenderWhConsignListの
+    // たびに再同期）に含まれるもの。ごく稀に、店舗の再同期がまだ済んでおらず_keyを含まない
+    // 古いスナップショットしか手元に無い場合は、安全のため取り消しボタンを出さない。
+    const cancelBtn = r._key
+      ? `<button type="button" onclick="cancelPortalOwnRequest('${r._key}')" style="margin-top:4px;background:none;border:none;color:#b33;font-size:11px;text-decoration:underline;cursor:pointer;padding:0">取り消す</button>`
       : '';
     return `
       <div style="padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.08);font-size:12px">
         <div style="color:var(--text)">${escapeHtmlMain(r.model || '')}／${r.qty || ''}個${priceDisp}</div>
-        <div style="color:var(--text-muted);font-size:11px;margin-top:2px">${kindLabel}（${dateDisp}）／確認をお待ちください</div>
+        <div style="color:var(--text-muted);font-size:11px;margin-top:2px">${kindLabel}（${dateDisp}）${soldDateDisp}／確認をお待ちください</div>
+        ${cancelBtn}
       </div>`;
   }).join('');
+}
+
+// 要望：「取引先が自分で取消せるようにしてほしい」への対応。店舗がまだ承認・却下していない
+// （＝在庫にも履歴にもまだ反映されていない）確認待ちの連絡を、期間の制限なく取引先自身が
+// 取り消せるようにする。/consignRequests/{portalId}への書き込みは取引先ポータルにも許可されて
+// いるパスのため、自分が送った子レコードの削除もここから直接行える。
+async function cancelPortalOwnRequest(key) {
+  const req = (window._portalPendingRequests || []).find(r => r._key === key);
+  if (!req) return;
+  const label = req.type === 'settle' ? '精算' : '返却';
+  const ok = await showConfirm(`${req.model || '商品'}の${label}のご連絡（${req.qty || ''}個）を取り消しますか？`);
+  if (!ok) return;
+  try {
+    await fetch(authedUrl('/consignRequests/' + window._portalId + '/' + key + '.json'), { method: 'DELETE' });
+    window._portalPendingRequests = (window._portalPendingRequests || []).filter(r => r._key !== key);
+    renderPortalPendingRequests(window._portalPendingRequests);
+    filterPortalItems();
+    showToast('連絡を取り消しました');
+  } catch (e) {
+    console.error('cancelPortalOwnRequest failed:', e);
+    showToast('取り消しに失敗しました。電波の良い場所でもう一度お試しください。');
+  }
 }
 
 // 商品カードに表示する「確認待ち」バッジ用のテキストを、指定した型番に対する確認待ち
@@ -13599,8 +13407,6 @@ function renderPortalItemsList(pairs) {
   }
   root.innerHTML = pairs.map(({ it, idx }) => {
     const saved = (window._portalEnteredValues || {})[idx];
-    const qtyVal = saved && saved.qty != null ? saved.qty : it.qty;
-    const priceVal = saved && saved.price != null ? saved.price : '';
     // 要望：「取引先の委託リスト画面の各型番の売値の下に備考欄を作成してください」への対応。
     // 販売条件の詳細や返却・精算に関する連絡事項など、取引先が自由に書き添えられる任意の
     // テキスト欄。数量・売値と同じく、検索の絞り込み・解除で再描画されても入力内容が
@@ -13623,25 +13429,28 @@ function renderPortalItemsList(pairs) {
       <div class="accordion-body" id="acc-body-portal-item-${idx}" style="padding:0 14px 14px">
         <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:8px">${fmtDateJP(it.date)}／預けている数量：${it.qty}個${it.memo ? '／' + escapeHtmlMain(it.memo) : ''}</div>
         ${pendingBadge ? `<div style="margin-bottom:8px">${pendingBadge}</div>` : ''}
-        <div style="display:flex;align-items:center;gap:8px">
-          <label for="portal-qty-${idx}" style="font-size:12px;color:var(--text-muted)">対象の数量</label>
-          <input type="number" id="portal-qty-${idx}" min="1" max="${it.qty}" value="${qtyVal}" oninput="updatePortalItemTotal(${idx})" style="width:64px;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
-          <span style="font-size:12px;color:var(--text-muted)">個（${it.qty}個のうち一部だけの場合は数を変えてください）</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
-          <label for="portal-price-${idx}" style="font-size:12px;color:var(--text-muted)">売値（円）</label>
-          <input type="number" id="portal-price-${idx}" min="0" placeholder="任意" value="${priceVal}" oninput="updatePortalItemTotal(${idx})" style="width:88px;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
-          <span style="font-size:12px;color:var(--text-muted)">精算する場合はこちらに入力してください</span>
-        </div>
+        <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px">精算（売れた）を報告</div>
+        <!-- 要望：「取引先の方が売れたその日に連絡できない時がある。1日でまとめて売れたものの
+             入力をしたい」「同じ商品でも売れた日によって金額が異なる場合がある」への対応。
+             1つの型番につき、売れた日・数量・売値の組を複数追加できるようにする
+             （addPortalSettleEntry／removePortalSettleEntry／updatePortalEntryField）。 -->
+        <div id="portal-entries-${idx}">${renderPortalEntryRowsHtml(idx, it)}</div>
+        <button type="button" onclick="addPortalSettleEntry(${idx})" style="background:none;border:none;color:var(--gold-dark);font-size:12px;font-weight:700;text-decoration:underline;cursor:pointer;padding:6px 0">＋ 別の日の分を追加</button>
+        <div id="portal-total-${idx}" style="display:none;font-size:12.5px;font-weight:700;color:var(--text);margin-top:2px;text-align:right"></div>
+        <div id="portal-entries-over-warning-${idx}" style="display:none;font-size:11px;color:#b33;margin-top:4px;text-align:right"></div>
         <div style="margin-top:8px">
           <label for="portal-memo-${idx}" style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">備考</label>
-          <textarea id="portal-memo-${idx}" placeholder="任意（店舗への連絡事項があればご記入ください）" oninput="updatePortalItemTotal(${idx})" rows="2" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical">${escapeHtmlMain(memoVal)}</textarea>
+          <textarea id="portal-memo-${idx}" placeholder="任意（店舗への連絡事項があればご記入ください）" oninput="updatePortalItemMemo(${idx})" rows="2" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical">${escapeHtmlMain(memoVal)}</textarea>
         </div>
-        <div id="portal-total-${idx}" style="display:none;font-size:12.5px;font-weight:700;color:var(--text);margin-top:6px;text-align:right"></div>
-        <div style="margin-top:10px">
+        <div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--border);display:flex;align-items:center;gap:8px">
+          <label for="portal-return-qty-${idx}" style="font-size:12px;color:var(--text-muted)">返却する数量</label>
+          <input type="number" id="portal-return-qty-${idx}" min="1" max="${it.qty}" value="${it.qty}" style="width:64px;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
+          <span style="font-size:12px;color:var(--text-muted)">個（${it.qty}個のうち一部だけの場合は数を変えてください）</span>
+        </div>
+        <div style="margin-top:8px">
           <button onclick="sendPortalRequest(${idx}, 'return')" style="width:100%;padding:9px 0;border-radius:8px;border:1.2px solid var(--border);background:var(--white);color:var(--text);font-size:13px;font-weight:700;cursor:pointer">返却します</button>
         </div>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:6px">精算する場合は、上の「売値」を入力すると画面上部の「まとめて精算」ボタンから送信できます</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:6px">精算する場合は、上の日付・数量・売値を入力すると画面上部の「まとめて精算」ボタンから送信できます</div>
         <div id="portal-item-status-${idx}" style="display:none;margin-top:8px;font-size:12px"></div>
       </div>
     </div>
@@ -13650,52 +13459,150 @@ function renderPortalItemsList(pairs) {
   updatePortalGrandTotal();
 }
 
-// 対象の数量・売値のどちらかが変わるたびに呼ばれ、精算しようとしている合計金額を
-// その場で計算して表示する（送信する前に金額の見込みが分かるように）
-function updatePortalItemTotal(idx) {
-  const qtyInput = document.getElementById('portal-qty-' + idx);
-  const priceInput = document.getElementById('portal-price-' + idx);
-  const memoInput = document.getElementById('portal-memo-' + idx);
-  const totalEl = document.getElementById('portal-total-' + idx);
-  // 検索の絞り込み・解除でカードが作り直されても入力内容が消えないよう、ここで保存しておく
+// idxの商品に対して、これまでに入力済みの（売れた日・数量・売値）の組を返す。まだ1件も
+// 無ければ、これまでの挙動（対象の数量＝預けている全数量、売値は空欄）に合わせた1件を初期値にする。
+function getPortalEntries(idx, it) {
   if (!window._portalEnteredValues) window._portalEnteredValues = {};
-  window._portalEnteredValues[idx] = {
-    qty: qtyInput && qtyInput.value !== '' ? qtyInput.value : null,
-    price: priceInput && priceInput.value !== '' ? priceInput.value : null,
-    memo: memoInput && memoInput.value !== '' ? memoInput.value : null
-  };
-  if (totalEl) {
-    const qty = qtyInput ? parseInt(qtyInput.value, 10) : NaN;
-    const rawPrice = priceInput ? priceInput.value.trim() : '';
+  const rec = window._portalEnteredValues[idx] || (window._portalEnteredValues[idx] = {});
+  if (!rec.entries || !rec.entries.length) {
+    rec.entries = [{ date: todayStr(), qty: (it && it.qty != null) ? String(it.qty) : '', price: '' }];
+  }
+  return rec.entries;
+}
+
+function renderPortalEntryRowsHtml(idx, it) {
+  const entries = getPortalEntries(idx, it);
+  return entries.map((entry, entryIdx) => `
+    <div style="display:flex;align-items:flex-end;gap:6px;flex-wrap:wrap;margin-top:${entryIdx === 0 ? '0' : '8px'}">
+      <div>
+        <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">売れた日</div>
+        <input type="date" id="portal-entry-date-${idx}-${entryIdx}" value="${entry.date || ''}" oninput="updatePortalEntryField(${idx},${entryIdx},'date',this.value)" style="padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
+      </div>
+      <div>
+        <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">数量</div>
+        <input type="number" id="portal-entry-qty-${idx}-${entryIdx}" min="1" max="${it.qty}" value="${entry.qty != null ? entry.qty : ''}" oninput="updatePortalEntryField(${idx},${entryIdx},'qty',this.value)" style="width:56px;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
+      </div>
+      <div>
+        <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">売値（円）</div>
+        <input type="number" id="portal-entry-price-${idx}-${entryIdx}" min="0" placeholder="任意" value="${entry.price != null ? entry.price : ''}" oninput="updatePortalEntryField(${idx},${entryIdx},'price',this.value)" style="width:80px;padding:6px 8px;border:1.2px solid var(--border);border-radius:8px;font-size:13px">
+      </div>
+      ${entries.length > 1 ? `<button type="button" onclick="removePortalSettleEntry(${idx},${entryIdx})" aria-label="この行を削除" style="background:none;border:none;color:var(--danger);font-size:16px;cursor:pointer;padding:0 4px 8px">✕</button>` : ''}
+    </div>
+  `).join('');
+}
+
+// idxの商品のカードだけを部分的に再描画する（検索の絞り込み解除などで一覧全体を作り直す
+// renderPortalItemsListとは違い、アコーディオンの開閉状態など他の部分に影響を与えない）
+function renderPortalItemEntries(idx) {
+  const it = (window._portalItems || [])[idx];
+  const container = document.getElementById('portal-entries-' + idx);
+  if (container) container.innerHTML = renderPortalEntryRowsHtml(idx, it);
+  updatePortalItemTotal(idx);
+}
+
+function addPortalSettleEntry(idx) {
+  const it = (window._portalItems || [])[idx];
+  const entries = getPortalEntries(idx, it);
+  entries.push({ date: todayStr(), qty: '', price: '' });
+  renderPortalItemEntries(idx);
+}
+
+function removePortalSettleEntry(idx, entryIdx) {
+  const it = (window._portalItems || [])[idx];
+  const entries = getPortalEntries(idx, it);
+  entries.splice(entryIdx, 1);
+  if (!entries.length) entries.push({ date: todayStr(), qty: (it && it.qty != null) ? String(it.qty) : '', price: '' });
+  renderPortalItemEntries(idx);
+}
+
+function updatePortalEntryField(idx, entryIdx, field, value) {
+  const it = (window._portalItems || [])[idx];
+  const entries = getPortalEntries(idx, it);
+  if (!entries[entryIdx]) return;
+  entries[entryIdx][field] = value;
+  updatePortalItemTotal(idx);
+}
+
+// 備考は商品単位で1つだけ持たせる（複数の日付・売値の組すべてに共通で添える）
+function updatePortalItemMemo(idx) {
+  if (!window._portalEnteredValues) window._portalEnteredValues = {};
+  const rec = window._portalEnteredValues[idx] || (window._portalEnteredValues[idx] = {});
+  const memoInput = document.getElementById('portal-memo-' + idx);
+  rec.memo = memoInput && memoInput.value !== '' ? memoInput.value : null;
+  updatePortalGrandTotal();
+}
+
+// いずれかの（売れた日・数量・売値）の組が変わるたびに呼ばれ、その商品の精算しようとして
+// いる合計（個数・金額）をその場で計算して表示する（送信する前に見込みが分かるように）。
+// 預けている数量を超えて指定してしまっている場合は、その旨を赤字で表示する。
+function updatePortalItemTotal(idx) {
+  const it = (window._portalItems || [])[idx];
+  const entries = getPortalEntries(idx, it);
+  const totalEl = document.getElementById('portal-total-' + idx);
+  const warnEl = document.getElementById('portal-entries-over-warning-' + idx);
+  let sumQty = 0, sumAmount = 0, anyValid = false;
+  entries.forEach(entry => {
+    const qty = parseInt(entry.qty, 10);
+    const rawPrice = (entry.price != null ? entry.price : '').toString().trim();
     const price = rawPrice !== '' ? parseInt(rawPrice, 10) : NaN;
     if (Number.isFinite(qty) && qty > 0 && Number.isFinite(price) && price >= 0) {
-      totalEl.textContent = `合計：¥${(qty * price).toLocaleString('ja-JP')}`;
+      sumQty += qty;
+      sumAmount += qty * price;
+      anyValid = true;
+    }
+  });
+  if (totalEl) {
+    if (anyValid) {
+      totalEl.textContent = `合計：${sumQty}個／¥${sumAmount.toLocaleString('ja-JP')}`;
       totalEl.style.display = 'block';
     } else {
       totalEl.style.display = 'none';
     }
   }
+  if (warnEl) {
+    if (it && sumQty > it.qty) {
+      warnEl.textContent = `※合計${sumQty}個が、預けている${it.qty}個を超えています。数量をご確認ください（このままでは精算に含まれません）`;
+      warnEl.style.display = 'block';
+    } else {
+      warnEl.style.display = 'none';
+    }
+  }
   updatePortalGrandTotal();
 }
 
-// 精算しようとしている（数量・売値がどちらも入力済みの）商品を集めて返す。検索で絞り込まれて
-// 非表示の商品は、対応する入力欄自体がDOMに存在しないため自然に除外される。
+// 精算しようとしている（売れた日・数量・売値がすべて入力済みの）組を、商品をまたいで
+// すべて集めて返す。1つの商品に複数の組がある場合はそれぞれ別の候補として扱う（＝別々の
+// consignRequestとして送信される）。ある商品の組の合計数量が預けている数量を超えている
+// 場合は、混乱を避けるためその商品の組はまとめて対象から外す（画面にも警告を表示済み）。
+// 検索で絞り込まれて非表示の商品も、window._portalEnteredValuesに保存済みの内容から
+// 判定する（DOM上に無くても対象に含める）。
 // 「まとめて精算」ボタンからの送信も、上部の合計表示も、この判定を共通で使う。
 function getPortalSettleCandidates() {
   const items = window._portalItems || [];
   const candidates = [];
   items.forEach((it, idx) => {
-    const qtyInput = document.getElementById('portal-qty-' + idx);
-    const priceInput = document.getElementById('portal-price-' + idx);
-    const memoInput = document.getElementById('portal-memo-' + idx);
-    if (!qtyInput || !priceInput) return;
-    const qty = parseInt(qtyInput.value, 10);
-    const rawPrice = priceInput.value.trim();
-    const price = rawPrice !== '' ? parseInt(rawPrice, 10) : NaN;
-    const memo = memoInput ? memoInput.value.trim() : '';
-    if (Number.isFinite(qty) && qty > 0 && qty <= it.qty && Number.isFinite(price) && price >= 0) {
-      candidates.push({ idx, it, qty, price, memo });
-    }
+    const saved = (window._portalEnteredValues || {})[idx];
+    const entries = (saved && saved.entries) || [];
+    if (!entries.length) return;
+    const memo = (saved && saved.memo) || '';
+    const validEntries = [];
+    let sumQty = 0;
+    entries.forEach(entry => {
+      const qty = parseInt(entry.qty, 10);
+      const rawPrice = (entry.price != null ? entry.price : '').toString().trim();
+      const price = rawPrice !== '' ? parseInt(rawPrice, 10) : NaN;
+      const date = (entry.date || '').trim();
+      // 日付・数量・売値のいずれかが未入力の組は、まだ入力中とみなして単純にスキップする
+      // （他の組の送信を妨げない）
+      if (!date || !Number.isFinite(qty) || qty <= 0 || !Number.isFinite(price) || price < 0) return;
+      sumQty += qty;
+      validEntries.push({ qty, price, date });
+    });
+    if (!validEntries.length) return;
+    if (sumQty > it.qty) return;
+    validEntries.forEach(entry => {
+      candidates.push({ idx, it, qty: entry.qty, price: entry.price, date: entry.date, memo });
+    });
   });
   return candidates;
 }
@@ -13718,7 +13625,7 @@ function updatePortalGrandTotal() {
   if (candidates.length >= 1) {
     if (textEl) textEl.textContent = `精算対象 ${candidates.length}件の合計：¥${grandTotal.toLocaleString('ja-JP')}`;
     if (chipsEl) chipsEl.innerHTML = candidates.map(c =>
-      `<span class="portal-chip">${escapeHtmlMain(c.it.model || '商品')}／${c.qty}個／¥${(c.qty * c.price).toLocaleString('ja-JP')}</span>`
+      `<span class="portal-chip">${escapeHtmlMain(c.it.model || '商品')}／${fmtDateJP(c.date)}／${c.qty}個／¥${(c.qty * c.price).toLocaleString('ja-JP')}</span>`
     ).join('');
     grandEl.style.display = 'block';
   } else {
@@ -13737,9 +13644,17 @@ function updatePortalGrandTotal() {
 // 1件ずつ送るsendPortalRequest()からは渡されない（undefinedのまま）ため、単発送信は今まで通り
 // 即座に1通のメールが届く。データ構造・店舗側の承認フロー（renderConsignRequestsPanel等）には
 // 手を加えていない（あくまで追加の任意フィールドとして持たせるだけ）。
-async function postConsignRequestsForItem(it, qty, type, unitPrice, memo, batchId) {
+// soldDate：要望「取引先が売れたその日に連絡できないことがある」への対応。連絡した日では
+// なく実際に売れた日を店舗側に伝え、精算確定時にその日付を反映してもらう（返却には日付の
+// 概念が無いため渡さない）。
+// 戻り値：作成した各consignRequestのレコード（サーバーが発行したキー_key付き）の配列。
+// 呼び出し側はこれをwindow._portalPendingRequestsにマージすることで、店舗側の確認を待たずに
+// 「確認中」欄・取り消しボタンをその場で表示できる（cancelPortalOwnRequestが_keyで特定して
+// 削除するため、ここでキーを確実に持ち帰っておく必要がある）。
+async function postConsignRequestsForItem(it, qty, type, unitPrice, memo, batchId, soldDate) {
   const slices = splitQtyAcrossMoveKeys(it.moveKeys, qty);
   if (!slices.length) throw new Error('割り当てできる預け入れ記録が見つかりませんでした');
+  const created = [];
   for (const slice of slices) {
     const body = {
       moveKey: slice.key, type, qty: slice.qty, model: it.model || '',
@@ -13750,11 +13665,14 @@ async function postConsignRequestsForItem(it, qty, type, unitPrice, memo, batchI
     // 取引先が任意で書き添えた連絡事項を、店舗側が確認できるようリクエストに含めて送る。
     if (memo) body.memo = memo;
     if (batchId) body.batchId = batchId;
-    await fetch(authedUrl('/consignRequests/' + window._portalId + '.json'), {
+    if (soldDate) body.soldDate = soldDate;
+    const res = await fetch(authedUrl('/consignRequests/' + window._portalId + '.json'), {
       method: 'POST',
       body: JSON.stringify(body)
-    });
+    }).then(r => r.json()).catch(() => null);
+    created.push({ ...body, _key: res && res.name });
   }
+  return created;
 }
 
 // 取引先が「返却します」を押したときの処理。実際の在庫・記録を直接書き換えるのではなく、
@@ -13773,7 +13691,7 @@ async function sendPortalRequest(idx, type) {
   };
   // 同じ商品をまとめて複数預けている場合に、そのうちの一部だけ（例：5個のうち1個）を
   // 返却したいケースに対応するため、対象の数量を取引先自身に指定してもらう
-  const qtyInput = document.getElementById('portal-qty-' + idx);
+  const qtyInput = document.getElementById('portal-return-qty-' + idx);
   const qty = qtyInput ? parseInt(qtyInput.value, 10) : it.qty;
   if (!qty || qty < 1) { setStatus('数量を正しく入力してください', true); return; }
   if (qty > it.qty) { setStatus(`預けている数量（${it.qty}個）を超えています`, true); return; }
@@ -13783,7 +13701,11 @@ async function sendPortalRequest(idx, type) {
   const memoInput = document.getElementById('portal-memo-' + idx);
   const memo = memoInput ? memoInput.value.trim() : '';
   try {
-    await postConsignRequestsForItem(it, qty, type, null, memo);
+    const created = await postConsignRequestsForItem(it, qty, type, null, memo);
+    // 要望「取引先が自分で取消せるようにしてほしい」への対応。店舗側の確認・スナップショット
+    // 再同期を待たず、送信できた時点でその場で「確認中」欄に反映し、取り消せるようにする
+    window._portalPendingRequests = (window._portalPendingRequests || []).concat(created);
+    renderPortalPendingRequests(window._portalPendingRequests);
     setStatus(`✓ ${qty}個の返却のご連絡を送信しました。店舗からの確認をお待ちください。`, false);
   } catch (e) {
     console.error('sendPortalRequest failed:', e);
@@ -13805,45 +13727,41 @@ function localDateStr(d) {
 
 // 要望：「取引先の方が扱う委託リストの画面で、同じ型番、同じ個数、同じ金額が同じ日に
 // 精算されてしまった時に、この動作が間違いではないかとアラートが出るようにしたい」への対応。
-// 今まさに送信しようとしている精算候補（candidates）が、
-//   (a) 今回の送信内容の中に同じ型番・数量・金額が複数含まれている
-//   (b) 本日すでに送信済み・店舗の確認待ちの精算リクエスト（_portalPendingRequests）と
-//       型番・数量・金額が一致する
-//   (c) 本日すでに店舗が精算済みとして処理した履歴（_portalHistoryFull）と
+// 「売れた日」を指定できるようになったことに合わせ、「本日」ではなく各候補（candidate）に
+// 指定された日付を基準に判定する。今まさに送信しようとしている精算候補（candidates）が、
+//   (a) 今回の送信内容の中に同じ型番・数量・金額・日付が複数含まれている
+//   (b) その日付ですでに送信済み・店舗の確認待ちの精算リクエスト（_portalPendingRequests。
+//       soldDateが無い古いリクエストは送信日requestedAtで代用する）と型番・数量・金額が一致する
+//   (c) その日付ですでに店舗が精算済みとして処理した履歴（_portalHistoryFull）と
 //       型番・数量・金額が一致する
 // のいずれかに当てはまる場合、二重送信の可能性がある旨の注意文を返す。あくまで注意喚起のため
 // 送信自体はブロックしない（同じ商品を別々に複数回預けていて、たまたま数量・金額が一致する
 // 正当なケースもあり得るため、最終判断は取引先自身に委ねる）。
 function findPortalSettleDuplicates(candidates) {
-  const today = localDateStr(Date.now());
-  const keyOf = (model, qty, price) => (model || '') + '|' + qty + '|' + price;
+  const keyOf = (model, qty, price, date) => (model || '') + '|' + qty + '|' + price + '|' + (date || '');
   const countInBatch = {};
   candidates.forEach(c => {
-    const key = keyOf(c.it.model, c.qty, c.price);
+    const key = keyOf(c.it.model, c.qty, c.price, c.date);
     countInBatch[key] = (countInBatch[key] || 0) + 1;
   });
-  const pendingToday = (window._portalPendingRequests || []).filter(r =>
-    r.type === 'settle' && r.requestedAt && localDateStr(r.requestedAt) === today
-  );
-  const settledToday = (window._portalHistoryFull || []).filter(h =>
-    h.status === 'settled' && h.unitPrice != null && h.date && localDateStr(h.date) === today
-  );
+  const pendingSettle = (window._portalPendingRequests || []).filter(r => r.type === 'settle');
+  const settledHistory = (window._portalHistoryFull || []).filter(h => h.status === 'settled' && h.unitPrice != null && h.date);
   const warnings = [];
   const warnedKeys = new Set();
   candidates.forEach(c => {
-    const key = keyOf(c.it.model, c.qty, c.price);
+    const key = keyOf(c.it.model, c.qty, c.price, c.date);
     if (warnedKeys.has(key)) return;
     const dupInBatch = countInBatch[key] > 1;
-    const dupPending = pendingToday.some(r => (r.model || '') === (c.it.model || '') && Number(r.qty) === c.qty && Number(r.unitPrice) === c.price);
-    const dupSettled = settledToday.some(h => (h.model || '') === (c.it.model || '') && Number(h.qty) === c.qty && Number(h.unitPrice) === c.price);
+    const dupPending = pendingSettle.some(r => (r.model || '') === (c.it.model || '') && Number(r.qty) === c.qty && Number(r.unitPrice) === c.price && (r.soldDate || localDateStr(r.requestedAt)) === c.date);
+    const dupSettled = settledHistory.some(h => (h.model || '') === (c.it.model || '') && Number(h.qty) === c.qty && Number(h.unitPrice) === c.price && localDateStr(h.date) === c.date);
     if (!dupInBatch && !dupPending && !dupSettled) return;
     warnedKeys.add(key);
     const modelDisp = escapeHtmlMain(c.it.model || '商品');
-    const detail = `${modelDisp}／${c.qty}個／¥${c.price.toLocaleString('ja-JP')}`;
+    const detail = `${modelDisp}／${fmtDateJP(c.date)}／${c.qty}個／¥${c.price.toLocaleString('ja-JP')}`;
     if (dupPending) {
-      warnings.push(`${detail}：本日すでに精算のご連絡を送信済みのようです`);
+      warnings.push(`${detail}：その日付ですでに精算のご連絡を送信済みのようです`);
     } else if (dupSettled) {
-      warnings.push(`${detail}：本日すでに店舗側で精算済みとして処理されているようです`);
+      warnings.push(`${detail}：その日付ですでに店舗側で精算済みとして処理されているようです`);
     } else {
       warnings.push(`${detail}：今回送信する内容の中に同じ条件のものが複数含まれています`);
     }
@@ -13872,7 +13790,7 @@ function openBatchSettleConfirm() {
       <div style="padding:7px 0;border-bottom:1px solid var(--border);font-size:12.5px">
         <div style="display:flex;align-items:center;gap:8px">
           <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${escapeHtmlMain(c.it.model || '商品')}</span>
-          <span style="flex-shrink:0;color:var(--text-muted)">${c.qty}個 × ¥${c.price.toLocaleString('ja-JP')}</span>
+          <span style="flex-shrink:0;color:var(--text-muted)">${fmtDateJP(c.date)}／${c.qty}個 × ¥${c.price.toLocaleString('ja-JP')}</span>
           <span style="flex-shrink:0;font-weight:700;color:var(--text)">¥${(c.qty * c.price).toLocaleString('ja-JP')}</span>
         </div>
         ${c.memo ? `<div style="color:var(--text-muted);font-size:11px;margin-top:3px">備考：${escapeHtmlMain(c.memo)}</div>` : ''}
@@ -13926,27 +13844,41 @@ async function submitBatchSettle() {
   let succeeded = 0;
   let grandTotal = 0;
   const failedModels = [];
+  // 同じ商品に複数の（売れた日・数量・売値）の組がある場合、1件ずつ上書きし合ってしまわない
+  // よう、商品（idx）ごとにメッセージをまとめてから最後にまとめて表示する
+  const itemMessages = {};
+  const itemHadFailure = {};
+  const newlyCreated = [];
   // このバッチ内の全リクエストに共通で持たせるID。通知メールを1通に集約するための目印
   // （詳しくはpostConsignRequestsForItemの説明コメントを参照）。
   const batchId = 'b' + Date.now();
   for (const c of candidates) {
-    const itemStatusEl = document.getElementById('portal-item-status-' + c.idx);
-    const setItemStatus = (msg, isError) => {
-      if (!itemStatusEl) return;
-      itemStatusEl.textContent = msg;
-      itemStatusEl.style.color = isError ? '#b33' : '#2f6b2f';
-      itemStatusEl.style.display = msg ? 'block' : 'none';
-    };
+    if (!itemMessages[c.idx]) itemMessages[c.idx] = [];
     try {
-      await postConsignRequestsForItem(c.it, c.qty, 'settle', c.price, c.memo, batchId);
+      const created = await postConsignRequestsForItem(c.it, c.qty, 'settle', c.price, c.memo, batchId, c.date);
+      newlyCreated.push(...created);
       succeeded++;
       grandTotal += c.qty * c.price;
-      setItemStatus(`✓ ${c.qty}個（売値¥${c.price.toLocaleString('ja-JP')}／合計¥${(c.qty * c.price).toLocaleString('ja-JP')}）の精算のご連絡を送信しました。店舗からの確認をお待ちください。`, false);
+      itemMessages[c.idx].push(`✓ ${fmtDateJP(c.date)}／${c.qty}個（売値¥${c.price.toLocaleString('ja-JP')}／合計¥${(c.qty * c.price).toLocaleString('ja-JP')}）の精算のご連絡を送信しました`);
     } catch (e) {
       console.error('submitBatchSettle failed for', c.it.model, e);
-      failedModels.push(c.it.model || '商品');
-      setItemStatus('送信に失敗しました。電波の良い場所でもう一度お試しください。', true);
+      failedModels.push(`${c.it.model || '商品'}（${fmtDateJP(c.date)}）`);
+      itemMessages[c.idx].push(`✕ ${fmtDateJP(c.date)}／${c.qty}個の送信に失敗しました`);
+      itemHadFailure[c.idx] = true;
     }
+  }
+  Object.keys(itemMessages).forEach(idx => {
+    const itemStatusEl = document.getElementById('portal-item-status-' + idx);
+    if (!itemStatusEl) return;
+    itemStatusEl.innerHTML = itemMessages[idx].join('<br>') + '<br>店舗からの確認をお待ちください。';
+    itemStatusEl.style.color = itemHadFailure[idx] ? '#b33' : '#2f6b2f';
+    itemStatusEl.style.display = 'block';
+  });
+  // 要望「取引先が自分で取消せるようにしてほしい」への対応。店舗側の確認・スナップショット
+  // 再同期を待たず、送信できた時点でその場で「確認中」欄に反映し、取り消せるようにする
+  if (newlyCreated.length) {
+    window._portalPendingRequests = (window._portalPendingRequests || []).concat(newlyCreated);
+    renderPortalPendingRequests(window._portalPendingRequests);
   }
   if (btn) btn.disabled = false;
   if (succeeded === candidates.length) {
