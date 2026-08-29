@@ -2052,6 +2052,35 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     </div>
   </div>
 </div>
+<!-- 要望：「取り消すのは完全に消してしまう機能だけでしょうか？修正機能はありますか？」への対応。
+     確認待ちの連絡を、取り消さずにその場で数量・売値・売れた日を直接修正できるようにする
+     （openEditPendingRequest／confirmEditPendingRequest）。返却のご連絡には日付・売値の
+     概念が無いため、精算のご連絡のときだけ該当欄を表示する。 -->
+<div id="portal-edit-pending-modal" style="display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:max(24px,env(safe-area-inset-top)) 24px max(24px,env(safe-area-inset-bottom)) 24px">
+  <div style="background:var(--white);border-radius:16px;padding:22px;width:100%;max-width:340px;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px">ご連絡内容を修正</div>
+    <div id="portal-edit-pending-desc" style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px"></div>
+    <div id="portal-edit-pending-date-field" style="margin-bottom:12px">
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">売れた日</div>
+      <input type="date" id="portal-edit-pending-date" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.2px solid var(--border);border-radius:8px;font-size:14px">
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:8px">
+      <div style="flex:1">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">数量</div>
+        <input type="number" id="portal-edit-pending-qty" min="1" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.2px solid var(--border);border-radius:8px;font-size:14px">
+      </div>
+      <div id="portal-edit-pending-price-field" style="flex:1">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">売値（円）</div>
+        <input type="number" id="portal-edit-pending-price" min="0" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.2px solid var(--border);border-radius:8px;font-size:14px">
+      </div>
+    </div>
+    <div id="portal-edit-pending-error" style="display:none;color:#b33;font-size:12px;margin-bottom:10px"></div>
+    <div style="display:flex;gap:10px;margin-top:6px">
+      <button onclick="closeEditPendingRequest()" style="flex:1;padding:13px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;cursor:pointer">キャンセル</button>
+      <button onclick="confirmEditPendingRequest()" style="flex:1;padding:13px;background:linear-gradient(135deg,#d8b872,#c8a052);color:#fff;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer">保存する</button>
+    </div>
+  </div>
+</div>
 <div id="add-subcat-modal" style="display:none;position:fixed;inset:0;z-index:650;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:max(24px,env(safe-area-inset-top)) 24px max(24px,env(safe-area-inset-bottom)) 24px">
   <div style="background:var(--white);border-radius:16px;padding:24px;width:100%;max-width:320px;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px">新しいサブカテゴリーを追加</div>
@@ -13037,6 +13066,12 @@ function renderPortalPendingRequests(pendingRequests) {
     // 持ち帰ったもの、またはconsignPortalスナップショット（店舗側がrenderWhConsignListの
     // たびに再同期）に含まれるもの。ごく稀に、店舗の再同期がまだ済んでおらず_keyを含まない
     // 古いスナップショットしか手元に無い場合は、安全のため取り消しボタンを出さない。
+    // 要望：「取り消すのは完全に消してしまう機能だけでしょうか？修正機能はありますか？」
+    // への対応。取り消して送り直す手間を減らせるよう、内容（数量・売値・売れた日）をその場で
+    // 直接修正できる「修正する」リンクも、取り消しと同じ条件（_keyがある場合のみ）で表示する。
+    const editBtn = r._key
+      ? `<button type="button" onclick="openEditPendingRequest('${r._key}')" style="margin-top:4px;margin-right:14px;background:none;border:none;color:var(--gold-dark);font-size:11px;text-decoration:underline;cursor:pointer;padding:0">修正する</button>`
+      : '';
     const cancelBtn = r._key
       ? `<button type="button" onclick="cancelPortalOwnRequest('${r._key}')" style="margin-top:4px;background:none;border:none;color:#b33;font-size:11px;text-decoration:underline;cursor:pointer;padding:0">取り消す</button>`
       : '';
@@ -13044,7 +13079,7 @@ function renderPortalPendingRequests(pendingRequests) {
       <div style="padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.08);font-size:12px">
         <div style="color:var(--text)">${escapeHtmlMain(r.model || '')}／${r.qty || ''}個${priceDisp}</div>
         <div style="color:var(--text-muted);font-size:11px;margin-top:2px">${kindLabel}（${dateDisp}）${soldDateDisp}／確認をお待ちください</div>
-        ${cancelBtn}
+        <div>${editBtn}${cancelBtn}</div>
       </div>`;
   }).join('');
 }
@@ -13068,6 +13103,83 @@ async function cancelPortalOwnRequest(key) {
   } catch (e) {
     console.error('cancelPortalOwnRequest failed:', e);
     showToast('取り消しに失敗しました。電波の良い場所でもう一度お試しください。');
+  }
+}
+
+// 要望：「取り消すのは完全に消してしまう機能だけでしょうか？修正機能はありますか？」への対応。
+// 間違えた内容を直すのに、いったん取り消してから同じ内容をもう一度入力し直す手間を無くすため、
+// 確認待ちの連絡（取り消しと同じ条件＝_keyがある間はいつでも）を、その場で直接修正できるように
+// する。取り消しと同じく/consignRequests/{portalId}への書き込みは取引先ポータルにも許可されて
+// いるパスのため、自分が送った子レコードの内容変更（PATCH）もここから直接行える。
+let _editPendingKey = null;
+
+function openEditPendingRequest(key) {
+  const req = (window._portalPendingRequests || []).find(r => r._key === key);
+  if (!req) return;
+  _editPendingKey = key;
+  const isSettle = req.type === 'settle';
+  const descEl = document.getElementById('portal-edit-pending-desc');
+  const dateField = document.getElementById('portal-edit-pending-date-field');
+  const priceField = document.getElementById('portal-edit-pending-price-field');
+  const dateInput = document.getElementById('portal-edit-pending-date');
+  const qtyInput = document.getElementById('portal-edit-pending-qty');
+  const priceInput = document.getElementById('portal-edit-pending-price');
+  const errorEl = document.getElementById('portal-edit-pending-error');
+  if (descEl) descEl.textContent = `${req.model || '商品'}（${isSettle ? '精算' : '返却'}のご連絡）`;
+  if (dateField) dateField.style.display = isSettle ? 'block' : 'none';
+  if (priceField) priceField.style.display = isSettle ? 'block' : 'none';
+  if (dateInput) dateInput.value = req.soldDate || todayStr();
+  if (qtyInput) qtyInput.value = req.qty != null ? req.qty : '';
+  if (priceInput) priceInput.value = req.unitPrice != null ? req.unitPrice : '';
+  if (errorEl) { errorEl.textContent = ''; errorEl.style.display = 'none'; }
+  const modal = document.getElementById('portal-edit-pending-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeEditPendingRequest() {
+  const modal = document.getElementById('portal-edit-pending-modal');
+  if (modal) modal.style.display = 'none';
+  _editPendingKey = null;
+}
+
+async function confirmEditPendingRequest() {
+  const key = _editPendingKey;
+  if (!key) return;
+  const req = (window._portalPendingRequests || []).find(r => r._key === key);
+  if (!req) { closeEditPendingRequest(); return; }
+  const isSettle = req.type === 'settle';
+  const errorEl = document.getElementById('portal-edit-pending-error');
+  const showError = (msg) => { if (errorEl) { errorEl.textContent = msg; errorEl.style.display = 'block'; } };
+  const qty = parseInt(document.getElementById('portal-edit-pending-qty').value, 10);
+  if (!qty || qty < 1) { showError('数量を正しく入力してください'); return; }
+  // 現在この画面に表示されている（＝まだ預かっている）数量を超えていないか、分かる範囲で
+  // 念のため確認する（この商品がすでに一部精算・返却済みで一覧から消えている場合は確認せず
+  // 通す。最終的には店舗側の承認時にも安全のため現在の預かり数量に合わせて調整される）
+  const it = (window._portalItems || []).find(x => (x.model || '') === (req.model || ''));
+  if (it && qty > it.qty) { showError(`預けている数量（${it.qty}個）を超えています`); return; }
+  const patch = { qty };
+  let soldDate = null, unitPrice = null;
+  if (isSettle) {
+    soldDate = document.getElementById('portal-edit-pending-date').value;
+    const priceStr = document.getElementById('portal-edit-pending-price').value;
+    unitPrice = priceStr !== '' ? parseInt(priceStr, 10) : NaN;
+    if (!soldDate) { showError('売れた日を入力してください'); return; }
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) { showError('売値を正しく入力してください'); return; }
+    patch.soldDate = soldDate;
+    patch.unitPrice = unitPrice;
+  }
+  try {
+    await fetch(authedUrl('/consignRequests/' + window._portalId + '/' + key + '.json'), {
+      method: 'PATCH', body: JSON.stringify(patch)
+    });
+    Object.assign(req, patch);
+    renderPortalPendingRequests(window._portalPendingRequests);
+    filterPortalItems();
+    closeEditPendingRequest();
+    showToast('内容を修正しました');
+  } catch (e) {
+    console.error('confirmEditPendingRequest failed:', e);
+    showError('修正に失敗しました。電波の良い場所でもう一度お試しください。');
   }
 }
 
