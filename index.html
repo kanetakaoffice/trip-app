@@ -316,6 +316,16 @@ textarea { resize: none; height: 72px; line-height: 1.5; }
     </div>
     <div id="portal-loading" style="text-align:center;color:var(--text-muted);font-size:13px;padding:30px 0">読み込み中…</div>
     <div id="portal-error" style="display:none;text-align:center;color:#b33;font-size:13px;padding:30px 0">このページは見つかりませんでした。お手数ですが、株式会社KANETAKAまでご連絡ください。</div>
+    <!-- 要望：「取引先の方が触る画面で、セキュリティーを強化したい」への対応。リンクを
+         知っているだけでは開けないよう、店舗から別途お伝えする暗証番号の入力を必須にした
+         （showPortalPinGate／submitPortalPin）。一致するまでitems等の内容は一切描画しない。 -->
+    <div id="portal-pin-screen" style="display:none;text-align:center;padding:24px 0">
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:14px;line-height:1.6">セキュリティ確認のため、店舗からお伝えしている<br>暗証番号をご入力ください</div>
+      <input type="tel" inputmode="numeric" pattern="[0-9]*" id="portal-pin-input" maxlength="6" placeholder="暗証番号（6桁）" onkeydown="if(event.key==='Enter'){event.preventDefault();submitPortalPin();}" style="width:170px;text-align:center;letter-spacing:5px;font-size:20px;padding:11px 12px;border:1.2px solid var(--border);border-radius:10px;box-sizing:border-box">
+      <div id="portal-pin-error" style="display:none;color:#b33;font-size:12px;margin-top:10px"></div>
+      <button type="button" onclick="submitPortalPin()" style="display:block;margin:16px auto 0;padding:11px 34px;border-radius:8px;border:none;background:linear-gradient(135deg,#d8b872,#c8a052);color:#fff;font-size:14px;font-weight:700;cursor:pointer">確認する</button>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:16px">暗証番号がご不明な場合は、株式会社KANETAKAまでお問い合わせください</div>
+    </div>
     <div id="portal-items-summary" style="display:none;text-align:center;font-size:12.5px;color:var(--text-muted);margin-bottom:12px"></div>
     <div id="portal-pending-wrap" style="display:none;background:#fff8e1;border:1.2px solid #e0c56a;border-radius:10px;padding:10px 12px;margin-bottom:12px">
       <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px">⏳ ご連絡内容を確認中です <span id="portal-pending-count" style="font-weight:400;color:var(--text-muted)"></span></div>
@@ -2495,14 +2505,144 @@ async function pollBizEntriesForNotify() {
   } catch (e) { console.error('biz notify poll error', e); }
 }
 
-// 取引先ポータルのURL（?portal=...）に使うID。取引先名から決定的に生成することで、
-// 同じ取引先なら毎回同じリンクになる（Firebaseのキーとして安全な英数字のみになるよう、
-// 生の取引先名ではなくハッシュ値を使う）。
-function portalIdForClient(client) {
+// 要望：「取引先の方が触る画面で、セキュリティーを強化したい」への対応。
+// 以前は取引先ポータルのURL（?portal=...）に使うIDを、取引先名（会社名）から決定的に
+// 計算していた。これだと会社名さえ分かれば第三者が同じURLを自分で計算できてしまうため、
+// 推測できないランダムな値（generateSecureRandomToken）に変更し、一度発行したものを
+// wholesaleClientsのレコード（portalId）に保存して使い回す（ensurePortalCredentials）。
+// あわせて、リンクを知っているだけでは開けないよう、簡単な暗証番号（pin）による確認も追加した。
+function generateSecureRandomToken(len) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let out = '';
+  if (window.crypto && window.crypto.getRandomValues) {
+    const arr = new Uint32Array(len);
+    window.crypto.getRandomValues(arr);
+    for (let i = 0; i < len; i++) out += chars[arr[i] % chars.length];
+  } else {
+    // crypto.getRandomValuesが使えない環境向けの簡易フォールバック
+    for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return out;
+}
+
+// 暗証番号は、取引先が電話等で口頭でも伝えやすいよう数字だけの6桁にする
+function generateNumericPin(digits) {
+  const max = Math.pow(10, digits);
+  let n;
+  if (window.crypto && window.crypto.getRandomValues) {
+    const arr = new Uint32Array(1);
+    window.crypto.getRandomValues(arr);
+    n = arr[0] % max;
+  } else {
+    n = Math.floor(Math.random() * max);
+  }
+  return String(n).padStart(digits, '0');
+}
+
+// 旧方式（取引先名から一意に決まるハッシュ値）。新しいportalIdへの切り替えに伴い、
+// 過去にこの値で公開されていたスナップショット（/consignPortal/{旧ID}）が読める状態の
+// ままにならないよう削除（クリーンアップ）するためだけに残してある。新規のリンク発行には
+// もう使わない。
+function legacyPortalIdForClient(client) {
   let h = 5381;
   const s = String(client || '');
   for (let i = 0; i < s.length; i++) { h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; }
   return 'p' + h.toString(36);
+}
+
+// 指定した取引先の、ポータル用ID（portalId）と暗証番号（pin）を返す。まだ発行されていなければ
+// その場でランダムに生成し、wholesaleClientsのレコードに保存してから返す（次回以降のリンク
+// 発行・スナップショット更新では、保存済みの同じ値を使い続ける。毎回変わってしまうと
+// ブックマークできず不便なため）。
+// renderWhConsignList()は複数箇所（loadInventory完了時・各種操作の完了時など）から短い間隔で
+// 何度も呼ばれることがあり、同じ取引先に対してこの関数がほぼ同時に複数回呼ばれると、
+// まだ保存が完了していない間に二重に別々のportalId・pinを発行してしまう恐れがある。
+// それを防ぐため、取引先ごとに進行中の発行処理をキャッシュし、後から来た呼び出しは新しく
+// 発行し直さず、先に始まっている処理の結果をそのまま待って共有する。
+const _portalCredentialsInFlight = {};
+async function ensurePortalCredentials(clientName) {
+  if (_portalCredentialsInFlight[clientName]) return _portalCredentialsInFlight[clientName];
+  const task = (async () => {
+    let rec = wholesaleClients.find(c => c.name === clientName);
+    if (!rec) {
+      // 通常はensureWholesaleClientで先に作られているはずだが、念のため無ければここでも作る
+      const res = await fetch(authedUrl('/wholesaleClients.json'), {
+        method: 'POST', body: JSON.stringify({ name: clientName, createdAt: Date.now() })
+      }).then(r => r.json()).catch(() => null);
+      rec = { _key: res && res.name, name: clientName };
+      wholesaleClients.push(rec);
+    }
+    const patch = {};
+    if (!rec.portalId) patch.portalId = 'pr' + generateSecureRandomToken(24);
+    if (!rec.pin) patch.pin = generateNumericPin(6);
+    if (Object.keys(patch).length) {
+      if (rec._key) {
+        await fetch(authedUrl('/wholesaleClients/' + rec._key + '.json'), { method: 'PATCH', body: JSON.stringify(patch) }).catch(() => {});
+      }
+      Object.assign(rec, patch);
+    }
+    return { portalId: rec.portalId, pin: rec.pin };
+  })();
+  _portalCredentialsInFlight[clientName] = task;
+  try {
+    return await task;
+  } finally {
+    delete _portalCredentialsInFlight[clientName];
+  }
+}
+
+// 指定した取引先1件分の、取引先ポータル用スナップショットを組み立ててFirebaseに書き込む。
+// renderWhConsignList()（全取引先まとめて自動更新）と、リンク共有の直前に対象の取引先
+// 1件だけ確実に最新化するshareConsignClientPage()の両方から共通で使う（ロジックの重複・
+// 食い違いを防ぐため）。holdingList・historyList・pendingListを渡さなければ、その場で
+// stockMoves・consignRequestsから対象の取引先分だけを絞り込んで使う。
+async function syncPortalSnapshotForClient(client, holdingList, historyList, pendingList) {
+  if (holdingList == null) {
+    holdingList = (stockMoves || []).filter(m => m.type === 'consign' && m.status === 'holding' && (m.client || '（取引先未設定）') === client);
+  }
+  if (historyList == null) {
+    historyList = (stockMoves || []).filter(m => m.type === 'consign' && m.status && m.status !== 'holding' && (m.client || '（取引先未設定）') === client);
+  }
+  if (pendingList == null) {
+    pendingList = (consignRequests || []).filter(r => r.status === 'pending' && (r.client || '（取引先未設定）') === client);
+  }
+  const { portalId, pin } = await ensurePortalCredentials(client);
+  const snapshotItems = buildPortalSnapshotItemsForClient(holdingList || []);
+  const snapshotHistoryItems = (historyList || []).map(m => ({
+    model: consignItemModel(m),
+    qty: m.qty, status: m.status,
+    date: m.status === 'settled' ? (m.settledAt || null) : (m.returnedAt || null),
+    // 要望：「同じ型番、同じ個数、同じ金額が同じ日に精算されてしまった時に、この動作が
+    // 間違いではないかとアラートが出るようにしたい」への対応。すでに精算済みの履歴に対しても
+    // 同日・同条件の二重精算でないかを取引先ポータル側でチェックできるよう、精算済みの
+    // 行にだけ販売価格も含めておく（返却済みの行には価格の概念が無いのでnullのまま）
+    unitPrice: (m.status === 'settled' && m.unitPrice != null) ? m.unitPrice : null
+  })).sort((a,b) => (b.date||0) - (a.date||0));
+  // 取引先ポータルは/consignRequests/{portalId}を読めない（書き込み専用）ため、確認待ち
+  // リクエストの状況は、店舗側が読み書きできるこのスナップショットに含めて渡す。
+  // _key・soldDateは、要望「取引先が自分で取消せるようにしてほしい」「売れた日を
+  // 指定できるようにしてほしい」への対応。_keyがあることで、取引先ポータルが自分で
+  // 送信したページを閉じて開き直した後でも、cancelPortalOwnRequestで取り消す対象を
+  // 特定できる（新規送信時はpostConsignRequestsForItemがその場で_keyを持ち帰るため、
+  // このスナップショットの再同期を待たずに取り消しボタンが出せる）。
+  const snapshotPendingRequests = (pendingList || []).map(r => ({
+    _key: r._key, model: r.model, qty: r.qty, type: r.type, unitPrice: r.unitPrice || null,
+    requestedAt: r.requestedAt || null, soldDate: r.soldDate || null
+  })).sort((a,b) => (b.requestedAt||0) - (a.requestedAt||0));
+  // pin：要望「取引先の方が触る画面で、セキュリティーを強化したい。ワンタイムパスワードや
+  // その他いいアイデアがあれば」への対応で追加した簡単な暗証番号。取引先ポータル側
+  // （tryInitPortalMode）はこれを一覧の表示前に照合し、一致するまで内容を表示しない。
+  await fetch(authedUrl('/consignPortal/' + portalId + '.json'), {
+    method: 'PUT', body: JSON.stringify({ client, pin, items: snapshotItems, historyItems: snapshotHistoryItems, pendingRequests: snapshotPendingRequests, updatedAt: Date.now() })
+  });
+  // 旧方式（取引先名から計算していた、推測されうるID）で過去に公開してしまっていたスナップ
+  // ショットを削除し、そちらのリンクではもう内容が見られないようにする（URLを知っていても
+  // 「見つかりませんでした」と表示されるだけになる）
+  const legacyId = legacyPortalIdForClient(client);
+  if (legacyId !== portalId) {
+    fetch(authedUrl('/consignPortal/' + legacyId + '.json'), { method: 'DELETE' }).catch(() => {});
+  }
+  return { portalId, pin };
 }
 // アプリ本体（メインのスクリプト）側で、ユーザー入力（取引先名・型番・メモなど）をHTML表示に
 // 埋め込む際に使う共通のエスケープ関数（預かりリクエスト一覧・取引先ポータル画面の両方で使用）。
@@ -5629,33 +5769,18 @@ function renderWhConsignList() {
     const pendingByClient = {};
     (consignRequests || []).filter(r => r.status === 'pending').forEach(r => { const key = r.client || '（取引先未設定）'; (pendingByClient[key] = pendingByClient[key] || []).push(r); });
     const allPortalClients = new Set([...Object.keys(holdingByClient), ...Object.keys(historyByClient), ...Object.keys(pendingByClient)]);
-    allPortalClients.forEach(client => {
-      const snapshotItems = buildPortalSnapshotItemsForClient(holdingByClient[client] || []);
-      const snapshotHistoryItems = (historyByClient[client] || []).map(m => ({
-        model: consignItemModel(m),
-        qty: m.qty, status: m.status,
-        date: m.status === 'settled' ? (m.settledAt || null) : (m.returnedAt || null),
-        // 要望：「同じ型番、同じ個数、同じ金額が同じ日に精算されてしまった時に、この動作が
-        // 間違いではないかとアラートが出るようにしたい」への対応。すでに精算済みの履歴に対しても
-        // 同日・同条件の二重精算でないかを取引先ポータル側でチェックできるよう、精算済みの
-        // 行にだけ販売価格も含めておく（返却済みの行には価格の概念が無いのでnullのまま）
-        unitPrice: (m.status === 'settled' && m.unitPrice != null) ? m.unitPrice : null
-      })).sort((a,b) => (b.date||0) - (a.date||0));
-      // 取引先ポータルは/consignRequests/{portalId}を読めない（書き込み専用）ため、確認待ち
-      // リクエストの状況は、店舗側が読み書きできるこのスナップショットに含めて渡す。
-      // _key・soldDateは、要望「取引先が自分で取消せるようにしてほしい」「売れた日を
-      // 指定できるようにしてほしい」への対応。_keyがあることで、取引先ポータルが自分で
-      // 送信したページを閉じて開き直した後でも、cancelPortalOwnRequestで取り消す対象を
-      // 特定できる（新規送信時はpostConsignRequestsForItemがその場で_keyを持ち帰るため、
-      // このスナップショットの再同期を待たずに取り消しボタンが出せる）。
-      const snapshotPendingRequests = (pendingByClient[client] || []).map(r => ({
-        _key: r._key, model: r.model, qty: r.qty, type: r.type, unitPrice: r.unitPrice || null,
-        requestedAt: r.requestedAt || null, soldDate: r.soldDate || null
-      })).sort((a,b) => (b.requestedAt||0) - (a.requestedAt||0));
-      fetch(authedUrl('/consignPortal/' + portalIdForClient(client) + '.json'), {
-        method: 'PUT', body: JSON.stringify({ client, items: snapshotItems, historyItems: snapshotHistoryItems, pendingRequests: snapshotPendingRequests, updatedAt: Date.now() })
-      }).catch(() => {});
-    });
+    // 要望：「取引先の方が触る画面で、セキュリティーを強化したい」への対応。portalId・pinの
+    // 発行（ensurePortalCredentials）はFirebaseへの問い合わせ・書き込みを伴うため、この
+    // ブロック全体を非同期IIFEにした（renderWhConsignList自体は今まで通り同期関数のまま、
+    // 呼び出し側の変更は不要）。実際のスナップショット組み立て・書き込みは、リンク共有直前に
+    // 1件だけ確実に最新化するshareConsignClientPage()と共通のsyncPortalSnapshotForClient()を使う。
+    (async () => {
+      for (const client of allPortalClients) {
+        try {
+          await syncPortalSnapshotForClient(client, holdingByClient[client], historyByClient[client], pendingByClient[client]);
+        } catch (e) { console.error('portal snapshot sync failed for', client, e); }
+      }
+    })();
   }
 
   if (!holding.length) {
@@ -6509,26 +6634,22 @@ async function shareConsignClientPage() {
   const client = _dsConsignPreviewClient;
 
   const statusEl = document.getElementById('wh-consign-preview-status');
-  const showStatus = (msg, isError) => {
+  const showStatus = (html, isError) => {
     if (!statusEl) return;
-    statusEl.textContent = msg;
-    statusEl.style.display = msg ? 'block' : 'none';
+    statusEl.innerHTML = html;
+    statusEl.style.display = html ? 'block' : 'none';
     statusEl.style.background = isError ? '#ffebee' : '#fff8e1';
     statusEl.style.color = isError ? '#b00020' : '#8a6d00';
   };
 
   showStatus('リンクを作成しています…', false);
-  const portalId = portalIdForClient(client);
 
-  // 念のため、共有直前にも最新のスナップショットを書き込んでおく
-  // （通常はrenderWhConsignList()のたびに自動更新されているが、念のためここでも確実にする）
-  const holding = (stockMoves || []).filter(m => m.type === 'consign' && m.status === 'holding' && m.client === client);
-  const items = buildPortalSnapshotItemsForClient(holding);
-
+  let portalId, pin;
   try {
-    await fetch(authedUrl('/consignPortal/' + portalId + '.json'), {
-      method: 'PUT', body: JSON.stringify({ client, items, updatedAt: Date.now() })
-    });
+    // 念のため、共有直前にも最新のスナップショットを書き込んでおく（portalId・暗証番号が
+    // まだ発行されていない取引先には、ここで新しく発行される）。通常はrenderWhConsignList()の
+    // たびに自動更新されているが、念のためここでも確実にする
+    ({ portalId, pin } = await syncPortalSnapshotForClient(client));
   } catch (e) {
     console.error('portal snapshot update failed:', e);
     showStatus('リンクの作成に失敗しました。通信状態をご確認のうえ、もう一度お試しください', true);
@@ -6538,10 +6659,22 @@ async function shareConsignClientPage() {
   const link = location.origin + location.pathname + '?portal=' + portalId;
   const message = `【${client} 様】\n${COMPANY_INFO.name}の預り品一覧ページです。精算・返却のご連絡はこちらのページからお願いいたします。\n\n${link}`;
 
+  // 要望：「取引先の方が触る画面で、セキュリティーを強化したい」への対応。リンクを知って
+  // いるだけでは開けないよう、暗証番号（pin）の入力を必須にした。リンクと同じ文面に含めて
+  // しまうと合言葉としての意味が薄れるため、あえて共有メッセージには含めず、電話など別の
+  // 手段で伝えていただくよう案内する（コピー用のボタンだけ別に用意する）。
+  const pinNoticeHtml = `
+    <div style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(0,0,0,0.15)">
+      <div style="font-size:12px">暗証番号：<span style="font-weight:800;font-size:15px;letter-spacing:1px">${escapeHtmlMain(pin)}</span>
+        <button type="button" onclick="copyPortalPin('${pin}')" style="margin-left:8px;padding:3px 10px;border:1px solid #c8a052;border-radius:6px;background:#fff;color:#8a6d00;font-size:11px;cursor:pointer">暗証番号だけコピー</button>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">リンクと同じメッセージにまとめず、お電話など別の方法でお伝えいただくとより安全です</div>
+    </div>`;
+
   try {
     if (navigator.share) {
       await navigator.share({ text: message });
-      showStatus('', false);
+      showStatus('リンクを送信しました' + pinNoticeHtml, false);
       return;
     }
   } catch (e) {
@@ -6557,9 +6690,19 @@ async function shareConsignClientPage() {
     try { await navigator.clipboard.writeText(message); copied = true; } catch (e) {}
   }
   showStatus(
-    (copied ? 'リンクをコピーしました。LINEやメールに貼り付けてお送りください\n' : '以下のリンクをコピーしてお送りください：\n') + link,
+    (copied ? 'リンクをコピーしました。LINEやメールに貼り付けてお送りください\n' : '以下のリンクをコピーしてお送りください：\n') + escapeHtmlMain(link) + pinNoticeHtml,
     false
   );
+}
+
+// 暗証番号だけを単独でクリップボードにコピーする（リンクとは別の手段で伝えられるように）
+async function copyPortalPin(pin) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(pin);
+      showToast('暗証番号をコピーしました');
+    }
+  } catch (e) { console.error('copyPortalPin failed:', e); }
 }
 
 
@@ -13013,6 +13156,58 @@ async function loadPortalData() {
     showPortalError();
     return;
   }
+  window._portalData = data;
+  // 要望：「取引先の方が触る画面で、セキュリティーを強化したい」への対応。リンクを知って
+  // いるだけでは開けないよう、店舗側が発行した暗証番号（data.pin）を店舗管理画面
+  // （syncPortalSnapshotForClient）で発行するようにし、一致するまでは内容（items・
+  // historyItems・pendingRequests）を一切表示しない。一度正しく入力すれば、そのタブを
+  // 閉じるまでは再入力を求めない（sessionStorageに保持。別のタブ・別の端末では改めて
+  // 入力が必要）。旧いスナップショット（pinがまだ発行されていない）との後方互換のため、
+  // data.pinが無い場合はこれまで通り暗証番号なしで表示する。
+  if (data.pin) {
+    let alreadyVerified = false;
+    try { alreadyVerified = sessionStorage.getItem('kanetaka_portal_pin_ok_' + window._portalId) === '1'; } catch (e) {}
+    if (!alreadyVerified) {
+      showPortalPinGate();
+      return;
+    }
+  }
+  renderPortalDataFromCache();
+}
+
+// 暗証番号の入力を求める画面を表示する（内容はまだ一切描画しない）
+function showPortalPinGate() {
+  const pinScreen = document.getElementById('portal-pin-screen');
+  if (pinScreen) pinScreen.style.display = 'block';
+  const input = document.getElementById('portal-pin-input');
+  const errorEl = document.getElementById('portal-pin-error');
+  if (errorEl) { errorEl.textContent = ''; errorEl.style.display = 'none'; }
+  if (input) { input.value = ''; setTimeout(() => input.focus(), 50); }
+}
+
+// 入力された暗証番号を、loadPortalDataで取得済みのdata.pinと照合する。一致すれば
+// 以後の描画（renderPortalDataFromCache）に進み、以後はこのタブでは再入力を求めない。
+function submitPortalPin() {
+  const data = window._portalData;
+  if (!data) return;
+  const input = document.getElementById('portal-pin-input');
+  const errorEl = document.getElementById('portal-pin-error');
+  const entered = (input ? input.value : '').trim();
+  if (!entered || entered !== String(data.pin)) {
+    if (errorEl) { errorEl.textContent = '暗証番号が違います。もう一度ご確認ください'; errorEl.style.display = 'block'; }
+    if (input) { input.value = ''; input.focus(); }
+    return;
+  }
+  try { sessionStorage.setItem('kanetaka_portal_pin_ok_' + window._portalId, '1'); } catch (e) {}
+  const pinScreen = document.getElementById('portal-pin-screen');
+  if (pinScreen) pinScreen.style.display = 'none';
+  renderPortalDataFromCache();
+}
+
+// 暗証番号の確認が済んだ（または不要だった）後に、実際の内容を描画する
+function renderPortalDataFromCache() {
+  const data = window._portalData;
+  if (!data) return;
   const nameEl = document.getElementById('portal-client-name');
   if (nameEl) nameEl.textContent = data.client || '';
   window._portalClient = data.client || '';
